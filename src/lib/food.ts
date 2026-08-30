@@ -12,6 +12,8 @@ export type Food = {
   fiber_g: number;
   sodium_mg: number | null;
   verified: boolean;
+  /** Set for scanned packaged goods; null for whole foods and recipe outputs. */
+  barcode?: string | null;
 };
 
 export const MEALS = ["Breakfast", "Lunch", "Dinner", "Snacks"] as const;
