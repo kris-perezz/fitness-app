@@ -13,6 +13,7 @@ Run the migrations in order, in the SQL editor:
 
 - `supabase/migrations/0001_init.sql` — tables, view, RLS
 - `supabase/migrations/0002_seed_foods.sql` — 94 foods from the Health repo
+- `supabase/migrations/0003_default_settings.sql` — gives every user a settings row
 
 ### 2. Environment
 
@@ -54,17 +55,8 @@ Authentication > URL Configuration:
 
 ### 5. Your targets
 
-After first sign-in, insert your row (values from the Health repo's `phase.json`):
-
-```sql
-insert into public.nutrition_settings
-  (user_id, phase_label, cal_daily_equiv, protein_floor_g, protein_stretch_g, fat_floor_g)
-values
-  (auth.uid(), 'Phase 1 part 2', 1950, 155, 190, 55);
-```
-
-Run it from the SQL editor while signed in, or substitute your user id from
-Authentication > Users.
+Sign in, then open Targets from the icon on the log screen. Migration 0003
+creates the row; the screen is where you edit it.
 
 ## Run
 

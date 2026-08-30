@@ -1,7 +1,8 @@
 "use client";
 
 import { useState, useTransition } from "react";
-import { Plus } from "lucide-react";
+import Link from "next/link";
+import { Plus, SlidersHorizontal } from "lucide-react";
 import type { Food } from "@/lib/food";
 import { deleteEntry } from "@/app/actions";
 import { Button } from "@/components/ui/button";
@@ -65,6 +66,7 @@ export function LogScreen({
     { kcal: 0, protein_g: 0, fat_g: 0, carb_g: 0, fiber_g: 0, sodium_mg: 0 },
   );
 
+  const noTargets = settings === null;
   const calTarget = settings?.cal_daily_equiv ?? null;
   const proTarget = settings?.protein_floor_g ?? null;
 
@@ -82,8 +84,15 @@ export function LogScreen({
   return (
     <>
       <main className="mx-auto w-full max-w-md flex-1 px-5 pb-32 pt-[max(1.5rem,env(safe-area-inset-top))]">
-        <header className="flex items-baseline justify-between">
+        <header className="flex items-center justify-between">
           <Eyebrow>{heading}</Eyebrow>
+          <Link
+            href="/targets"
+            aria-label="Targets"
+            className="-mr-2 p-2 text-muted-foreground transition-colors active:text-foreground"
+          >
+            <SlidersHorizontal className="size-4" />
+          </Link>
         </header>
 
         <section className="mt-6 grid grid-cols-2 gap-x-6">
@@ -122,6 +131,15 @@ export function LogScreen({
             {proTarget !== null && ` of ${n(proTarget)}g`}
           </p>
         </section>
+
+        {noTargets && (
+          <Link
+            href="/targets"
+            className="mt-5 block rounded-md border border-border px-4 py-3 text-sm"
+          >
+            Set your calorie and protein targets to see what is left.
+          </Link>
+        )}
 
         <dl className="mt-8 flex justify-between border-y border-border py-3 font-mono text-[11px] tabular-nums">
           {[
