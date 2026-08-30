@@ -62,11 +62,13 @@ export default function LoginPage() {
     }
   }
 
+  const awaitingCode = status === "sent" || status === "verifying";
+
   return (
     <main className="mx-auto flex min-h-dvh w-full max-w-sm flex-col justify-center px-6">
       <Eyebrow>Sign in</Eyebrow>
 
-      {status === "sent" ? (
+      {awaitingCode ? (
         <form onSubmit={verify} className="mt-4 space-y-5">
           <p className="text-sm text-muted-foreground">
             Sent to <span className="text-foreground">{email}</span>. Open the link, or type the
