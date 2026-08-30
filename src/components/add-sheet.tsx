@@ -1,9 +1,10 @@
 "use client";
 
 import { useEffect, useMemo, useRef, useState, useTransition } from "react";
-import { ChevronLeft, Search } from "lucide-react";
+import { ChevronLeft, ScanBarcode, Search } from "lucide-react";
 import { searchFoods, scale, qtyLabel, type Food, type Meal } from "@/lib/food";
 import { addEntry } from "@/app/actions";
+import { BarcodeScanner } from "@/components/barcode-scanner";
 import {
   Drawer,
   DrawerContent,
@@ -16,7 +17,11 @@ import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { toast } from "sonner";
 
-type Step = { kind: "search" } | { kind: "qty"; food: Food } | { kind: "custom" };
+type Step =
+  | { kind: "search" }
+  | { kind: "scan" }
+  | { kind: "qty"; food: Food }
+  | { kind: "custom" };
 
 export function AddSheet({
   meal,
@@ -49,7 +54,15 @@ export function AddSheet({
           <SearchStep
             foods={foods}
             onPick={(food) => setStep({ kind: "qty", food })}
+            onScan={() => setStep({ kind: "scan" })}
             onCustom={() => setStep({ kind: "custom" })}
+          />
+        )}
+
+        {meal && step.kind === "scan" && (
+          <BarcodeScanner
+            onFood={(food) => setStep({ kind: "qty", food })}
+            onBack={() => setStep({ kind: "search" })}
           />
         )}
 
@@ -79,10 +92,12 @@ export function AddSheet({
 function SearchStep({
   foods,
   onPick,
+  onScan,
   onCustom,
 }: {
   foods: Food[];
   onPick: (food: Food) => void;
+  onScan: () => void;
   onCustom: () => void;
 }) {
   const [query, setQuery] = useState("");
@@ -96,8 +111,8 @@ function SearchStep({
 
   return (
     <div className="flex min-h-0 flex-col">
-      <div className="px-5 pb-3">
-        <div className="relative">
+      <div className="flex items-center gap-2 px-5 pb-3">
+        <div className="relative flex-1">
           <Search className="pointer-events-none absolute left-3 top-1/2 size-4 -translate-y-1/2 text-muted-foreground" />
           <Input
             ref={inputRef}
@@ -109,6 +124,15 @@ function SearchStep({
             className="h-11 pl-9 text-base"
           />
         </div>
+        <Button
+          variant="outline"
+          size="icon"
+          className="size-11 shrink-0"
+          onClick={onScan}
+          aria-label="Scan a barcode"
+        >
+          <ScanBarcode className="size-5" />
+        </Button>
       </div>
 
       <div className="min-h-0 flex-1 overflow-y-auto overscroll-contain pb-8">
