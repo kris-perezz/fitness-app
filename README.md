@@ -1,36 +1,84 @@
-This is a [Next.js](https://nextjs.org) project bootstrapped with [`create-next-app`](https://nextjs.org/docs/app/api-reference/cli/create-next-app).
+# Fitness app
 
-## Getting Started
+Phone-first food logging. Next.js + Supabase + shadcn.
 
-First, run the development server:
+The analysis side of this system stays in the Health repo; this app is the fast
+write path.
 
-```bash
-npm run dev
-# or
-yarn dev
-# or
-pnpm dev
-# or
-bun dev
+## Setup
+
+### 1. Supabase project
+
+Run the migrations in order, in the SQL editor:
+
+- `supabase/migrations/0001_init.sql` — tables, view, RLS
+- `supabase/migrations/0002_seed_foods.sql` — 94 foods from the Health repo
+
+### 2. Environment
+
+```
+cp .env.local.example .env.local
 ```
 
-Open [http://localhost:3000](http://localhost:3000) with your browser to see the result.
+Fill in `NEXT_PUBLIC_SUPABASE_URL` and `NEXT_PUBLIC_SUPABASE_ANON_KEY` from
+Project Settings > API.
 
-You can start editing the page by modifying `app/page.tsx`. The page auto-updates as you edit the file.
+### 3. Email template (REQUIRED — sign-in is broken without it)
 
-This project uses [`next/font`](https://nextjs.org/docs/app/building-your-application/optimizing/fonts) to automatically optimize and load [Geist](https://vercel.com/font), a new font family for Vercel.
+Authentication > Emails > Magic Link. Replace the body with:
 
-## Learn More
+```html
+<h2>Sign in</h2>
+<p><a href="{{ .SiteURL }}/auth/confirm?token_hash={{ .TokenHash }}&type=email">Open the app</a></p>
+<p>Or enter this code: <strong>{{ .Token }}</strong></p>
+```
 
-To learn more about Next.js, take a look at the following resources:
+Two reasons this is not optional:
 
-- [Next.js Documentation](https://nextjs.org/docs) - learn about Next.js features and API.
-- [Learn Next.js](https://nextjs.org/learn) - an interactive Next.js tutorial.
+1. **The default template has no `{{ .Token }}`**, so the six-digit code the
+   login screen asks for would never arrive.
+2. **The default template uses PKCE**, whose code verifier lives in a cookie in
+   the browser that requested the link. Request on a laptop, open on a phone,
+   and it fails. `{{ .TokenHash }}` is verified server-side, so the link works
+   on any device.
 
-You can check out [the Next.js GitHub repository](https://github.com/vercel/next.js) - your feedback and contributions are welcome!
+`/auth/confirm` still accepts a PKCE `?code=` as well, so an already-sent link
+keeps working.
 
-## Deploy on Vercel
+### 4. URL configuration
 
-The easiest way to deploy your Next.js app is to use the [Vercel Platform](https://vercel.com/new?utm_medium=default-template&filter=next.js&utm_source=create-next-app&utm_campaign=create-next-app-readme) from the creators of Next.js.
+Authentication > URL Configuration:
 
-Check out our [Next.js deployment documentation](https://nextjs.org/docs/app/building-your-application/deploying) for more details.
+- Site URL: `http://localhost:3000` in development, the Vercel URL in production
+- Redirect URLs: add `http://localhost:3000/**` and `https://<your-app>.vercel.app/**`
+
+### 5. Your targets
+
+After first sign-in, insert your row (values from the Health repo's `phase.json`):
+
+```sql
+insert into public.nutrition_settings
+  (user_id, phase_label, cal_daily_equiv, protein_floor_g, protein_stretch_g, fat_floor_g)
+values
+  (auth.uid(), 'Phase 1 part 2', 1950, 155, 190, 55);
+```
+
+Run it from the SQL editor while signed in, or substitute your user id from
+Authentication > Users.
+
+## Run
+
+```
+npm run dev
+```
+
+## Conventions
+
+- `qty` means COUNT for `per_unit` foods and GRAMS for `per_100g` foods — the
+  same convention `log_food.py` uses, so a number means the same thing in both
+  systems.
+- The log day is the WAKING day: anything before 04:00 files under the previous
+  date.
+- Catalog rows are append-only to non-creators. Correcting a shared food's
+  macros would retroactively change someone else's logged history, so a
+  correction is a new row.
