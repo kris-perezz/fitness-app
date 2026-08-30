@@ -117,6 +117,16 @@
   --sidebar-ring: oklch(0.556 0 0);
 }
 
+/*
+ * The viewport is viewport-fit=cover, so the page runs under the home
+ * indicator. Anything that ends at the bottom edge -- a sheet's action row, the
+ * last of a scrolling list -- has to clear it. max() keeps a sane minimum on
+ * hardware that has no inset at all.
+ */
+@utility pb-safe {
+  padding-bottom: max(1rem, env(safe-area-inset-bottom));
+}
+
 @layer base {
   * {
     @apply border-border outline-ring/50;

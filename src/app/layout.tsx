@@ -18,12 +18,19 @@ export const metadata: Metadata = {
   description: "Food and training log",
 };
 
-// Phone-first: no zoom-on-focus, respects the notch.
 export const viewport: Viewport = {
   width: "device-width",
   initialScale: 1,
-  maximumScale: 1,
+  // Draw under the notch and the home indicator. This is a contract: anything
+  // anchored to the bottom of the screen must inset itself with
+  // env(safe-area-inset-bottom), or it lands under the gesture bar.
   viewportFit: "cover",
+  // Shrink the layout viewport when the keyboard opens instead of covering the
+  // page, so dvh-sized sheets keep their action row reachable while typing.
+  interactiveWidget: "resizes-content",
+  // Deliberately no maximumScale/userScalable: blocking pinch-zoom fails
+  // WCAG 1.4.4. Inputs are all 16px, which is what actually stops iOS
+  // zooming on focus.
 };
 
 export default function RootLayout({ children }: LayoutProps<"/">) {

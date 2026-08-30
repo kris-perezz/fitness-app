@@ -1,7 +1,7 @@
 "use client";
 
 import { useEffect, useRef, useState } from "react";
-import { ChevronLeft, Loader2 } from "lucide-react";
+import { Loader2 } from "lucide-react";
 import type { IScannerControls } from "@zxing/browser";
 import { lookupBarcode } from "@/app/actions";
 import type { Food } from "@/lib/food";
@@ -138,48 +138,52 @@ export function BarcodeScanner({
     };
   }, []);
 
+  const blocked = status.kind === "blocked";
+
   return (
-    <div className="px-5 pb-8">
-      <button
-        onClick={onBack}
-        className="-ml-1 mb-4 flex items-center gap-1 text-sm text-muted-foreground"
-      >
-        <ChevronLeft className="size-4" /> Back
-      </button>
+    <div className="flex min-h-0 flex-1 flex-col">
+      <div className="min-h-0 flex-1 overflow-y-auto overscroll-contain px-5 pb-4">
+        {blocked ? (
+          <p className="py-6 text-sm text-muted-foreground">{status.message}</p>
+        ) : (
+          <>
+            <div className="relative overflow-hidden rounded-lg bg-black">
+              <video
+                ref={videoRef}
+                muted
+                playsInline
+                autoPlay
+                // Decorative: the reticle and the status line below carry the
+                // meaning, and a live camera feed has no useful alt text.
+                aria-hidden
+                className="aspect-[4/3] w-full object-cover"
+              />
+              <div className="pointer-events-none absolute inset-x-8 inset-y-1/3 rounded-md border-2 border-white/70" />
+              {status.kind !== "scanning" && (
+                <div className="absolute inset-0 flex items-center justify-center bg-black/50">
+                  <Loader2 className="size-6 animate-spin text-white" />
+                </div>
+              )}
+            </div>
 
-      {status.kind === "blocked" ? (
-        <div className="py-6">
-          <p className="text-sm text-muted-foreground">{status.message}</p>
-          <Button variant="outline" className="mt-4 w-full" onClick={onBack}>
-            Search instead
-          </Button>
-        </div>
-      ) : (
-        <>
-          <div className="relative overflow-hidden rounded-lg bg-black">
-            <video
-              ref={videoRef}
-              muted
-              playsInline
-              className="aspect-[4/3] w-full object-cover"
-            />
-            <div className="pointer-events-none absolute inset-x-8 inset-y-1/3 rounded-md border-2 border-white/70" />
-            {status.kind !== "scanning" && (
-              <div className="absolute inset-0 flex items-center justify-center bg-black/50">
-                <Loader2 className="size-6 animate-spin text-white" />
-              </div>
-            )}
-          </div>
+            <p aria-live="polite" className="mt-4 text-center text-sm text-muted-foreground">
+              {status.kind === "looking-up"
+                ? "Looking up that barcode"
+                : status.kind === "starting"
+                  ? "Starting the camera"
+                  : // There is no shutter button: the decoder reads every frame,
+                    // so the only instruction that helps is where to point it.
+                    "Hold the barcode inside the frame. It scans on its own."}
+            </p>
+          </>
+        )}
+      </div>
 
-          <p className="mt-4 text-center text-sm text-muted-foreground">
-            {status.kind === "looking-up"
-              ? "Looking up that barcode"
-              : status.kind === "starting"
-                ? "Starting the camera"
-                : "Point the camera at the barcode"}
-          </p>
-        </>
-      )}
+      <div className="shrink-0 border-t border-border px-5 pt-3 pb-safe">
+        <Button variant="outline" className="h-11 w-full text-base" onClick={onBack}>
+          {blocked ? "Search instead" : "Cancel"}
+        </Button>
+      </div>
     </div>
   );
 }

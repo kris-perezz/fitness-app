@@ -35,10 +35,16 @@ export function AddSheet({
   date: string;
 }) {
   const [step, setStep] = useState<Step>({ kind: "search" });
+  const [openedFor, setOpenedFor] = useState<Meal | null>(meal);
 
-  useEffect(() => {
-    if (meal) setStep({ kind: "search" });
-  }, [meal]);
+  // Reset to the search step when a *different* meal opens the sheet. Adjusted
+  // during render rather than in an effect: an effect would paint the previous
+  // meal's step for a frame first, and React re-runs this before committing.
+  // Nothing is unmounted on close, so the exit animation keeps its content.
+  if (meal !== null && meal !== openedFor) {
+    setOpenedFor(meal);
+    setStep({ kind: "search" });
+  }
 
   return (
     <Drawer open={meal !== null} onOpenChange={onOpenChange}>
@@ -110,8 +116,8 @@ function SearchStep({
   }, []);
 
   return (
-    <div className="flex min-h-0 flex-col">
-      <div className="flex items-center gap-2 px-5 pb-3">
+    <div className="flex min-h-0 flex-1 flex-col">
+      <div className="flex shrink-0 items-center gap-2 px-5 pb-3">
         <div className="relative flex-1">
           <Search className="pointer-events-none absolute left-3 top-1/2 size-4 -translate-y-1/2 text-muted-foreground" />
           <Input
@@ -135,7 +141,7 @@ function SearchStep({
         </Button>
       </div>
 
-      <div className="min-h-0 flex-1 overflow-y-auto overscroll-contain pb-8">
+      <div className="min-h-0 flex-1 overflow-y-auto overscroll-contain">
         {query === "" && (
           <p className="px-5 py-10 text-center text-sm text-muted-foreground">
             {foods.length} foods available.
@@ -168,11 +174,12 @@ function SearchStep({
           </ul>
         )}
 
-        <div className="px-5">
-          <Button variant="outline" className="mt-4 w-full" onClick={onCustom}>
-            Create a food
-          </Button>
-        </div>
+      </div>
+
+      <div className="shrink-0 border-t border-border px-5 pt-3 pb-safe">
+        <Button variant="outline" className="h-11 w-full text-base" onClick={onCustom}>
+          Create a food
+        </Button>
       </div>
     </div>
   );
@@ -197,7 +204,16 @@ function QtyStep({
 
   const presets = food.basis === "per_100g" ? [100, 150, 200, 300] : [0.5, 1, 2, 3];
   const n = Number(qty);
-  const preview = n > 0 ? scale(food, n) : null;
+  // Null, never undefined: a half-typed quantity has no preview, and the
+  // difference between "not yet known" and "zero" has to survive into the UI.
+  const preview = Number.isFinite(n) && n > 0 ? scale(food, n) : null;
+
+  const previewRows: { label: string; value: number | null }[] = [
+    { label: "Calories", value: preview?.kcal ?? null },
+    { label: "Protein", value: preview?.protein_g ?? null },
+    { label: "Carbs", value: preview?.carb_g ?? null },
+    { label: "Fat", value: preview?.fat_g ?? null },
+  ];
 
   useEffect(() => {
     const t = setTimeout(() => {
@@ -230,66 +246,69 @@ function QtyStep({
   }
 
   return (
-    <div className="px-5 pb-8">
-      <button
-        onClick={onBack}
-        className="-ml-1 mb-4 flex items-center gap-1 text-sm text-muted-foreground"
-      >
-        <ChevronLeft className="size-4" /> Back
-      </button>
+    <div className="flex min-h-0 flex-1 flex-col">
+      <div className="min-h-0 flex-1 overflow-y-auto overscroll-contain px-5 pb-4">
+        <button
+          onClick={onBack}
+          className="-ml-1 mb-4 flex items-center gap-1 text-sm text-muted-foreground"
+        >
+          <ChevronLeft className="size-4" /> Back
+        </button>
 
-      <h3 className="text-base font-semibold leading-tight">{food.name}</h3>
-      <p className="mt-0.5 text-xs text-muted-foreground">
-        {food.kcal} cal · {food.protein_g}g protein · {food.carb_g}g carbs · {food.fat_g}g fat per{" "}
-        {food.basis === "per_100g" ? "100 g" : food.unit}
-      </p>
+        <h3 className="text-base font-semibold leading-tight">{food.name}</h3>
+        <p className="mt-0.5 text-xs text-muted-foreground">
+          {food.kcal} cal · {food.protein_g}g protein · {food.carb_g}g carbs · {food.fat_g}g fat
+          per {food.basis === "per_100g" ? "100 g" : food.unit}
+        </p>
 
-      <div className="mt-5 space-y-2">
-        <Label htmlFor="qty" className="text-xs text-muted-foreground">
-          Serving size ({qtyLabel(food)})
-        </Label>
-        <Input
-          ref={inputRef}
-          id="qty"
-          type="number"
-          inputMode="decimal"
-          enterKeyHint="done"
-          value={qty}
-          onChange={(e) => setQty(e.target.value)}
-          onKeyDown={(e) => e.key === "Enter" && save()}
-          className="h-12 text-base tabular-nums"
-        />
+        <div className="mt-5 space-y-2">
+          <Label htmlFor="qty" className="text-xs text-muted-foreground">
+            Serving size ({qtyLabel(food)})
+          </Label>
+          <Input
+            ref={inputRef}
+            id="qty"
+            type="number"
+            inputMode="decimal"
+            enterKeyHint="done"
+            value={qty}
+            onChange={(e) => setQty(e.target.value)}
+            onKeyDown={(e) => e.key === "Enter" && save()}
+            className="h-12 text-base tabular-nums"
+          />
+        </div>
+
+        <div className="mt-3 flex gap-2">
+          {presets.map((p) => (
+            <button
+              key={p}
+              onClick={() => setQty(String(p))}
+              className="h-11 flex-1 rounded-md border border-border text-sm tabular-nums transition-colors active:bg-accent"
+            >
+              {p}
+            </button>
+          ))}
+        </div>
+
+        <dl className="mt-6 grid grid-cols-4 gap-2 border-t border-border pt-4 text-center">
+          {previewRows.map((row) => (
+            <div key={row.label}>
+              <dd className="text-lg tabular-nums">{row.value ?? "-"}</dd>
+              <dt className="mt-0.5 text-[11px] text-muted-foreground">{row.label}</dt>
+            </div>
+          ))}
+        </dl>
       </div>
 
-      <div className="mt-3 flex gap-2">
-        {presets.map((p) => (
-          <button
-            key={p}
-            onClick={() => setQty(String(p))}
-            className="flex-1 rounded-md border border-border py-2 text-sm tabular-nums transition-colors active:bg-accent"
-          >
-            {p}
-          </button>
-        ))}
+      <div className="shrink-0 border-t border-border px-5 pt-3 pb-safe">
+        <Button
+          className="h-11 w-full text-base"
+          onClick={save}
+          disabled={preview === null || pending}
+        >
+          {pending ? "Adding" : "Add"}
+        </Button>
       </div>
-
-      <dl className="mt-6 grid grid-cols-4 gap-2 border-t border-border pt-4 text-center">
-        {[
-          ["Calories", preview?.kcal],
-          ["Protein", preview?.protein_g],
-          ["Carbs", preview?.carb_g],
-          ["Fat", preview?.fat_g],
-        ].map(([label, v]) => (
-          <div key={label as string}>
-            <dd className="text-lg tabular-nums">{v === undefined || v === null ? "-" : v}</dd>
-            <dt className="mt-0.5 text-[11px] text-muted-foreground">{label}</dt>
-          </div>
-        ))}
-      </dl>
-
-      <Button className="mt-6 h-11 w-full text-base" onClick={save} disabled={!preview || pending}>
-        Add
-      </Button>
     </div>
   );
 }
@@ -353,47 +372,51 @@ function CustomStep({
   }
 
   return (
-    <div className="max-h-full overflow-y-auto px-5 pb-8">
-      <button
-        onClick={onBack}
-        className="-ml-1 mb-4 flex items-center gap-1 text-sm text-muted-foreground"
-      >
-        <ChevronLeft className="size-4" /> Back
-      </button>
+    <div className="flex min-h-0 flex-1 flex-col">
+      <div className="min-h-0 flex-1 overflow-y-auto overscroll-contain px-5 pb-4">
+        <button
+          onClick={onBack}
+          className="-ml-1 mb-4 flex items-center gap-1 text-sm text-muted-foreground"
+        >
+          <ChevronLeft className="size-4" /> Back
+        </button>
 
-      <Input
-        placeholder="Food name"
-        value={f.name}
-        onChange={(e) => setF({ ...f, name: e.target.value })}
-        className="h-11 text-base"
-      />
+        <Input
+          placeholder="Food name"
+          value={f.name}
+          onChange={(e) => setF({ ...f, name: e.target.value })}
+          className="h-11 text-base"
+        />
 
-      <div className="mt-4 grid grid-cols-2 gap-3">
-        {fields.map(([key, label]) => (
-          <div key={key} className="space-y-1.5">
-            <Label htmlFor={key} className="text-xs text-muted-foreground">
-              {label}
-            </Label>
-            <Input
-              id={key}
-              type="number"
-              inputMode="decimal"
-              value={f[key]}
-              onChange={(e) => setF({ ...f, [key]: e.target.value })}
-              className="h-11 text-base tabular-nums"
-              placeholder="0"
-            />
-          </div>
-        ))}
+        <div className="mt-4 grid grid-cols-2 gap-3">
+          {fields.map(([key, label]) => (
+            <div key={key} className="space-y-1.5">
+              <Label htmlFor={key} className="text-xs text-muted-foreground">
+                {label}
+              </Label>
+              <Input
+                id={key}
+                type="number"
+                inputMode="decimal"
+                value={f[key]}
+                onChange={(e) => setF({ ...f, [key]: e.target.value })}
+                className="h-11 text-base tabular-nums"
+                placeholder="0"
+              />
+            </div>
+          ))}
+        </div>
       </div>
 
-      <Button
-        className="mt-6 h-11 w-full text-base"
-        onClick={save}
-        disabled={pending || !f.name || !f.kcal}
-      >
-        Add
-      </Button>
+      <div className="shrink-0 border-t border-border px-5 pt-3 pb-safe">
+        <Button
+          className="h-11 w-full text-base"
+          onClick={save}
+          disabled={pending || f.name.trim() === "" || f.kcal === ""}
+        >
+          {pending ? "Adding" : "Add"}
+        </Button>
+      </div>
     </div>
   );
 }

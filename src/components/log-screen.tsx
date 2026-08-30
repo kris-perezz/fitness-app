@@ -84,7 +84,7 @@ export function LogScreen({
 
   return (
     <>
-      <main className="mx-auto w-full max-w-md flex-1 pb-24">
+      <main className="mx-auto w-full max-w-md flex-1 pb-[calc(6rem+env(safe-area-inset-bottom))]">
         <header className="flex items-center justify-between border-b border-border px-2 py-2">
           <Button
             size="icon"
@@ -267,46 +267,51 @@ function EntryDetail({ entry, onClose }: { entry: Entry | null; onClose: () => v
         </DrawerHeader>
 
         {entry && (
-          <div className="px-5 pb-8">
-            <h2 className="text-lg font-semibold leading-tight">{entry.name}</h2>
-            <p className="mt-0.5 text-sm text-muted-foreground">
-              {entry.qty} {entry.unit} · {entry.meal}
-              {entry.estimate && " · estimate"}
-            </p>
+          <div className="flex min-h-0 flex-1 flex-col">
+            <div className="min-h-0 flex-1 overflow-y-auto overscroll-contain px-5 pb-4">
+              <h2 className="text-lg font-semibold leading-tight">{entry.name}</h2>
+              <p className="mt-0.5 text-sm text-muted-foreground">
+                {entry.qty} {entry.unit} · {entry.meal}
+                {entry.estimate && " · estimate"}
+              </p>
 
-            <dl className="mt-6 grid grid-cols-3 gap-y-5 border-t border-border pt-5">
-              {[
-                ["Calories", withCommas(entry.kcal)],
-                ["Protein", `${round(entry.protein_g)}g`],
-                ["Carbs", `${round(entry.carb_g)}g`],
-                ["Fat", `${round(entry.fat_g)}g`],
-                ["Fibre", `${round(entry.fiber_g)}g`],
-                ["Sodium", `${withCommas(entry.sodium_mg)}mg`],
-              ].map(([label, value]) => (
-                <div key={label}>
-                  <dt className="text-xs text-muted-foreground">{label}</dt>
-                  <dd className="mt-0.5 text-lg tabular-nums">{value}</dd>
-                </div>
-              ))}
-            </dl>
+              <dl className="mt-6 grid grid-cols-3 gap-y-5 border-t border-border pt-5">
+                {[
+                  ["Calories", withCommas(entry.kcal)],
+                  ["Protein", `${round(entry.protein_g)}g`],
+                  ["Carbs", `${round(entry.carb_g)}g`],
+                  ["Fat", `${round(entry.fat_g)}g`],
+                  ["Fibre", `${round(entry.fiber_g)}g`],
+                  ["Sodium", `${withCommas(entry.sodium_mg)}mg`],
+                ].map(([label, value]) => (
+                  <div key={label}>
+                    <dt className="text-xs text-muted-foreground">{label}</dt>
+                    <dd className="mt-0.5 text-lg tabular-nums">{value}</dd>
+                  </div>
+                ))}
+              </dl>
 
-            <Button
-              variant="outline"
-              className="mt-8 h-11 w-full text-destructive"
-              disabled={pending}
-              onClick={() =>
-                startTransition(async () => {
-                  const res = await deleteEntry(entry.id);
-                  if (res.error) {
-                    toast.error(res.error);
-                    return;
-                  }
-                  onClose();
-                })
-              }
-            >
-              Delete
-            </Button>
+            </div>
+
+            <div className="shrink-0 border-t border-border px-5 pt-3 pb-safe">
+              <Button
+                variant="outline"
+                className="h-11 w-full text-destructive"
+                disabled={pending}
+                onClick={() =>
+                  startTransition(async () => {
+                    const res = await deleteEntry(entry.id);
+                    if (res.error) {
+                      toast.error(res.error);
+                      return;
+                    }
+                    onClose();
+                  })
+                }
+              >
+                {pending ? "Deleting" : "Delete"}
+              </Button>
+            </div>
           </div>
         )}
       </DrawerContent>
