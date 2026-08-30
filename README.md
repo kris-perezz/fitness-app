@@ -14,6 +14,7 @@ Run the migrations in order, in the SQL editor:
 - `supabase/migrations/0001_init.sql` — tables, view, RLS
 - `supabase/migrations/0002_seed_foods.sql` — 94 foods from the Health repo
 - `supabase/migrations/0003_default_settings.sql` — gives every user a settings row
+- `supabase/migrations/0004_standard_goals_and_meals.sql` — goals plus meal on each entry
 
 ### 2. Environment
 
@@ -53,10 +54,10 @@ Authentication > URL Configuration:
 - Site URL: `http://localhost:3000` in development, the Vercel URL in production
 - Redirect URLs: add `http://localhost:3000/**` and `https://<your-app>.vercel.app/**`
 
-### 5. Your targets
+### 5. Your goals
 
-Sign in, then open Targets from the icon on the log screen. Migration 0003
-creates the row; the screen is where you edit it.
+Sign in, then open Goals from the gear icon on the log screen. Migration 0003
+creates the row; the screen is where you set calories and macros.
 
 ## Run
 
@@ -74,3 +75,4 @@ npm run dev
 - Catalog rows are append-only to non-creators. Correcting a shared food's
   macros would retroactively change someone else's logged history, so a
   correction is a new row.
+- Meals are the fixed four: Breakfast, Lunch, Dinner, Snacks.

@@ -14,6 +14,9 @@ export type Food = {
   verified: boolean;
 };
 
+export const MEALS = ["Breakfast", "Lunch", "Dinner", "Snacks"] as const;
+export type Meal = (typeof MEALS)[number];
+
 export type Macros = {
   kcal: number;
   protein_g: number;
@@ -74,5 +77,12 @@ export function searchFoods(foods: Food[], query: string): Food[] {
 export function wakingDate(now = new Date()): string {
   const d = new Date(now);
   if (d.getHours() < 4) d.setDate(d.getDate() - 1);
+  return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}-${String(d.getDate()).padStart(2, "0")}`;
+}
+
+/** Shift a YYYY-MM-DD date string by whole days. */
+export function shiftDate(date: string, days: number): string {
+  const d = new Date(`${date}T12:00:00`);
+  d.setDate(d.getDate() + days);
   return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}-${String(d.getDate()).padStart(2, "0")}`;
 }

@@ -5,12 +5,11 @@ import { createClient } from "@/lib/supabase/client";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
-import { Eyebrow } from "@/components/eyebrow";
 
 type Mode = "password" | "email";
 type Status = "idle" | "working" | "sent";
 
-const fieldLabel = "text-[10px] uppercase tracking-[0.16em] text-muted-foreground";
+const fieldLabel = "text-xs text-muted-foreground";
 
 export default function LoginPage() {
   const [mode, setMode] = useState<Mode>("password");
@@ -82,7 +81,7 @@ export default function LoginPage() {
 
   return (
     <main className="mx-auto flex min-h-dvh w-full max-w-sm flex-col justify-center px-6">
-      <Eyebrow>Sign in</Eyebrow>
+      <h1 className="text-xl font-semibold tracking-tight">Sign in</h1>
 
       {status === "sent" ? (
         <form onSubmit={verifyCode} className="mt-4 space-y-5">
@@ -102,7 +101,7 @@ export default function LoginPage() {
               maxLength={6}
               value={code}
               onChange={(e) => setCode(e.target.value.replace(/\D/g, ""))}
-              className="h-14 border-0 border-b border-border px-0 text-center font-mono text-2xl tabular-nums tracking-[0.4em] shadow-none focus-visible:border-foreground focus-visible:ring-0"
+              className="h-12 text-center text-xl tabular-nums tracking-[0.3em]"
               placeholder="000000"
             />
           </div>
