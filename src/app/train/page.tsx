@@ -1,12 +1,9 @@
 import { createClient } from "@/lib/supabase/server";
 import { wakingDate } from "@/lib/food";
-import type {
-  Exercise,
-  SetDraft,
-  Workout,
-  WorkoutSet,
-  WorkoutSlot,
-} from "@/lib/training";
+import type { Exercise, Workout, WorkoutSet, WorkoutSlot } from "@/lib/training";
+
+/** Last time this exercise was trained: its sets, and when. */
+export type LastSession = { sets: WorkoutSet[]; date: string };
 import { TrainScreen } from "@/components/train-screen";
 
 export const dynamic = "force-dynamic";
@@ -30,7 +27,7 @@ export default async function TrainPage() {
       <TrainScreen
         workout={null}
         slots={[]}
-        prefills={{}}
+        lastSessions={{}}
         exercises={(exercises ?? []) as Exercise[]}
         today={today}
         recentExerciseIds={await recentExerciseIds(supabase)}
@@ -57,7 +54,7 @@ export default async function TrainPage() {
     <TrainScreen
       workout={workout}
       slots={slots}
-      prefills={await prefillsFor(supabase, workout.id, slots)}
+      lastSessions={await lastSessionsFor(supabase, workout.id, slots)}
       exercises={(exercises ?? []) as Exercise[]}
       today={today}
       recentExerciseIds={await recentExerciseIds(supabase)}
@@ -66,53 +63,58 @@ export default async function TrainPage() {
 }
 
 /**
- * S23. What each exercise in this session did LAST time, as editable defaults.
+ * S42/S45. What each exercise in this session did the last time it was trained.
+ *
+ * The unit is the EXERCISE, never the session. A week that runs full body,
+ * upper, lower, arms shares almost no lifts between consecutive sessions, so
+ * "what did I do last workout" is the wrong question -- "what did I do last
+ * time I benched" is the right one, and it is the only one asked here.
  *
  * One query for the whole session rather than one per slot: pull every earlier
  * slot for the exercises in play, newest first, and keep the first one seen per
  * exercise. RLS already restricts this to the caller's own history, so there is
  * no user filter to forget.
  *
- * This is the entire progression model. No formula, no coefficients -- the app
- * shows what happened and gets out of the way.
+ * The DATE comes along because the suggestion says where it came from, and
+ * "Mon 25 Aug" is the difference between a number you trust and a number you
+ * wonder about.
  */
-async function prefillsFor(
+async function lastSessionsFor(
   supabase: Awaited<ReturnType<typeof createClient>>,
   workoutId: string,
   slots: WorkoutSlot[],
-): Promise<Record<string, SetDraft[]>> {
+): Promise<Record<string, LastSession>> {
   const exerciseIds = [...new Set(slots.map((s) => s.exercise_id))];
   if (exerciseIds.length === 0) return {};
 
   const { data } = await supabase
     .from("workout_exercises")
-    .select("exercise_id, created_at, sets:workout_sets(*)")
+    .select("exercise_id, created_at, workout:workouts!inner(log_date), sets:workout_sets(*)")
     .in("exercise_id", exerciseIds)
     .neq("workout_id", workoutId)
     .order("created_at", { ascending: false });
 
-  const byExercise: Record<string, SetDraft[]> = {};
+  const byExercise: Record<string, LastSession> = {};
   for (const row of data ?? []) {
     const id = row.exercise_id as string;
     if (id in byExercise) continue; // newest wins; the rest is older history
 
     const sets = ((row.sets ?? []) as WorkoutSet[])
       .slice()
-      .sort((a, b) => a.set_index - b.set_index)
-      // A skipped set is not a prescription for next week (S25).
-      .filter((s) => !s.skipped);
+      .sort((a, b) => a.set_index - b.set_index);
+    if (sets.length === 0) continue;
 
-    byExercise[id] = sets.map((s) => ({
-      reps: s.reps,
-      load_lb: s.load_lb,
-      set_type: s.set_type,
-    }));
+    const workout = row.workout as unknown as { log_date: string } | null;
+    byExercise[id] = { sets, date: workout?.log_date ?? "" };
   }
 
   // Keyed by slot, not by exercise, so the same lift twice in one session gets
-  // the same pre-fill in both slots without the caller having to re-map it.
-  const out: Record<string, SetDraft[]> = {};
-  for (const slot of slots) out[slot.id] = byExercise[slot.exercise_id] ?? [];
+  // the same history in both slots without the caller re-mapping it.
+  const out: Record<string, LastSession> = {};
+  for (const slot of slots) {
+    const found = byExercise[slot.exercise_id];
+    if (found) out[slot.id] = found;
+  }
   return out;
 }
 

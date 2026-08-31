@@ -2,11 +2,10 @@
 
 import { useState, useTransition } from "react";
 import { useRouter } from "next/navigation";
-import { Check, Dumbbell, Plus, SkipForward, Trash2, X } from "lucide-react";
+import { Check, Dumbbell, Pencil, Plus, Trash2, X } from "lucide-react";
 import {
   isHardSet,
-  nextDraft,
-  setSummary,
+  suggestFor,
   trim,
   type Exercise,
   type SetDraft,
@@ -14,6 +13,7 @@ import {
   type WorkoutSet,
   type WorkoutSlot,
 } from "@/lib/training";
+import type { LastSession } from "@/app/train/page";
 import {
   addWorkoutExercise,
   currentWorkout,
@@ -30,7 +30,8 @@ import { ButtonGroup } from "@/components/ui/button-group";
 import { Badge } from "@/components/ui/badge";
 import { Input } from "@/components/ui/input";
 import { Field, FieldLabel } from "@/components/ui/field";
-import { Item, ItemActions, ItemContent, ItemDescription, ItemTitle } from "@/components/ui/item";
+import { Toggle } from "@/components/ui/toggle";
+import { Collapsible, CollapsibleContent, CollapsibleTrigger } from "@/components/ui/collapsible";
 import {
   Empty,
   EmptyDescription,
@@ -41,25 +42,28 @@ import {
 import { toast } from "sonner";
 
 /**
- * S22-S28. The gym screen.
+ * S22-S28, S43-S46. The gym screen.
  *
- * The interaction budget is one tap per set, which is why a set row arrives
- * pre-filled with last session's numbers and is committed with a check rather
- * than a Save button. This is the one place the training UI deliberately
- * differs from the food flow, which submits a form -- standing at a rack with
- * 90 seconds of rest is a different situation from sitting down to log lunch.
+ * Button first, form second: an exercise shows the sets already logged, and
+ * "Add set" opens a form underneath. Nothing sits on screen half-filled waiting
+ * to be confirmed, which was the flaw in the first version -- a pre-filled row
+ * plus a careless tap wrote a lift that never happened.
+ *
+ * What the form OPENS WITH is the suggestion (S45): last session's best set for
+ * the opening set of a lift, and the set you just did for every set after it.
+ * Shown muted until touched, so it reads as an offer rather than a claim.
  */
 export function TrainScreen({
   workout,
   slots,
-  prefills,
+  lastSessions,
   exercises,
   today,
   recentExerciseIds,
 }: {
   workout: Workout | null;
   slots: WorkoutSlot[];
-  prefills: Record<string, SetDraft[]>;
+  lastSessions: Record<string, LastSession>;
   exercises: Exercise[];
   today: string;
   recentExerciseIds: string[];
@@ -69,47 +73,26 @@ export function TrainScreen({
   const [pending, startTransition] = useTransition();
 
   // S26. A session from a previous day is closed rather than resumed, so it
-  // cannot absorb today's sets. `currentWorkout` does both halves -- close the
-  // stale one, open today's -- because they have to happen together.
+  // cannot absorb today's sets.
   const stale = workout !== null && workout.log_date !== today;
 
-  function start() {
+  function run(action: () => Promise<{ error: string | null }>, done?: () => void) {
     startTransition(async () => {
-      const res = await currentWorkout();
+      const res = await action();
       if (res.error) {
         toast.error(res.error);
         return;
       }
-      router.refresh();
-    });
-  }
-
-  function finish() {
-    if (!workout) return;
-    startTransition(async () => {
-      const res = await finishWorkout(workout.id);
-      if (res.error) {
-        toast.error(res.error);
-        return;
-      }
-      toast.success("Session finished");
-      router.refresh();
-    });
-  }
-
-  function discard() {
-    if (!workout) return;
-    startTransition(async () => {
-      const res = await discardWorkout(workout.id);
-      if (res.error) {
-        toast.error(res.error);
-        return;
-      }
+      done?.();
       router.refresh();
     });
   }
 
   const hardSets = slots.reduce((n, s) => n + s.sets.filter(isHardSet).length, 0);
+  const volume = slots.reduce(
+    (v, s) => v + s.sets.filter(isHardSet).reduce((t, x) => t + x.load_lb * (x.reps ?? 0), 0),
+    0,
+  );
 
   if (workout === null || stale) {
     return (
@@ -123,17 +106,23 @@ export function TrainScreen({
             <EmptyMedia variant="icon">
               <Dumbbell />
             </EmptyMedia>
-            <EmptyTitle>{stale ? "Yesterday's session is still open" : "No session yet"}</EmptyTitle>
+            <EmptyTitle>
+              {stale ? "Yesterday's session is still open" : "No session yet"}
+            </EmptyTitle>
             <EmptyDescription>
               {stale
                 ? "Starting today's session closes it where it stands, so today's sets stay on today."
-                : "Start one and add a lift. Every set arrives filled in with what you did last time — change it or confirm it."}
+                : "Start one and add a lift. Each set opens with what you did last time, ready to change or accept."}
             </EmptyDescription>
           </EmptyHeader>
         </Empty>
 
         <div className="px-5">
-          <Button className="h-12 w-full text-base" onClick={start} disabled={pending}>
+          <Button
+            className="h-12 w-full text-base"
+            disabled={pending}
+            onClick={() => run(async () => ({ error: (await currentWorkout()).error }))}
+          >
             {pending ? "Starting" : "Start a session"}
           </Button>
         </div>
@@ -147,7 +136,8 @@ export function TrainScreen({
         <header className="flex items-center justify-between border-b border-border px-5 py-3">
           <span className="text-sm font-medium">Today&rsquo;s session</span>
           <span className="text-xs tabular-nums text-muted-foreground">
-            {hardSets} hard {hardSets === 1 ? "set" : "sets"}
+            {hardSets} {hardSets === 1 ? "set" : "sets"}
+            {volume > 0 && ` · ${Math.round(volume).toLocaleString()} lb`}
           </span>
         </header>
 
@@ -159,7 +149,7 @@ export function TrainScreen({
               </EmptyMedia>
               <EmptyTitle>Session is open</EmptyTitle>
               <EmptyDescription>
-                Add the first lift. If you have done it before, its sets come back pre-filled.
+                Add the first lift. If you have done it before, its numbers come back with it.
               </EmptyDescription>
             </EmptyHeader>
           </Empty>
@@ -169,15 +159,11 @@ export function TrainScreen({
           <SlotSection
             key={slot.id}
             slot={slot}
-            prefill={prefills[slot.id] ?? []}
+            last={lastSessions[slot.id] ?? null}
             onChanged={() => router.refresh()}
           />
         ))}
 
-        {/* S44. A button, not a full-bleed strip. The food log gets away with a
-            strip because there it genuinely is the last row of that meal's
-            list; here the same shape would sit under a list of SETS and mean
-            something else entirely. */}
         <div className="px-5 py-4">
           <Button
             variant="outline"
@@ -193,8 +179,13 @@ export function TrainScreen({
             <Button
               variant="outline"
               className="h-11 flex-1"
-              onClick={finish}
               disabled={pending}
+              onClick={() =>
+                run(
+                  () => finishWorkout(workout.id),
+                  () => toast.success("Session finished"),
+                )
+              }
             >
               {pending ? "Finishing" : "Finish session"}
             </Button>
@@ -205,7 +196,7 @@ export function TrainScreen({
                 className="h-11 text-destructive"
                 aria-label="Discard session"
                 disabled={pending}
-                onClick={discard}
+                onClick={() => run(() => discardWorkout(workout.id))}
               >
                 <Trash2 className="size-4" />
               </Button>
@@ -220,53 +211,38 @@ export function TrainScreen({
         exercises={exercises}
         recentExerciseIds={recentExerciseIds}
         onPick={(exercise) =>
-          startTransition(async () => {
-            const res = await addWorkoutExercise(workout.id, exercise.id);
-            if (res.error) {
-              toast.error(res.error);
-              return;
-            }
-            setPicking(false);
-            router.refresh();
-          })
+          run(
+            () => addWorkoutExercise(workout.id, exercise.id),
+            () => setPicking(false),
+          )
         }
       />
     </>
   );
 }
 
-/** One exercise slot: its confirmed sets, then the next row waiting to be done. */
+/** One exercise: the sets already logged as a table, then the Add set control. */
 function SlotSection({
   slot,
-  prefill,
+  last,
   onChanged,
 }: {
   slot: WorkoutSlot;
-  prefill: SetDraft[];
+  last: LastSession | null;
   onChanged: () => void;
 }) {
+  const [adding, setAdding] = useState(false);
+  const [editing, setEditing] = useState<WorkoutSet | null>(null);
   const [pending, startTransition] = useTransition();
 
-  function remove() {
-    startTransition(async () => {
-      const res = await removeWorkoutExercise(slot.id);
-      if (res.error) {
-        toast.error(res.error);
-        return;
-      }
-      onChanged();
-    });
-  }
+  const suggestion = suggestFor(slot.sets, last);
 
   return (
     <section className="border-b border-border">
-      <div className="flex items-center justify-between gap-2 px-5 pb-1 pt-4">
+      <div className="flex items-center justify-between gap-2 px-5 pb-2 pt-4">
         <div className="min-w-0">
           <h2 className="truncate text-sm font-semibold">{slot.name}</h2>
-          <p className="text-xs text-muted-foreground">
-            {slot.muscle_group}
-            {prefill.length > 0 && slot.sets.length === 0 && " · filled in from last time"}
-          </p>
+          <p className="text-xs text-muted-foreground">{slot.muscle_group}</p>
         </div>
         <Button
           size="icon"
@@ -274,281 +250,316 @@ function SlotSection({
           className="shrink-0 text-muted-foreground"
           aria-label={`Remove ${slot.name}`}
           disabled={pending}
-          onClick={remove}
+          onClick={() =>
+            startTransition(async () => {
+              const res = await removeWorkoutExercise(slot.id);
+              if (res.error) {
+                toast.error(res.error);
+                return;
+              }
+              onChanged();
+            })
+          }
         >
           <X className="size-4" />
         </Button>
       </div>
 
+      {/* A real table: these are rows of the same four measurements, which is
+          what a table is for, and it keeps the columns aligned down the
+          session the way the food list keeps calories aligned. */}
       {slot.sets.length > 0 && (
-        <ul>
-          {slot.sets.map((set) => (
-            <ConfirmedSet key={set.id} set={set} onChanged={onChanged} />
-          ))}
-        </ul>
+        <table className="w-full text-sm">
+          <thead>
+            <tr className="text-[11px] text-muted-foreground">
+              <th scope="col" className="w-8 py-1 pl-5 text-left font-normal">
+                #
+              </th>
+              <th scope="col" className="py-1 text-left font-normal">
+                Load
+              </th>
+              <th scope="col" className="py-1 text-left font-normal">
+                Reps
+              </th>
+              <th scope="col" className="py-1 text-left font-normal">
+                RIR
+              </th>
+              <th scope="col" className="w-10 py-1 pr-5">
+                <span className="sr-only">Edit</span>
+              </th>
+            </tr>
+          </thead>
+          <tbody>
+            {slot.sets.map((set) => (
+              <tr key={set.id} className="border-t border-border/60">
+                <td className="py-2 pl-5 tabular-nums text-muted-foreground">
+                  {set.set_index + 1}
+                </td>
+                <td className="py-2 tabular-nums">
+                  {set.load_lb === 0 ? "BW" : `${trim(set.load_lb)} lb`}
+                </td>
+                <td className="py-2 tabular-nums">{set.reps ?? "—"}</td>
+                <td className="py-2 tabular-nums text-muted-foreground">{set.rir ?? "—"}</td>
+                <td className="py-2 pr-3 text-right">
+                  <Button
+                    size="icon-sm"
+                    variant="ghost"
+                    aria-label={`Edit set ${set.set_index + 1}`}
+                    onClick={() => setEditing(set)}
+                  >
+                    <Pencil />
+                  </Button>
+                </td>
+              </tr>
+            ))}
+          </tbody>
+        </table>
       )}
 
-      <DraftRow slot={slot} prefill={prefill} onChanged={onChanged} />
+      {editing && (
+        <div className="px-5 pb-3 pt-2">
+          <SetForm
+            key={editing.id}
+            title={`Set ${editing.set_index + 1}`}
+            suggestion={null}
+            initial={{ reps: editing.reps, load_lb: editing.load_lb, set_type: editing.set_type }}
+            initialRir={editing.rir}
+            confirmLabel="Save"
+            onCancel={() => setEditing(null)}
+            onSubmit={(draft, rir) =>
+              startTransition(async () => {
+                const res = await updateSet(editing.id, {
+                  ...draft,
+                  rir,
+                  skipped: editing.skipped,
+                });
+                if (res.error) {
+                  toast.error(res.error);
+                  return;
+                }
+                setEditing(null);
+                onChanged();
+              })
+            }
+            onDelete={() =>
+              startTransition(async () => {
+                const res = await deleteSet(editing.id);
+                if (res.error) {
+                  toast.error(res.error);
+                  return;
+                }
+                setEditing(null);
+                onChanged();
+              })
+            }
+          />
+        </div>
+      )}
+
+      {/* Button first, form second (S46). Collapsible carries the aria-expanded
+          wiring and the height animation; the trigger hides while open because
+          the form has its own confirm and cancel. */}
+      <Collapsible open={adding} onOpenChange={setAdding}>
+        <div className={adding ? "hidden" : "px-5 pb-4 pt-2"}>
+          <CollapsibleTrigger asChild>
+            <Button variant="outline" className="h-11 w-full">
+              <Plus className="size-4" /> Add set
+            </Button>
+          </CollapsibleTrigger>
+        </div>
+
+        <CollapsibleContent>
+          <div className="px-5 pb-4 pt-1">
+            <SetForm
+              // Re-keyed on the set count so each new set opens with a fresh
+              // suggestion rather than the previous row's edited state.
+              key={slot.sets.length}
+              title={`Set ${slot.sets.length + 1}`}
+              suggestion={suggestion}
+              initial={suggestion?.draft ?? { reps: null, load_lb: 0, set_type: "straight" }}
+              initialRir={null}
+              confirmLabel="Add set"
+              onCancel={() => setAdding(false)}
+              onSubmit={(draft, rir) =>
+                startTransition(async () => {
+                  const res = await logSet(slot.id, {
+                    set_index: slot.sets.length,
+                    ...draft,
+                    rir,
+                    skipped: false,
+                  });
+                  if (res.error) {
+                    toast.error(res.error);
+                    return;
+                  }
+                  onChanged();
+                })
+              }
+            />
+          </div>
+        </CollapsibleContent>
+      </Collapsible>
     </section>
   );
 }
 
-/** A set already logged. Tapping it reopens it for correction. */
-function ConfirmedSet({ set, onChanged }: { set: WorkoutSet; onChanged: () => void }) {
-  const [editing, setEditing] = useState(false);
-  const [pending, startTransition] = useTransition();
+/**
+ * Load, then reps, then RIR (S43) -- the order the information arrives in: you
+ * choose the weight, find out what you got, and only then judge what was left.
+ *
+ * A suggested value is a REAL value shown muted, not a placeholder. Submitting
+ * without touching anything logs the suggestion, which is the point of opening
+ * with one; the text goes solid as soon as you edit that field, so the screen
+ * distinguishes "offered" from "yours" without a word of explanation.
+ */
+function SetForm({
+  title,
+  suggestion,
+  initial,
+  initialRir,
+  confirmLabel,
+  onSubmit,
+  onCancel,
+  onDelete,
+}: {
+  title: string;
+  suggestion: { from: string; detail: string } | null;
+  initial: SetDraft;
+  initialRir: number | null;
+  confirmLabel: string;
+  onSubmit: (draft: SetDraft, rir: number | null) => void;
+  onCancel: () => void;
+  onDelete?: () => void;
+}) {
+  const [load, setLoad] = useState(initial.load_lb === 0 ? "" : trim(initial.load_lb));
+  const [reps, setReps] = useState(initial.reps === null ? "" : String(initial.reps));
+  const [rir, setRir] = useState(initialRir === null ? "" : String(initialRir));
+  const [warmup, setWarmup] = useState(initial.set_type === "warmup");
+  const [touched, setTouched] = useState<Record<string, boolean>>({});
 
-  function remove() {
-    startTransition(async () => {
-      const res = await deleteSet(set.id);
-      if (res.error) {
-        toast.error(res.error);
-        return;
-      }
-      onChanged();
-    });
-  }
+  /** Muted while it is still the suggestion; solid once it is yours. */
+  const tone = (key: string, value: string) =>
+    suggestion && !touched[key] && value !== "" ? " text-muted-foreground" : "";
 
-  if (editing) {
-    return (
-      <li className="px-5 py-2">
-        <SetFields
-          initial={{ reps: set.reps, load_lb: set.load_lb, set_type: set.set_type }}
-          initialRir={set.rir}
-          busy={pending}
-          confirmLabel="Save"
-          onCancel={() => setEditing(false)}
-          onConfirm={(values, rir) =>
-            startTransition(async () => {
-              const res = await updateSet(set.id, { ...values, rir, skipped: set.skipped });
-              if (res.error) {
-                toast.error(res.error);
-                return;
-              }
-              setEditing(false);
-              onChanged();
-            })
-          }
-        />
-      </li>
+  const edit = (key: string, apply: (v: string) => void) => (v: string) => {
+    setTouched((t) => ({ ...t, [key]: true }));
+    apply(v);
+  };
+
+  const ready = reps.trim() !== "" && Number(reps) > 0;
+
+  function submit() {
+    onSubmit(
+      {
+        reps: reps.trim() === "" ? null : Number(reps),
+        // Blank is bodyweight -- a real load of zero (S29), not a missing one.
+        load_lb: load.trim() === "" ? 0 : Number(load),
+        set_type: warmup ? "warmup" : "straight",
+      },
+      // Null, not zero: blank is "not recorded", zero is "taken to failure",
+      // and collapsing them makes every unlogged set read as a max effort (S24).
+      rir.trim() === "" ? null : Number(rir),
     );
   }
 
   return (
-    <li>
-      <Item size="sm" className="rounded-none px-5 py-2">
-        <ItemContent className="min-w-0">
-          <ItemTitle className="font-normal tabular-nums">
-            {set.set_index + 1}. {setSummary(set)}
-          </ItemTitle>
-          {set.set_type !== "straight" && (
-            <ItemDescription className="text-xs">
-              <Badge variant="secondary">{set.set_type}</Badge>
-            </ItemDescription>
-          )}
-        </ItemContent>
-        <ItemActions className="shrink-0">
-          <Button size="sm" variant="ghost" disabled={pending} onClick={() => setEditing(true)}>
-            Edit
-          </Button>
-          <Button
-            size="icon"
-            variant="ghost"
-            className="text-muted-foreground"
-            aria-label={`Delete set ${set.set_index + 1}`}
-            disabled={pending}
-            onClick={remove}
-          >
-            <Trash2 className="size-4" />
-          </Button>
-        </ItemActions>
-      </Item>
-    </li>
-  );
-}
-
-/**
- * The next set, pre-filled and waiting for a check (S22/S23). It is a draft in
- * the browser and not a row in the database, which is what makes "confirmed"
- * and "row exists" the same fact rather than two facts to keep in sync.
- */
-function DraftRow({
-  slot,
-  prefill,
-  onChanged,
-}: {
-  slot: WorkoutSlot;
-  prefill: SetDraft[];
-  onChanged: () => void;
-}) {
-  const [pending, startTransition] = useTransition();
-  const draft = nextDraft(slot.sets, prefill);
-  const setIndex = slot.sets.length;
-
-  function commit(values: SetDraft, rir: number | null, skipped: boolean) {
-    startTransition(async () => {
-      const res = await logSet(slot.id, { set_index: setIndex, ...values, rir, skipped });
-      if (res.error) {
-        toast.error(res.error);
-        return;
-      }
-      onChanged();
-    });
-  }
-
-  return (
-    <div className="px-5 py-2 pb-3">
-      <SetFields
-        // Re-keyed per set so confirming one row hands the next a fresh set of
-        // inputs rather than the previous row's edited state.
-        key={setIndex}
-        initial={draft}
-        initialRir={null}
-        busy={pending}
-        confirmLabel="Log set"
-        setIndex={setIndex}
-        onSkip={(values) => commit(values, null, true)}
-        onConfirm={(values, rir) => commit(values, rir, false)}
-      />
-    </div>
-  );
-}
-
-/**
- * Reps, load and RIR on numeric keypads, with the same
- * `h-12 text-base tabular-nums` treatment as the food quantity field -- 16px
- * inputs are what stop iOS zooming on focus.
- */
-function SetFields({
-  initial,
-  initialRir,
-  busy,
-  confirmLabel,
-  setIndex,
-  onConfirm,
-  onSkip,
-  onCancel,
-}: {
-  initial: SetDraft;
-  initialRir: number | null;
-  busy: boolean;
-  confirmLabel: string;
-  setIndex?: number;
-  onConfirm: (values: SetDraft, rir: number | null) => void;
-  onSkip?: (values: SetDraft) => void;
-  onCancel?: () => void;
-}) {
-  const [reps, setReps] = useState(initial.reps === null ? "" : String(initial.reps));
-  const [load, setLoad] = useState(initial.load_lb === 0 ? "" : trim(initial.load_lb));
-  const [rir, setRir] = useState(initialRir === null ? "" : String(initialRir));
-
-  const values = (): SetDraft => ({
-    reps: reps.trim() === "" ? null : Number(reps),
-    // Blank is bodyweight, which is a real load of zero rather than a missing
-    // one -- the opposite of RIR below (S24/S29).
-    load_lb: load.trim() === "" ? 0 : Number(load),
-    set_type: initial.set_type,
-  });
-
-  // Null, not zero: blank means "not recorded", zero means "taken to failure",
-  // and collapsing them would make every unlogged set read as a max effort.
-  const rirValue = () => (rir.trim() === "" ? null : Number(rir));
-
-  const ready = reps.trim() !== "" && Number(reps) > 0;
-  const id = setIndex ?? "edit";
-
-  return (
-    <div className="flex flex-col gap-2">
-      <div className="flex items-end gap-2">
-        {setIndex !== undefined && (
-          <span className="pb-3 text-sm tabular-nums text-muted-foreground">{setIndex + 1}.</span>
+    <div className="rounded-lg border border-border p-3">
+      <div className="flex items-center justify-between gap-2">
+        <span className="text-xs font-medium">{title}</span>
+        {suggestion && (
+          <span className="flex items-center gap-1.5 text-xs text-muted-foreground">
+            <Badge variant="outline">{suggestion.from}</Badge>
+            <span className="tabular-nums">{suggestion.detail}</span>
+          </span>
         )}
-        {/* S43. Load, then reps, then RIR -- the order the information actually
-            arrives in. You pick the weight, then find out what you got, and
-            only then judge how much was left in the tank. */}
+      </div>
+
+      <div className="mt-2 flex items-end gap-2">
         <Field className="min-w-0 flex-1 gap-1">
           <FieldLabel
-            htmlFor={`load_${id}`}
+            htmlFor={`load_${title}`}
             className="text-[11px] font-normal text-muted-foreground"
           >
             Load (lb)
           </FieldLabel>
           <Input
-            id={`load_${id}`}
+            id={`load_${title}`}
             type="number"
             inputMode="decimal"
             value={load}
-            onChange={(e) => setLoad(e.target.value)}
-            className="h-12 text-base tabular-nums"
-            // Blank reads as bodyweight, which is what load_lb = 0 means (S29),
-            // rather than as a number nobody supplied.
+            onChange={(e) => edit("load", setLoad)(e.target.value)}
+            className={`h-12 text-base tabular-nums${tone("load", load)}`}
             placeholder="BW"
           />
         </Field>
         <Field className="min-w-0 flex-1 gap-1">
           <FieldLabel
-            htmlFor={`reps_${id}`}
+            htmlFor={`reps_${title}`}
             className="text-[11px] font-normal text-muted-foreground"
           >
             Reps
           </FieldLabel>
           <Input
-            id={`reps_${id}`}
+            id={`reps_${title}`}
             type="number"
             inputMode="numeric"
             value={reps}
-            onChange={(e) => setReps(e.target.value)}
-            className="h-12 text-base tabular-nums"
+            onChange={(e) => edit("reps", setReps)(e.target.value)}
+            className={`h-12 text-base tabular-nums${tone("reps", reps)}`}
             placeholder="—"
           />
         </Field>
         <Field className="w-16 shrink-0 gap-1">
           <FieldLabel
-            htmlFor={`rir_${id}`}
+            htmlFor={`rir_${title}`}
             className="text-[11px] font-normal text-muted-foreground"
           >
             RIR
           </FieldLabel>
           <Input
-            id={`rir_${id}`}
+            id={`rir_${title}`}
             type="number"
             inputMode="numeric"
             value={rir}
-            onChange={(e) => setRir(e.target.value)}
+            onChange={(e) => edit("rir", setRir)(e.target.value)}
             className="h-12 text-base tabular-nums"
             placeholder="—"
           />
         </Field>
       </div>
 
-      {/* S44. The actions carry words. A tick and a skip glyph side by side are
-          two different writes distinguished only by iconography, which is a
-          guess rather than an affordance -- and a guess is a poor thing to hand
-          someone with a barbell waiting. */}
-      <ButtonGroup className="w-full">
-        <Button
-          className="h-11 flex-1"
-          disabled={busy || !ready}
-          onClick={() => onConfirm(values(), rirValue())}
+      <div className="mt-3 flex items-center gap-2">
+        {/* Warm-ups stay in history but out of volume (S32 / decision 5). */}
+        <Toggle
+          pressed={warmup}
+          onPressedChange={setWarmup}
+          variant="outline"
+          size="sm"
+          className="text-xs"
         >
-          <Check className="size-4" /> {confirmLabel}
-        </Button>
-        {onSkip && (
-          <Button
-            variant="outline"
-            className="h-11 text-muted-foreground"
-            disabled={busy}
-            onClick={() => onSkip(values())}
-          >
-            <SkipForward className="size-4" /> Skip
+          Warm-up
+        </Toggle>
+
+        <ButtonGroup className="ml-auto">
+          {onDelete && (
+            <Button
+              variant="outline"
+              size="icon"
+              className="h-10 text-destructive"
+              aria-label="Delete this set"
+              onClick={onDelete}
+            >
+              <Trash2 className="size-4" />
+            </Button>
+          )}
+          <Button variant="outline" className="h-10" onClick={onCancel}>
+            Cancel
           </Button>
-        )}
-        {onCancel && (
-          <Button variant="outline" className="h-11" disabled={busy} onClick={onCancel}>
-            <X className="size-4" /> Cancel
+          <Button className="h-10" disabled={!ready} onClick={submit}>
+            <Check className="size-4" /> {confirmLabel}
           </Button>
-        )}
-      </ButtonGroup>
+        </ButtonGroup>
+      </div>
     </div>
   );
 }

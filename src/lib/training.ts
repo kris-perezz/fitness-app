@@ -33,6 +33,12 @@ export type WorkoutSet = {
   load_lb: number;
   /** S24. Null is "not recorded"; 0 is "taken to failure". Never collapse them. */
   rir: number | null;
+  /**
+   * S25, no longer reachable from the UI (S46). It existed so that pre-fill
+   * would not inherit a set you never did; suggestions now come from your best
+   * recent set or from the set you just did, so an absent set is simply absent.
+   * The column stays, so bringing it back is a UI change and not a migration.
+   */
   skipped: boolean;
   set_type: SetType;
 };
@@ -112,20 +118,95 @@ export function setSummary(set: WorkoutSet): string {
 }
 
 /**
- * The next row's starting point: the last set that was actually performed.
- * A skipped set is a poor prescription for the next one, so it is passed over
- * rather than copied -- which is the point of recording the skip at all (S25).
+ * Estimated one-rep max, Epley. Used to pick which of last week's sets to
+ * suggest (S45) and, later, to notice a PR when more reps at the same weight
+ * beat a heavier single (S33). One formula, defined once, so those two can
+ * never disagree about what "better" means.
+ *
+ * Epley over Brzycki purely for behaviour at the edges: it degrades gracefully
+ * past 10 reps where Brzycki starts misbehaving, and at 1 rep both return the
+ * load itself.
  */
-export function nextDraft(sets: WorkoutSet[], prefill: SetDraft[]): SetDraft {
-  const performed = [...sets].reverse().find((s) => !s.skipped);
-  if (performed) {
-    return { reps: performed.reps, load_lb: performed.load_lb, set_type: performed.set_type };
+export function estimated1RM(loadLb: number, reps: number | null): number {
+  const r = reps ?? 0;
+  if (r <= 0) return 0;
+  if (r === 1) return loadLb;
+  return loadLb * (1 + r / 30);
+}
+
+/**
+ * Last session's best set of a lift: the one with the highest estimated 1RM
+ * (S45). Warm-ups and skipped sets are not candidates -- a warm-up is not what
+ * you want suggested as the opening set of today's work.
+ */
+export function bestSet(sets: WorkoutSet[]): WorkoutSet | null {
+  const candidates = sets.filter(isHardSet);
+  if (candidates.length === 0) return null;
+  return candidates.reduce((best, set) =>
+    estimated1RM(set.load_lb, set.reps) > estimated1RM(best.load_lb, best.reps) ? set : best,
+  );
+}
+
+/** Where a suggested set came from, so the sheet can say so out loud. */
+export type Suggestion = {
+  draft: SetDraft;
+  /** "Set 2 today" or "Mon 25 Aug", shown on the Previous line. */
+  from: string;
+  detail: string;
+};
+
+/**
+ * What to pre-fill the Add-set sheet with (S45).
+ *
+ * The rule changes with where you are in the exercise, because what is
+ * informative changes:
+ *
+ *   - FIRST set of this exercise today -> last session's best set. You have no
+ *     information about today yet, so the most useful anchor is your best
+ *     recent effort at this lift.
+ *   - SECOND set onward -> the set you just did. By then today's information
+ *     beats last week's outright: you already know how the weight is moving.
+ *
+ * Returns null when there is nothing to suggest -- the first time you ever do a
+ * lift opens an empty sheet, because a zero is a claim and a blank is not.
+ */
+export function suggestFor(
+  setsToday: WorkoutSet[],
+  lastSession: { sets: WorkoutSet[]; date: string } | null,
+): Suggestion | null {
+  const prior = [...setsToday].reverse().find(isHardSet);
+  if (prior) {
+    return {
+      draft: { reps: prior.reps, load_lb: prior.load_lb, set_type: "straight" },
+      from: `Set ${prior.set_index + 1} today`,
+      detail: loadReps(prior.load_lb, prior.reps),
+    };
   }
-  // Nothing confirmed yet in this slot: fall back to what last session did, and
-  // to a genuinely empty row if there is no last session (S23 -- empty, never
-  // zeros, because a zero is a claim and a blank is not).
-  const next = prefill[sets.length];
-  return next ?? { reps: null, load_lb: 0, set_type: "straight" };
+
+  if (!lastSession) return null;
+  const best = bestSet(lastSession.sets);
+  if (!best) return null;
+
+  return {
+    draft: { reps: best.reps, load_lb: best.load_lb, set_type: "straight" },
+    from: shortDate(lastSession.date),
+    detail: loadReps(best.load_lb, best.reps),
+  };
+}
+
+/** "100 lb × 12", or "bodyweight × 12" where the load is a real zero (S29). */
+export function loadReps(loadLb: number, reps: number | null): string {
+  const load = loadLb === 0 ? "bodyweight" : `${trim(loadLb)} lb`;
+  return `${load} × ${reps ?? 0}`;
+}
+
+/** "Mon 25 Aug" -- midday so a date-only string cannot drift a day on parse. */
+export function shortDate(date: string): string {
+  return new Date(`${date}T12:00:00`).toLocaleDateString(undefined, {
+    weekday: "short",
+    day: "numeric",
+    month: "short",
+  });
 }
 
 /** Trailing-zero-free pounds: 135 not 135.0, but 132.5 stays 132.5. */
