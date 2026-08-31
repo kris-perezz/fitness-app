@@ -58,6 +58,19 @@ export function BottomNav() {
             <li key={href} className="flex-1">
               <Link
                 href={href}
+                // Fetched while you are on another tab, so switching is instant
+                // rather than a full server render you sit through. Every tab
+                // here is `force-dynamic`, and Next SKIPS prefetching a dynamic
+                // route unless it has a loading boundary -- app/train/loading.tsx
+                // is what makes this possible at all, and prefetch={true} is
+                // what makes the result reusable, since it stores under the
+                // static stale time (five minutes) rather than the dynamic one
+                // (zero, meaning never reused).
+                //
+                // Four tabs means four background fetches per page. They are
+                // small, and pre-loading the destination is the entire job of a
+                // bottom nav. Production only -- Next does not prefetch in dev.
+                prefetch
                 aria-current={active ? "page" : undefined}
                 className={cn(
                   // 44px minimum target, which is the floor on both platforms.
