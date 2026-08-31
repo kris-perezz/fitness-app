@@ -47,10 +47,6 @@ function text(value: unknown): string {
   return typeof value === "string" ? value.trim() : "";
 }
 
-function round(n: number): number {
-  return Math.round((n + Number.EPSILON) * 10) / 10;
-}
-
 function displayName(product: OffProduct, barcode: string): string {
   const name =
     text(product.product_name) || text(product.product_name_en) || text(product.generic_name);
@@ -101,12 +97,18 @@ function toFood(product: OffProduct, barcode: string): Food | null {
     basis: "per_100g",
     unit: "g",
     grams_per_unit: servingGrams(product),
-    kcal: Math.round(kcal),
-    protein_g: round(num(n["proteins_100g"]) ?? 0),
-    fat_g: round(num(n["fat_100g"]) ?? 0),
-    carb_g: round(num(n["carbohydrates_100g"]) ?? 0),
-    fiber_g: round(num(n["fiber_100g"]) ?? 0),
-    sodium_mg: sodium_g === null ? null : Math.round(sodium_g * 1000),
+    // Stored at OFF's full precision, deliberately unrounded. These are
+    // per-100g figures that OFF derived by DIVIDING the label's per-serving
+    // numbers, so logging a serving multiplies them straight back up: rounding
+    // 49.184 to 49 here and then scaling by 3.25 loses most of a calorie and
+    // reports 159 for a shake whose label says 160. `scale()` rounds the
+    // result, which is the only place rounding belongs.
+    kcal,
+    protein_g: num(n["proteins_100g"]) ?? 0,
+    fat_g: num(n["fat_100g"]) ?? 0,
+    carb_g: num(n["carbohydrates_100g"]) ?? 0,
+    fiber_g: num(n["fiber_100g"]) ?? 0,
+    sodium_mg: sodium_g === null ? null : sodium_g * 1000,
     verified: false,
     barcode,
   };

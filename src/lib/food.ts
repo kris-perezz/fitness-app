@@ -45,6 +45,15 @@ export function scale(food: Food, qty: number): Macros {
   };
 }
 
+/**
+ * Catalog macros are stored unrounded so scaling stays label-exact (see
+ * lib/off.ts). Anywhere a raw per-100g figure is shown to a person it goes
+ * through here, or the search list reads "49.1840821866013 cal".
+ */
+export function show(n: number | null): number {
+  return Math.round(((n ?? 0) + Number.EPSILON) * 10) / 10;
+}
+
 export function qtyLabel(food: Food): string {
   return food.basis === "per_100g" ? "grams" : food.unit;
 }
