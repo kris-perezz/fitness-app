@@ -18,22 +18,29 @@ export default async function WorkoutPage({ params }: PageProps<"/train/[id]">) 
   const { id } = await params;
   const supabase = await createClient();
 
-  const [{ data: row }, { data: exercises }] = await Promise.all([
+  // FOUR of these used to run one after another, each waiting on the one
+  // before: the workout, then its slots, then the history, then the recent
+  // list -- five sequential round trips before the page could render. Only the
+  // history genuinely depends on anything (it needs the slots' exercise ids and
+  // the session's date). The rest were sequential by accident of where they sat
+  // in the file, and the slots query never needed the workout row at all: it
+  // keys on the id already in the URL.
+  const [{ data: row }, { data: exercises }, { data: slotRows }, recent] = await Promise.all([
     // RLS scopes this to the caller, so somebody else's id is a 404 rather than
     // a permission error -- which is the honest answer, since as far as this
     // user is concerned the session does not exist.
     supabase.from("workouts").select("*").eq("id", id).maybeSingle(),
     supabase.from("exercises").select("*").order("name"),
+    supabase
+      .from("workout_exercises")
+      .select("*, sets:workout_sets(*)")
+      .eq("workout_id", id)
+      .order("sort_order", { ascending: true }),
+    recentExerciseIds(supabase),
   ]);
 
   if (!row) notFound();
   const workout = row as Workout;
-
-  const { data: slotRows } = await supabase
-    .from("workout_exercises")
-    .select("*, sets:workout_sets(*)")
-    .eq("workout_id", workout.id)
-    .order("sort_order", { ascending: true });
 
   const slots: WorkoutSlot[] = (slotRows ?? []).map((r) => ({
     id: r.id as string,
@@ -55,7 +62,7 @@ export default async function WorkoutPage({ params }: PageProps<"/train/[id]">) 
       bests={history.bests}
       exercises={(exercises ?? []) as Exercise[]}
       today={wakingDate()}
-      recentExerciseIds={await recentExerciseIds(supabase)}
+      recentExerciseIds={recent}
     />
   );
 }
