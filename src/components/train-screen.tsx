@@ -116,6 +116,17 @@ export function TrainScreen({
     (current, name) => [...current, name],
   );
 
+  /**
+   * Slots being removed, hidden before the server has confirmed it. Same
+   * reasoning as addingNames and the same self-clearing behaviour: confirming a
+   * removal is a decision already made, so the row should not sit there through
+   * a round trip looking like the tap missed.
+   */
+  const [removingIds, markRemoving] = useOptimistic<string[], string>(
+    [],
+    (current, id) => [...current, id],
+  );
+
   function run(action: () => Promise<{ error: string | null }>, done?: () => void) {
     startTransition(async () => {
       const res = await action();
@@ -177,7 +188,9 @@ export function TrainScreen({
           </Empty>
         )}
 
-        {slots.map((slot) => (
+        {slots
+          .filter((slot) => !removingIds.includes(slot.id))
+          .map((slot) => (
           <SlotSection
             key={slot.id}
             slot={slot}
@@ -187,7 +200,7 @@ export function TrainScreen({
             // a form BEHAVES today, not what a past set meant, so they are the
             // things here that follow the catalog rather than freeze at log time.
             exercise={exercises.find((e) => e.id === slot.exercise_id) ?? null}
-            onChanged={() => router.refresh()}
+            onRemoving={markRemoving}
           />
         ))}
 
@@ -289,7 +302,7 @@ function SlotSection({
   last,
   bests,
   exercise,
-  onChanged,
+  onRemoving,
 }: {
   slot: WorkoutSlot;
   last: LastSession | null;
@@ -297,7 +310,8 @@ function SlotSection({
   bests: Bests;
   /** The catalog row, for the two things that govern how the form behaves. */
   exercise: Exercise | null;
-  onChanged: () => void;
+  /** Hide this slot now; the parent clears it when the action settles. */
+  onRemoving: (slotId: string) => void;
 }) {
   const [adding, setAdding] = useState(false);
   const [editing, setEditing] = useState<WorkoutSet | null>(null);
@@ -340,12 +354,11 @@ function SlotSection({
           confirmLabel="Remove"
           onConfirm={() =>
             startTransition(async () => {
+              onRemoving(slot.id);
               const res = await removeWorkoutExercise(slot.id);
-              if (res.error) {
-                toast.error(res.error);
-                return;
-              }
-              onChanged();
+              // On failure the row comes back with the transition, which is the
+              // honest outcome: it was not removed.
+              if (res.error) toast.error(res.error);
             })
           }
           trigger={
@@ -446,7 +459,6 @@ function SlotSection({
                   return;
                 }
                 setEditing(null);
-                onChanged();
               })
             }
             onDelete={() =>
@@ -458,7 +470,6 @@ function SlotSection({
                   toast.error(res.error);
                   return;
                 }
-                onChanged();
               })
             }
           />
@@ -528,8 +539,6 @@ function SlotSection({
                     beforeToday,
                   );
                   if (pr) toast.success(prMessage(pr, slot.name));
-
-                  onChanged();
                 })
               }
             />
