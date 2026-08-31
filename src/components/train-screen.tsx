@@ -174,16 +174,21 @@ export function TrainScreen({
           />
         ))}
 
-        {/* Hand-rolled: a full-bleed borderless row is not a Button shape, the
-            same call as the "Add food" row in log-screen.tsx. */}
-        <button
-          onClick={() => setPicking(true)}
-          className="flex w-full items-center gap-1.5 border-b border-border px-5 py-3 text-left text-sm font-medium text-primary transition-colors active:bg-accent"
-        >
-          <Plus className="size-4" /> Add exercise
-        </button>
+        {/* S44. A button, not a full-bleed strip. The food log gets away with a
+            strip because there it genuinely is the last row of that meal's
+            list; here the same shape would sit under a list of SETS and mean
+            something else entirely. */}
+        <div className="px-5 py-4">
+          <Button
+            variant="outline"
+            className="h-11 w-full text-base"
+            onClick={() => setPicking(true)}
+          >
+            <Plus className="size-4" /> Add exercise
+          </Button>
+        </div>
 
-        <section className="px-5 py-5">
+        <section className="border-t border-border px-5 py-5">
           <ButtonGroup className="w-full">
             <Button
               variant="outline"
@@ -400,7 +405,7 @@ function DraftRow({
         initial={draft}
         initialRir={null}
         busy={pending}
-        confirmLabel="Log"
+        confirmLabel="Log set"
         setIndex={setIndex}
         onSkip={(values) => commit(values, null, true)}
         onConfirm={(values, rir) => commit(values, rir, false)}
@@ -453,89 +458,96 @@ function SetFields({
   const id = setIndex ?? "edit";
 
   return (
-    <div className="flex items-end gap-2">
-      {setIndex !== undefined && (
-        <span className="pb-3 text-sm tabular-nums text-muted-foreground">{setIndex + 1}.</span>
-      )}
-      <Field className="min-w-0 flex-1 gap-1">
-        <FieldLabel htmlFor={`reps_${id}`} className="text-[11px] font-normal text-muted-foreground">
-          Reps
-        </FieldLabel>
-        <Input
-          id={`reps_${id}`}
-          type="number"
-          inputMode="numeric"
-          value={reps}
-          onChange={(e) => setReps(e.target.value)}
-          className="h-12 text-base tabular-nums"
-          placeholder="—"
-        />
-      </Field>
-      <Field className="min-w-0 flex-1 gap-1">
-        <FieldLabel htmlFor={`load_${id}`} className="text-[11px] font-normal text-muted-foreground">
-          Load (lb)
-        </FieldLabel>
-        <Input
-          id={`load_${id}`}
-          type="number"
-          inputMode="decimal"
-          value={load}
-          onChange={(e) => setLoad(e.target.value)}
-          className="h-12 text-base tabular-nums"
-          // Blank reads as bodyweight rather than as nothing, which is what
-          // load_lb = 0 actually means (S29).
-          placeholder="BW"
-        />
-      </Field>
-      <Field className="w-16 shrink-0 gap-1">
-        <FieldLabel htmlFor={`rir_${id}`} className="text-[11px] font-normal text-muted-foreground">
-          RIR
-        </FieldLabel>
-        <Input
-          id={`rir_${id}`}
-          type="number"
-          inputMode="numeric"
-          value={rir}
-          onChange={(e) => setRir(e.target.value)}
-          className="h-12 text-base tabular-nums"
-          placeholder="—"
-        />
-      </Field>
+    <div className="flex flex-col gap-2">
+      <div className="flex items-end gap-2">
+        {setIndex !== undefined && (
+          <span className="pb-3 text-sm tabular-nums text-muted-foreground">{setIndex + 1}.</span>
+        )}
+        {/* S43. Load, then reps, then RIR -- the order the information actually
+            arrives in. You pick the weight, then find out what you got, and
+            only then judge how much was left in the tank. */}
+        <Field className="min-w-0 flex-1 gap-1">
+          <FieldLabel
+            htmlFor={`load_${id}`}
+            className="text-[11px] font-normal text-muted-foreground"
+          >
+            Load (lb)
+          </FieldLabel>
+          <Input
+            id={`load_${id}`}
+            type="number"
+            inputMode="decimal"
+            value={load}
+            onChange={(e) => setLoad(e.target.value)}
+            className="h-12 text-base tabular-nums"
+            // Blank reads as bodyweight, which is what load_lb = 0 means (S29),
+            // rather than as a number nobody supplied.
+            placeholder="BW"
+          />
+        </Field>
+        <Field className="min-w-0 flex-1 gap-1">
+          <FieldLabel
+            htmlFor={`reps_${id}`}
+            className="text-[11px] font-normal text-muted-foreground"
+          >
+            Reps
+          </FieldLabel>
+          <Input
+            id={`reps_${id}`}
+            type="number"
+            inputMode="numeric"
+            value={reps}
+            onChange={(e) => setReps(e.target.value)}
+            className="h-12 text-base tabular-nums"
+            placeholder="—"
+          />
+        </Field>
+        <Field className="w-16 shrink-0 gap-1">
+          <FieldLabel
+            htmlFor={`rir_${id}`}
+            className="text-[11px] font-normal text-muted-foreground"
+          >
+            RIR
+          </FieldLabel>
+          <Input
+            id={`rir_${id}`}
+            type="number"
+            inputMode="numeric"
+            value={rir}
+            onChange={(e) => setRir(e.target.value)}
+            className="h-12 text-base tabular-nums"
+            placeholder="—"
+          />
+        </Field>
+      </div>
 
-      <ButtonGroup>
-        {onSkip && (
-          <Button
-            size="icon"
-            variant="outline"
-            className="h-12 text-muted-foreground"
-            aria-label="Skip this set"
-            disabled={busy}
-            onClick={() => onSkip(values())}
-          >
-            <SkipForward className="size-4" />
-          </Button>
-        )}
-        {onCancel && (
-          <Button
-            size="icon"
-            variant="outline"
-            className="h-12"
-            aria-label="Cancel"
-            disabled={busy}
-            onClick={onCancel}
-          >
-            <X className="size-4" />
-          </Button>
-        )}
+      {/* S44. The actions carry words. A tick and a skip glyph side by side are
+          two different writes distinguished only by iconography, which is a
+          guess rather than an affordance -- and a guess is a poor thing to hand
+          someone with a barbell waiting. */}
+      <ButtonGroup className="w-full">
         <Button
-          size="icon"
-          className="h-12"
-          aria-label={confirmLabel}
+          className="h-11 flex-1"
           disabled={busy || !ready}
           onClick={() => onConfirm(values(), rirValue())}
         >
-          <Check className="size-4" />
+          <Check className="size-4" /> {confirmLabel}
         </Button>
+        {onSkip && (
+          <Button
+            variant="outline"
+            className="h-11 text-muted-foreground"
+            disabled={busy}
+            onClick={() => onSkip(values())}
+          >
+            <SkipForward className="size-4" /> Skip
+          </Button>
+        )}
+        {onCancel && (
+          <Button variant="outline" className="h-11" disabled={busy} onClick={onCancel}>
+            <X className="size-4" /> Cancel
+          </Button>
+        )}
       </ButtonGroup>
     </div>
   );
