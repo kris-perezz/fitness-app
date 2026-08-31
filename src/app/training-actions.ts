@@ -16,55 +16,17 @@ import type { Exercise, SetType } from "@/lib/training";
 type ServerClient = Awaited<ReturnType<typeof createClient>>;
 
 /**
- * The open session, opening one if there is none (S22: logging never requires
- * choosing a session first). Also closes a session left open overnight, so it
- * cannot absorb the next day's sets (S26).
- */
-export async function currentWorkout(): Promise<{ id: string | null; error: string | null }> {
-  const supabase = await createClient();
-  const {
-    data: { user },
-  } = await supabase.auth.getUser();
-  if (!user) return { id: null, error: "Not signed in" };
-
-  const today = wakingDate();
-
-  const { data: open, error } = await supabase
-    .from("workouts")
-    .select("id, log_date")
-    .is("ended_at", null)
-    .maybeSingle();
-  if (error) return { id: null, error: error.message };
-
-  if (open) {
-    if (open.log_date === today) return { id: open.id as string, error: null };
-    // Yesterday's session, still open. Close it at its own date rather than
-    // rolling it forward -- what happened yesterday happened yesterday.
-    const closed = await closeWorkout(supabase, open.id as string, user.id);
-    if (closed) return { id: null, error: closed };
-  }
-
-  const { data, error: insertError } = await supabase
-    .from("workouts")
-    .insert({ user_id: user.id, log_date: today })
-    .select("id")
-    .single();
-  if (insertError) return { id: null, error: insertError.message };
-
-  revalidatePath("/train");
-  return { id: data.id as string, error: null };
-}
-
-/**
- * S51. A session for a day already gone.
+ * The session for a given day, created if it does not exist yet (S52).
  *
- * Created ALREADY FINISHED, unlike today's: "open" means "I am training right
- * now", which can only be one thing and can only be today. That keeps
- * workouts_one_open meaningful and leaves S26's resume with exactly one answer,
- * at the cost of nothing -- a back-dated session is edited in place from the
- * same screen either way.
+ * One action, not two. With at most one session per date there is exactly one
+ * thing a date can refer to, so "start today" and "add last Tuesday" stopped
+ * being different questions -- which is why the screen has one button.
+ *
+ * Today's session is created OPEN, because you are about to train. Any earlier
+ * day is created already finished: "open" means "I am training right now",
+ * which can only be one thing and can only be today (S51).
  */
-export async function createWorkoutOn(
+export async function openWorkoutOn(
   date: string,
 ): Promise<{ id: string | null; error: string | null }> {
   const supabase = await createClient();
@@ -74,20 +36,62 @@ export async function createWorkoutOn(
   if (!user) return { id: null, error: "Not signed in" };
 
   if (!/^\d{4}-\d{2}-\d{2}$/.test(date)) return { id: null, error: "Not a valid date" };
+
+  const today = wakingDate();
   // A workout you have not done yet is a plan, and planning is out of scope
-  // (open decision 2). The picker does not offer future dates; this is the
-  // check that makes that a rule rather than a convention.
-  if (date > wakingDate()) return { id: null, error: "That day has not happened yet" };
+  // (open decision 2). The picker does not offer future dates; this is what
+  // makes that a rule rather than a convention.
+  if (date > today) return { id: null, error: "That day has not happened yet" };
+
+  // Anything left open from an earlier day is over, whatever the button says.
+  const stale = await closeStaleWorkout(supabase, user.id, today);
+  if (stale) return { id: null, error: stale };
+
+  const { data: existing, error: findError } = await supabase
+    .from("workouts")
+    .select("id")
+    .eq("log_date", date)
+    .maybeSingle();
+  if (findError) return { id: null, error: findError.message };
+  if (existing) return { id: existing.id as string, error: null };
 
   const { data, error } = await supabase
     .from("workouts")
-    .insert({ user_id: user.id, log_date: date, ended_at: new Date().toISOString() })
+    .insert({
+      user_id: user.id,
+      log_date: date,
+      ended_at: date === today ? null : new Date().toISOString(),
+    })
     .select("id")
     .single();
   if (error) return { id: null, error: error.message };
 
-  revalidatePath("/train");
+  revalidatePath("/train", "layout");
   return { id: data.id as string, error: null };
+}
+
+/**
+ * Close a session left open on an earlier day (S53).
+ *
+ * Forgetting to press Finish is the normal case, not an edge one -- the last
+ * thing you do in a gym is leave. So a session whose date is not today is over
+ * by definition, and this is called on viewing the train tab as well as before
+ * opening any session, rather than waiting for the next deliberate action.
+ *
+ * Safe to call when there is nothing to close, and safe to call twice.
+ */
+export async function closeStaleWorkouts(): Promise<{ error: string | null }> {
+  const supabase = await createClient();
+  const {
+    data: { user },
+  } = await supabase.auth.getUser();
+  if (!user) return { error: "Not signed in" };
+
+  const failed = await closeStaleWorkout(supabase, user.id, wakingDate());
+  if (failed) return { error: failed };
+
+  revalidatePath("/train", "layout");
+  return { error: null };
 }
 
 export async function finishWorkout(id: string) {
@@ -322,19 +326,29 @@ async function ownsWorkout(
   return null;
 }
 
-/** Closes a session, and deletes it instead if nothing was logged in it. */
+/**
+ * Closes a session, and deletes it instead if nothing was logged in it.
+ *
+ * `ended_at` is the timestamp of the LAST SET, not now. A session you forgot to
+ * finish on Tuesday and closed on Thursday did not last two days, and recording
+ * that it did would be a lie the app told itself. Falling back to `started_at`
+ * covers a session with slots but no sets.
+ */
 async function closeWorkout(
   supabase: ServerClient,
   workoutId: string,
   userId: string,
 ): Promise<string | null> {
-  const { count, error: countError } = await supabase
+  const { data: slots, error: slotError } = await supabase
     .from("workout_exercises")
-    .select("id", { count: "exact", head: true })
+    .select("id")
     .eq("workout_id", workoutId);
-  if (countError) return countError.message;
+  if (slotError) return slotError.message;
 
-  if (!count) {
+  // An abandoned session with nothing in it is not history, it is litter -- and
+  // leaving it closed-but-empty would clutter the calendar with a day that
+  // claims a workout happened.
+  if (!slots || slots.length === 0) {
     const { error } = await supabase
       .from("workouts")
       .delete()
@@ -343,10 +357,49 @@ async function closeWorkout(
     return error ? error.message : null;
   }
 
+  const { data: last } = await supabase
+    .from("workout_sets")
+    .select("created_at")
+    .in(
+      "workout_exercise_id",
+      slots.map((s) => s.id as string),
+    )
+    .order("created_at", { ascending: false })
+    .limit(1)
+    .maybeSingle();
+
+  const { data: workout } = await supabase
+    .from("workouts")
+    .select("started_at")
+    .eq("id", workoutId)
+    .maybeSingle();
+
+  const endedAt =
+    (last?.created_at as string | undefined) ??
+    (workout?.started_at as string | undefined) ??
+    new Date().toISOString();
+
   const { error } = await supabase
     .from("workouts")
-    .update({ ended_at: new Date().toISOString() })
+    .update({ ended_at: endedAt })
     .eq("id", workoutId)
     .eq("user_id", userId);
   return error ? error.message : null;
+}
+
+/** Closes whatever is open on a day that is not today. Null when nothing was. */
+async function closeStaleWorkout(
+  supabase: ServerClient,
+  userId: string,
+  today: string,
+): Promise<string | null> {
+  const { data, error } = await supabase
+    .from("workouts")
+    .select("id, log_date")
+    .is("ended_at", null)
+    .maybeSingle();
+  if (error) return error.message;
+  if (!data || data.log_date === today) return null;
+
+  return closeWorkout(supabase, data.id as string, userId);
 }

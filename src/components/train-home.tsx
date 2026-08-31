@@ -1,11 +1,11 @@
 "use client";
 
-import { useState, useTransition } from "react";
+import { useEffect, useRef, useState, useTransition } from "react";
 import { useRouter } from "next/navigation";
 import Link from "next/link";
 import { CalendarPlus, Dumbbell, Play } from "lucide-react";
 import { shortDate } from "@/lib/training";
-import { createWorkoutOn, currentWorkout } from "@/app/training-actions";
+import { closeStaleWorkouts, openWorkoutOn } from "@/app/training-actions";
 import { Button } from "@/components/ui/button";
 import { Calendar } from "@/components/ui/calendar";
 import { Item, ItemActions, ItemContent, ItemDescription, ItemTitle } from "@/components/ui/item";
@@ -54,21 +54,21 @@ export function TrainHome({
 }) {
   const router = useRouter();
   const [adding, setAdding] = useState(false);
-  const [pending, startTransition] = useTransition();
 
   const byDate = new Map(sessions.map((s) => [s.date, s]));
   const trainedDays = sessions.map((s) => toDate(s.date));
 
-  function start() {
-    startTransition(async () => {
-      const res = await currentWorkout();
-      if (res.error || !res.id) {
-        toast.error(res.error ?? "Could not start a session");
-        return;
-      }
-      router.push(`/train/${res.id}`);
-    });
-  }
+  // S53. Forgetting to press Finish is the normal case -- the last thing you do
+  // in a gym is leave -- so a session left open on an earlier day is closed on
+  // sight rather than waiting for the next deliberate action. Guarded by a ref
+  // because React runs effects twice in development and this one writes.
+  const swept = useRef(false);
+  const staleOpen = openSession !== null && openSession.date !== today;
+  useEffect(() => {
+    if (!staleOpen || swept.current) return;
+    swept.current = true;
+    void closeStaleWorkouts().then(() => router.refresh());
+  }, [staleOpen, router]);
 
   return (
     <>
@@ -121,8 +121,7 @@ export function TrainHome({
               </EmptyMedia>
               <EmptyTitle>Nothing logged this month</EmptyTitle>
               <EmptyDescription>
-                Start today&rsquo;s session, or add one for a day you trained without your
-                phone.
+                Add a session for today, or for any day you trained without your phone.
               </EmptyDescription>
             </EmptyHeader>
           </Empty>
@@ -154,29 +153,31 @@ export function TrainHome({
           </ul>
         )}
 
-        <div className="space-y-2 px-5 py-4">
-          {!openSession && (
-            <Button className="h-12 w-full text-base" disabled={pending} onClick={start}>
-              {pending ? "Starting" : "Start today's session"}
-            </Button>
-          )}
-          <Button
-            variant="outline"
-            className="h-11 w-full text-base"
-            onClick={() => setAdding(true)}
-          >
-            <CalendarPlus className="size-4" /> Add a past session
+        {/* S52. One button. With at most one session per date, picking a day IS
+            the whole interaction -- there is exactly one thing that date can
+            refer to, so "start today" and "add last Tuesday" stopped being
+            different questions. */}
+        <div className="px-5 py-4">
+          <Button className="h-12 w-full text-base" onClick={() => setAdding(true)}>
+            <CalendarPlus className="size-4" /> Add session
           </Button>
         </div>
       </main>
 
-      <AddPastSession open={adding} onOpenChange={setAdding} today={today} />
+      <PickDay open={adding} onOpenChange={setAdding} today={today} />
     </>
   );
 }
 
-/** S51. Any day up to today; tomorrow is a plan, and plans are out of scope. */
-function AddPastSession({
+/**
+ * S51/S52. Pick the day. Defaults to today, because that is what it usually is;
+ * anything earlier is one tap away and needs no separate control.
+ *
+ * The action is "open that day's session", so picking a day that already has
+ * one goes to it rather than refusing or duplicating -- which is the behaviour
+ * that made a second button unnecessary.
+ */
+function PickDay({
   open,
   onOpenChange,
   today,
@@ -186,15 +187,15 @@ function AddPastSession({
   today: string;
 }) {
   const router = useRouter();
-  const [picked, setPicked] = useState<Date | undefined>();
+  const [picked, setPicked] = useState<Date | undefined>(() => toDate(today));
   const [pending, startTransition] = useTransition();
 
-  function create() {
+  function go() {
     if (!picked) return;
     startTransition(async () => {
-      const res = await createWorkoutOn(dateKey(picked));
+      const res = await openWorkoutOn(dateKey(picked));
       if (res.error || !res.id) {
-        toast.error(res.error ?? "Could not add that session");
+        toast.error(res.error ?? "Could not open that session");
         return;
       }
       onOpenChange(false);
@@ -206,9 +207,9 @@ function AddPastSession({
     <Drawer open={open} onOpenChange={onOpenChange}>
       <DrawerContent>
         <DrawerHeader className="px-5 pb-2 pt-0">
-          <DrawerTitle className="text-base">Add a past session</DrawerTitle>
+          <DrawerTitle className="text-base">Which day?</DrawerTitle>
           <DrawerDescription className="sr-only">
-            Pick the day you trained.
+            Pick the day you trained. Today is selected already.
           </DrawerDescription>
         </DrawerHeader>
 
@@ -228,10 +229,16 @@ function AddPastSession({
         <div className="shrink-0 border-t border-border px-5 pt-3 pb-safe">
           <Button
             className="h-11 w-full text-base"
-            onClick={create}
+            onClick={go}
             disabled={pending || !picked}
           >
-            {pending ? "Adding" : picked ? `Add ${shortDate(dateKey(picked))}` : "Pick a day"}
+            {pending
+              ? "Opening"
+              : !picked
+                ? "Pick a day"
+                : dateKey(picked) === today
+                  ? "Train today"
+                  : `Log ${shortDate(dateKey(picked))}`}
           </Button>
         </div>
       </DrawerContent>
