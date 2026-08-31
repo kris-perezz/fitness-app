@@ -24,6 +24,7 @@ import {
 } from "@/components/ui/drawer";
 import { Button } from "@/components/ui/button";
 import { ButtonGroup } from "@/components/ui/button-group";
+import { ToggleGroup, ToggleGroupItem } from "@/components/ui/toggle-group";
 import { Input } from "@/components/ui/input";
 import { Field, FieldGroup, FieldLabel } from "@/components/ui/field";
 import { InputGroup, InputGroupAddon, InputGroupInput } from "@/components/ui/input-group";
@@ -535,21 +536,37 @@ function QtyStep({
   onBack: () => void;
   onDone: () => void;
 }) {
-  // A per_100g food is measured in grams, so opening at "1" asks the user to
-  // confirm one gram of a protein shake. Prefer the label's own serving when
-  // the scan captured one -- one shake is what was actually drunk -- and fall
-  // back to 100, which is at least the basis the numbers are quoted in.
-  const [qty, setQty] = useState(() =>
-    food.basis === "per_100g" ? String(food.grams_per_unit ?? 100) : "1",
-  );
+  // S5. A packaged food knows what one serving is, so it can be logged either
+  // way: "1 shake" is what a person drinks, "260 ml" is what is left in the
+  // carton. Only offered when the serving size is actually known -- inventing
+  // one would make "1 serving" mean nothing.
+  const canServe =
+    food.basis === "per_100g" && food.grams_per_unit !== null && food.grams_per_unit > 0;
+  const [mode, setMode] = useState<"serving" | "amount">(canServe ? "serving" : "amount");
+
+  const [qty, setQty] = useState(() => (canServe || food.basis !== "per_100g" ? "1" : "100"));
   const [pending, startTransition] = useTransition();
   const inputRef = useRef<HTMLInputElement>(null);
 
-  // With a known serving, half and double it are the useful jumps; the round
-  // hundreds only make sense when nothing better is known. Sorted so the row
-  // reads left to right.
+  /** Carry the amount across the switch, so toggling never silently changes it. */
+  function switchMode(next: "serving" | "amount") {
+    const current = Number(qty);
+    const per = food.grams_per_unit ?? 100;
+    if (Number.isFinite(current) && current > 0) {
+      setQty(
+        next === "amount"
+          ? String(Math.round(current * per))
+          : String(Math.round((current / per) * 100) / 100),
+      );
+    }
+    setMode(next);
+  }
+
+  // Whole and half servings when counting servings. When counting grams or
+  // millilitres: multiples of the real serving where one is known, and round
+  // hundreds only when nothing better is available.
   const presets =
-    food.basis !== "per_100g"
+    food.basis !== "per_100g" || mode === "serving"
       ? [0.5, 1, 2, 3]
       : food.grams_per_unit
         ? [
@@ -560,9 +577,21 @@ function QtyStep({
           ]
         : [100, 150, 200, 300];
   const n = Number(qty);
+
+  /**
+   * `scale()` takes grams for a per_100g food and a count for a per_unit one,
+   * so servings are converted here and nowhere else.
+   */
+  const scaleQty = mode === "serving" && canServe ? n * food.grams_per_unit! : n;
+
+  /** How the entry reads back in the log. Entries denormalise qty and unit for
+   * display only -- the macros are stored separately -- so "1 serving" is an
+   * honest label for a portion that was logged as one. */
+  const entryUnit =
+    mode === "serving" && canServe ? (n === 1 ? "serving" : "servings") : qtyLabel(food);
   // Null, never undefined: a half-typed quantity has no preview, and the
   // difference between "not yet known" and "zero" has to survive into the UI.
-  const preview = Number.isFinite(n) && n > 0 ? scale(food, n) : null;
+  const preview = Number.isFinite(n) && n > 0 ? scale(food, scaleQty) : null;
 
   const previewRows: { label: string; value: number | null }[] = [
     { label: "Calories", value: preview?.kcal ?? null },
@@ -600,7 +629,7 @@ function QtyStep({
         food_id: food.id,
         name: food.name,
         qty: n,
-        unit: qtyLabel(food),
+        unit: entryUnit,
         estimate: false,
         ...preview,
       });
@@ -633,9 +662,29 @@ function QtyStep({
         </p>
 
         <Field className="mt-5">
-          <FieldLabel htmlFor="qty" className="text-xs font-normal text-muted-foreground">
-            Serving size ({qtyLabel(food)})
-          </FieldLabel>
+          <div className="flex items-center justify-between gap-3">
+            <FieldLabel htmlFor="qty" className="text-xs font-normal text-muted-foreground">
+              {mode === "serving" && canServe ? "Servings" : `Amount (${qtyLabel(food)})`}
+            </FieldLabel>
+            {canServe && (
+              <ToggleGroup
+                type="single"
+                size="sm"
+                variant="outline"
+                value={mode}
+                // A single ToggleGroup deselects when its active item is pressed
+                // again, which would leave no mode at all; ignore the empty value.
+                onValueChange={(next) => next && switchMode(next as "serving" | "amount")}
+              >
+                <ToggleGroupItem value="serving" className="px-3 text-xs">
+                  Servings
+                </ToggleGroupItem>
+                <ToggleGroupItem value="amount" className="px-3 text-xs">
+                  {food.unit === "ml" ? "ml" : "g"}
+                </ToggleGroupItem>
+              </ToggleGroup>
+            )}
+          </div>
           <Input
             ref={inputRef}
             id="qty"
