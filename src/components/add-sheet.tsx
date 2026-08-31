@@ -1,7 +1,7 @@
 "use client";
 
 import { useEffect, useMemo, useRef, useState, useTransition } from "react";
-import { ChevronLeft, ScanBarcode, Search } from "lucide-react";
+import { Camera, ChevronLeft, ScanBarcode, Search } from "lucide-react";
 import {
   searchFoods,
   scale,
@@ -11,7 +11,9 @@ import {
   type Food,
   type Meal,
 } from "@/lib/food";
-import { addEntry, saveScannedFood } from "@/app/actions";
+import { addEntry, readLabel, saveLabelFood, saveScannedFood } from "@/app/actions";
+import { downscaleToDataUrl } from "@/lib/image";
+import type { LabelDraft } from "@/lib/label";
 import { BarcodeScanner } from "@/components/barcode-scanner";
 import {
   Drawer,
@@ -30,6 +32,7 @@ import {
   InputGroupInput,
 } from "@/components/ui/input-group";
 import { Item, ItemContent, ItemDescription, ItemTitle } from "@/components/ui/item";
+import { Spinner } from "@/components/ui/spinner";
 import {
   Empty,
   EmptyDescription,
@@ -55,6 +58,7 @@ type Step =
   // intake_entries.food_id is a foreign key, the catalog row has to land
   // before the entry does (S3).
   | { kind: "qty"; food: Food; scanned: boolean }
+  | { kind: "label" }
   | { kind: "custom" };
 
 export function AddSheet({
@@ -113,7 +117,15 @@ export function AddSheet({
             foods={foods}
             onPick={(food) => go({ kind: "qty", food, scanned: false })}
             onScan={() => go({ kind: "scan" })}
+            onLabel={() => go({ kind: "label" })}
             onCustom={() => go({ kind: "custom" })}
+          />
+        )}
+
+        {meal && step.kind === "label" && (
+          <LabelStep
+            onFood={(food) => go({ kind: "qty", food, scanned: false })}
+            onBack={() => go({ kind: "search" })}
           />
         )}
 
@@ -152,11 +164,13 @@ function SearchStep({
   foods,
   onPick,
   onScan,
+  onLabel,
   onCustom,
 }: {
   foods: Food[];
   onPick: (food: Food) => void;
   onScan: () => void;
+  onLabel: () => void;
   onCustom: () => void;
 }) {
   const [query, setQuery] = useState("");
@@ -246,9 +260,248 @@ function SearchStep({
       </div>
 
       <div className="shrink-0 border-t border-border px-5 pt-3 pb-safe">
-        <Button variant="outline" className="h-11 w-full text-base" onClick={onCustom}>
-          Create a food
-        </Button>
+        <div className="flex gap-2">
+          <Button variant="outline" className="h-11 flex-1 text-base" onClick={onLabel}>
+            <Camera className="size-4" /> Read a label
+          </Button>
+          <Button variant="outline" className="h-11 flex-1 text-base" onClick={onCustom}>
+            Create a food
+          </Button>
+        </div>
+      </div>
+    </div>
+  );
+}
+
+/**
+ * S4/S5. Photograph a nutrition panel, check what was read off it, save.
+ *
+ * The draft is shown in the units the LABEL uses -- per serving where the panel
+ * is per serving -- because the entire point is checking it against the packet
+ * in your hand, and "49.2 per 100 ml" cannot be checked against a panel that
+ * says 160. It is converted back to the app's per-100 basis on save.
+ */
+function LabelStep({ onFood, onBack }: { onFood: (food: Food) => void; onBack: () => void }) {
+  type Phase =
+    | { kind: "idle" }
+    | { kind: "reading" }
+    | { kind: "draft"; draft: LabelDraft; warning: string | null }
+    | { kind: "failed"; message: string };
+
+  const [phase, setPhase] = useState<Phase>({ kind: "idle" });
+  const [form, setForm] = useState<Record<string, string>>({});
+  const [pending, startTransition] = useTransition();
+  const fileRef = useRef<HTMLInputElement>(null);
+
+  // Per-serving where the label was, so the numbers on screen are the numbers
+  // printed on the package.
+  const perServing = (draft: LabelDraft) =>
+    draft.basis === "per_100g" && draft.grams_per_unit ? draft.grams_per_unit / 100 : 1;
+
+  function loadDraft(draft: LabelDraft, warning: string | null) {
+    const f = perServing(draft);
+    const at = (n: number | null) => String(Math.round(((n ?? 0) * f + Number.EPSILON) * 10) / 10);
+    setForm({
+      name: draft.name,
+      kcal: String(Math.round(draft.kcal * f)),
+      protein_g: at(draft.protein_g),
+      carb_g: at(draft.carb_g),
+      fat_g: at(draft.fat_g),
+      fiber_g: at(draft.fiber_g),
+      sodium_mg: at(draft.sodium_mg),
+    });
+    setPhase({ kind: "draft", draft, warning });
+  }
+
+  async function pick(file: File) {
+    setPhase({ kind: "reading" });
+    let image: string;
+    try {
+      image = await downscaleToDataUrl(file);
+    } catch {
+      setPhase({ kind: "failed", message: "That photo could not be opened." });
+      return;
+    }
+
+    const res = await readLabel(image);
+    if (res.status === "found") loadDraft(res.draft, res.warning);
+    else setPhase({ kind: "failed", message: res.message });
+  }
+
+  function save() {
+    if (phase.kind !== "draft") return;
+    const f = perServing(phase.draft);
+    const num = (key: string) => {
+      const parsed = Number(form[key]);
+      return Number.isFinite(parsed) ? parsed / f : 0;
+    };
+
+    startTransition(async () => {
+      const res = await saveLabelFood(
+        {
+          ...phase.draft,
+          name: form.name.trim() || phase.draft.name,
+          kcal: num("kcal"),
+          protein_g: num("protein_g"),
+          carb_g: num("carb_g"),
+          fat_g: num("fat_g"),
+          fiber_g: num("fiber_g"),
+          sodium_mg: num("sodium_mg"),
+        },
+        null,
+      );
+      if (res.error || !res.food) {
+        toast.error(res.error ?? "Could not save that food");
+        return;
+      }
+      // Straight into the existing quantity step -- extraction produces a food,
+      // never an entry.
+      onFood(res.food);
+    });
+  }
+
+  const draft = phase.kind === "draft" ? phase.draft : null;
+  const basisText =
+    draft === null
+      ? ""
+      : draft.basis === "per_unit"
+        ? `per ${draft.unit}`
+        : draft.grams_per_unit
+          ? `per serving (${draft.grams_per_unit} ${draft.unit})`
+          : `per 100 ${draft.unit}`;
+
+  const macroFields: [string, string][] = [
+    ["kcal", "Calories"],
+    ["protein_g", "Protein (g)"],
+    ["carb_g", "Carbs (g)"],
+    ["fat_g", "Fat (g)"],
+    ["fiber_g", "Fibre (g)"],
+    ["sodium_mg", "Sodium (mg)"],
+  ];
+
+  return (
+    <div className="flex min-h-0 flex-1 flex-col">
+      <div className="min-h-0 flex-1 overflow-y-auto overscroll-contain px-5 pb-4">
+        <button
+          onClick={onBack}
+          className="-ml-1 mb-4 flex items-center gap-1 text-sm text-muted-foreground"
+        >
+          <ChevronLeft className="size-4" /> Back
+        </button>
+
+        <input
+          ref={fileRef}
+          type="file"
+          accept="image/*"
+          capture="environment"
+          className="hidden"
+          onChange={(e) => {
+            const file = e.target.files?.[0];
+            // Cleared so retaking the same file fires change again.
+            e.target.value = "";
+            if (file) void pick(file);
+          }}
+        />
+
+        {phase.kind === "idle" && (
+          <Empty className="py-10">
+            <EmptyHeader>
+              <EmptyMedia variant="icon">
+                <Camera />
+              </EmptyMedia>
+              <EmptyTitle>Photograph the nutrition panel</EmptyTitle>
+              <EmptyDescription>
+                Fill the frame with the panel itself. Everything read off it is editable
+                before anything is saved.
+              </EmptyDescription>
+            </EmptyHeader>
+          </Empty>
+        )}
+
+        {phase.kind === "reading" && (
+          <div className="flex flex-col items-center gap-3 py-16">
+            <Spinner className="size-6" />
+            <p aria-live="polite" className="text-sm text-muted-foreground">
+              Reading the label
+            </p>
+          </div>
+        )}
+
+        {phase.kind === "failed" && (
+          <p aria-live="polite" className="py-6 text-sm text-muted-foreground">
+            {phase.message}
+          </p>
+        )}
+
+        {draft !== null && (
+          <>
+            <p className="text-xs text-muted-foreground">
+              Read from the label, {basisText}. Check every number against the package.
+            </p>
+
+            {phase.kind === "draft" && phase.warning && (
+              <p className="mt-3 text-xs text-destructive">{phase.warning}</p>
+            )}
+
+            <Field className="mt-4">
+              <FieldLabel htmlFor="label_name" className="text-xs font-normal text-muted-foreground">
+                Name
+              </FieldLabel>
+              <Input
+                id="label_name"
+                value={form.name ?? ""}
+                onChange={(e) => setForm({ ...form, name: e.target.value })}
+                className="h-11 text-base"
+              />
+            </Field>
+
+            <FieldGroup className="mt-4 grid grid-cols-2 gap-3">
+              {macroFields.map(([key, label]) => (
+                <Field key={key}>
+                  <FieldLabel
+                    htmlFor={`label_${key}`}
+                    className="text-xs font-normal text-muted-foreground"
+                  >
+                    {label}
+                  </FieldLabel>
+                  <Input
+                    id={`label_${key}`}
+                    type="number"
+                    inputMode="decimal"
+                    value={form[key] ?? ""}
+                    onChange={(e) => setForm({ ...form, [key]: e.target.value })}
+                    className="h-11 text-base tabular-nums"
+                    placeholder="0"
+                  />
+                </Field>
+              ))}
+            </FieldGroup>
+          </>
+        )}
+      </div>
+
+      <div className="shrink-0 border-t border-border px-5 pt-3 pb-safe">
+        {draft === null ? (
+          <Button
+            className="h-11 w-full text-base"
+            disabled={phase.kind === "reading"}
+            onClick={() => fileRef.current?.click()}
+          >
+            {phase.kind === "reading"
+              ? "Reading"
+              : phase.kind === "failed"
+                ? "Try another photo"
+                : "Take a photo"}
+          </Button>
+        ) : (
+          <Button
+            className="h-11 w-full text-base"
+            onClick={save}
+            disabled={pending || (form.name ?? "").trim() === ""}
+          >
+            {pending ? "Saving" : "Save food"}
+          </Button>
+        )}
       </div>
     </div>
   );

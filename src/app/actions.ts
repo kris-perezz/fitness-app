@@ -4,6 +4,7 @@ import { revalidatePath } from "next/cache";
 import { redirect } from "next/navigation";
 import { createClient } from "@/lib/supabase/server";
 import { fetchOffProduct, isBarcode } from "@/lib/off";
+import { extractLabel, type LabelDraft, type LabelResult } from "@/lib/label";
 import { generatedFood, type RecipeDetails, type RecipeLine } from "@/lib/recipe";
 import type { Food, Macros, Meal } from "@/lib/food";
 
@@ -119,6 +120,57 @@ export async function saveScannedFood(food: Food) {
 
   revalidatePath("/log");
   return { error: null };
+}
+
+// ------------------------------------------------------------ label photos
+// S4/S5. The provider lives entirely in lib/label.ts; this action exists so the
+// key never reaches the browser and so an unauthenticated caller cannot spend
+// it. Extraction produces a DRAFT -- nothing is written until the user has
+// looked at every field and confirmed it (readLabel does not touch the
+// database at all).
+
+export async function readLabel(image: string): Promise<LabelResult> {
+  const supabase = await createClient();
+  const {
+    data: { user },
+  } = await supabase.auth.getUser();
+  if (!user) return { status: "error", message: "Not signed in" };
+
+  return extractLabel(image);
+}
+
+/**
+ * Write a confirmed label draft to the catalog and hand back the saved food, so
+ * the caller can drop straight into the existing quantity step.
+ *
+ * `verified` is true here and only here: it means "transcribed from a label",
+ * which is what puts this row above an Open Food Facts guess in the source
+ * hierarchy. A barcode is carried through when the label was reached from a
+ * scan that missed, so the next scan of the same product finds this row first.
+ */
+export async function saveLabelFood(
+  draft: LabelDraft,
+  barcode: string | null,
+): Promise<{ food: Food | null; error: string | null }> {
+  const supabase = await createClient();
+  const {
+    data: { user },
+  } = await supabase.auth.getUser();
+  if (!user) return { food: null, error: "Not signed in" };
+
+  const food: Food = {
+    ...draft,
+    id: `label_${crypto.randomUUID()}`,
+    aliases: [],
+    barcode,
+    verified: true,
+  };
+
+  const { error } = await supabase.from("foods").insert({ ...food, created_by: user.id });
+  if (error) return { food: null, error: error.message };
+
+  revalidatePath("/log");
+  return { food, error: null };
 }
 
 export async function signOut() {
