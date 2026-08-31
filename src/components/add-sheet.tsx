@@ -23,6 +23,7 @@ import {
   DrawerTitle,
 } from "@/components/ui/drawer";
 import { Button } from "@/components/ui/button";
+import { ButtonGroup } from "@/components/ui/button-group";
 import { Input } from "@/components/ui/input";
 import { Field, FieldGroup, FieldLabel } from "@/components/ui/field";
 import { InputGroup, InputGroupAddon, InputGroupInput } from "@/components/ui/input-group";
@@ -196,9 +197,27 @@ function SearchStep({
             className="text-base"
           />
         </InputGroup>
+
+        {/* Directly under the search field rather than pinned to the bottom.
+            The sheet opens at its 60% snap point, but `snapped` makes
+            DrawerContent h-full and vaul translates it down -- so anything at
+            the bottom of the content sits below the fold until the sheet is
+            dragged all the way up. These are the entry points to three of the
+            four ways to add a food; they have to be visible on open. */}
+        <ButtonGroup className="mt-2 w-full">
+          <Button variant="outline" className="h-11 flex-1" onClick={onScan}>
+            <ScanBarcode className="size-4" /> Scan
+          </Button>
+          <Button variant="outline" className="h-11 flex-1" onClick={onLabel}>
+            <Camera className="size-4" /> Label
+          </Button>
+          <Button variant="outline" className="h-11 flex-1" onClick={onCustom}>
+            <Plus className="size-4" /> Create
+          </Button>
+        </ButtonGroup>
       </div>
 
-      <div className="min-h-0 flex-1 overflow-y-auto overscroll-contain">
+      <div className="min-h-0 flex-1 overflow-y-auto overscroll-contain pb-safe">
         {query === "" && (
           <Empty className="py-10">
             <EmptyHeader>
@@ -243,24 +262,6 @@ function SearchStep({
           </ul>
         )}
 
-      </div>
-
-      {/* The three ways to get a food that searching cannot reach, at equal
-          weight and in one place. The barcode button used to live inside the
-          search field, which split the two camera actions across two unrelated
-          parts of the sheet and squeezed its own tap target to 36px. */}
-      <div className="shrink-0 border-t border-border px-5 pt-3 pb-safe">
-        <div className="flex gap-2">
-          <Button variant="outline" className="h-11 flex-1" onClick={onScan}>
-            <ScanBarcode className="size-4" /> Scan
-          </Button>
-          <Button variant="outline" className="h-11 flex-1" onClick={onLabel}>
-            <Camera className="size-4" /> Label
-          </Button>
-          <Button variant="outline" className="h-11 flex-1" onClick={onCustom}>
-            <Plus className="size-4" /> Create
-          </Button>
-        </div>
       </div>
     </div>
   );
