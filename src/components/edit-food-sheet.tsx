@@ -2,7 +2,7 @@
 
 import { useState, useTransition } from "react";
 import { updateFood, type FoodEdit } from "@/app/actions";
-import { basisLabel, show, sourceHint, type Food } from "@/lib/food";
+import { basisLabel, countLabel, measureLabel, show, sourceHint, type Food } from "@/lib/food";
 import { FoodSourceBadge } from "@/components/food-source-badge";
 import {
   Drawer,
@@ -14,6 +14,7 @@ import {
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Field, FieldGroup, FieldLabel } from "@/components/ui/field";
+import { ToggleGroup, ToggleGroupItem } from "@/components/ui/toggle-group";
 import { toast } from "sonner";
 
 /**
@@ -78,6 +79,7 @@ function EditForm({
   const [serving, setServing] = useState(
     food.grams_per_unit === null ? "" : String(food.grams_per_unit),
   );
+  const [weightUnit, setWeightUnit] = useState<"g" | "ml">(food.weight_unit);
   const [form, setForm] = useState<Record<string, string>>(() =>
     Object.fromEntries(
       FIELDS.map(([key]) => [key, key === "sodium_mg" && food.sodium_mg === null
@@ -88,12 +90,15 @@ function EditForm({
   const [pending, startTransition] = useTransition();
 
   // A per_100g food's serving size is optional and genuinely unknown when
-  // absent (lib/off.ts); a per_unit food's is the weight of one of whatever it
-  // is counted in. Blank means unknown in both cases, never zero.
+  // absent (lib/off.ts); a per_unit food's is how much one of whatever it is
+  // counted in comes to. Blank means unknown in both cases, never zero.
+  //
+  // This is the number S40 turns on: fill it in and the food can be logged by
+  // volume or weight as well as by the count.
   const servingLabel =
     food.basis === "per_100g"
-      ? `One serving (${food.unit === "ml" ? "ml" : "g"})`
-      : `Weight of one ${food.unit} (g)`;
+      ? "One serving"
+      : `How much one ${countLabel(food, 1)} is`;
 
   const num = (v: string) => (v.trim() === "" ? 0 : Number(v));
   const orNull = (v: string) => (v.trim() === "" ? null : Number(v));
@@ -103,6 +108,7 @@ function EditForm({
       const res = await updateFood(food.id, {
         name,
         grams_per_unit: orNull(serving),
+        weight_unit: weightUnit,
         kcal: num(form.kcal),
         protein_g: num(form.protein_g),
         carb_g: num(form.carb_g),
@@ -147,9 +153,33 @@ function EditForm({
         </Field>
 
         <Field className="mt-4">
-          <FieldLabel htmlFor="edit_serving" className="text-xs font-normal text-muted-foreground">
-            {servingLabel}
-          </FieldLabel>
+          <div className="flex items-center justify-between gap-3">
+            <FieldLabel
+              htmlFor="edit_serving"
+              className="text-xs font-normal text-muted-foreground"
+            >
+              {servingLabel}
+            </FieldLabel>
+            {/* Grams or millilitres. Offered only where it is a real question:
+                a per_100g food answers it in `unit` already, and letting the
+                two disagree is exactly what 0008 exists to prevent. */}
+            {food.basis !== "per_100g" && (
+              <ToggleGroup
+                type="single"
+                size="sm"
+                variant="outline"
+                value={weightUnit}
+                onValueChange={(next) => next && setWeightUnit(next as "g" | "ml")}
+              >
+                <ToggleGroupItem value="g" className="px-3 text-xs">
+                  g
+                </ToggleGroupItem>
+                <ToggleGroupItem value="ml" className="px-3 text-xs">
+                  ml
+                </ToggleGroupItem>
+              </ToggleGroup>
+            )}
+          </div>
           <Input
             id="edit_serving"
             type="number"
@@ -159,6 +189,11 @@ function EditForm({
             className="h-11 text-base tabular-nums"
             placeholder="Unknown"
           />
+          <p className="text-xs text-muted-foreground">
+            {serving.trim() === ""
+              ? `Fill this in to log ${food.name} by ${measureLabel(food)} as well as by the ${countLabel(food, 1)}.`
+              : `One ${countLabel(food, 1)} is ${serving} ${weightUnit}.`}
+          </p>
         </Field>
 
         <FieldGroup className="mt-4 grid grid-cols-2 gap-3">

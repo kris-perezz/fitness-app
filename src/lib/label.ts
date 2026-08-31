@@ -184,6 +184,9 @@ function toDraft(x: Extracted): LabelDraft | null {
     name: x.name?.trim() || "",
     basis: countable ? "per_unit" : "per_100g",
     unit: countable ? x.serving_label?.trim() || "serving" : unit,
+    // A countable draft has no weight at all, so 'g' is a placeholder rather
+    // than a claim; on the per_100g branch it mirrors `unit` as 0008 requires.
+    weight_unit: unit,
     grams_per_unit: countable ? null : amount,
     kcal: kcal * factor,
     protein_g: at(x.protein_g),

@@ -13,6 +13,12 @@ export type Food = {
   basis: "per_unit" | "per_100g";
   unit: string;
   grams_per_unit: number | null;
+  /**
+   * What `grams_per_unit` is measured in (S40). A cup of milk is 250 ml, a
+   * slice of bread is 37.5 g, and the column name is loose about which -- this
+   * says so. For a per_100g food it always equals `unit`.
+   */
+  weight_unit: "g" | "ml";
   kcal: number;
   protein_g: number;
   fat_g: number;
@@ -120,13 +126,66 @@ export function show(n: number | null): number {
 }
 
 /**
- * What `qty` counts. A per_100g food is measured by weight or by volume, and
- * `unit` says which -- drinks are declared in millilitres on the label and in
- * Open Food Facts, so calling them grams would be wrong on both counts.
+ * What `qty` counts, in the food's own storage convention: grams or millilitres
+ * for a per_100g food, and a count of whatever `unit` names for a per_unit one.
  */
 export function qtyLabel(food: Food): string {
   if (food.basis !== "per_100g") return food.unit;
-  return food.unit === "ml" ? "millilitres" : "grams";
+  return food.weight_unit === "ml" ? "millilitres" : "grams";
+}
+
+/** The measure a food can be poured or weighed out in, spelled out. */
+export function measureLabel(food: Food): string {
+  return food.weight_unit === "ml" ? "millilitres" : "grams";
+}
+
+/**
+ * Can this food be expressed BOTH ways -- counted, and measured out? (S40)
+ *
+ * The question is only ever "does it know what one of it weighs", which is a
+ * property of the food, not of how the food happened to arrive. A scanned drink
+ * (per_100g, 325 ml a bottle) and a seeded milk (per_unit, 250 ml a cup) both
+ * qualify; a homemade dish with no cooked weight does not, and inventing a
+ * serving size for it would make "1 serving" mean nothing.
+ */
+export function canMeasure(food: Food): boolean {
+  return food.grams_per_unit != null && food.grams_per_unit > 0;
+}
+
+/**
+ * `scale()` wants grams for a per_100g food and a count for a per_unit one, so
+ * both of a screen's two input modes have to land back on that convention.
+ * These are the only two places that conversion happens.
+ */
+export function qtyFromCount(food: Food, count: number): number {
+  return food.basis === "per_100g" ? count * (food.grams_per_unit ?? 0) : count;
+}
+
+export function qtyFromMeasure(food: Food, measure: number): number {
+  return food.basis === "per_100g" ? measure : measure / (food.grams_per_unit ?? 1);
+}
+
+/**
+ * Carrying an amount across the count/measure toggle. Independent of basis:
+ * one of the thing weighs `grams_per_unit`, whichever way the food is stored.
+ */
+export function countToMeasure(food: Food, count: number): number {
+  return count * (food.grams_per_unit ?? 0);
+}
+
+export function measureToCount(food: Food, measure: number): number {
+  return measure / (food.grams_per_unit ?? 1);
+}
+
+/**
+ * What one of this food is called when counted. A per_100g food counts its
+ * servings; a per_unit food counts cups, slices or scoops.
+ */
+export function countLabel(food: Food, n: number): string {
+  if (food.basis === "per_100g") return n === 1 ? "serving" : "servings";
+  // Left unpluralised: the seed set contains "serving (1/3 cup)" and
+  // "serving (3 slices)", which no naive rule survives.
+  return food.unit;
 }
 
 /** The amount the catalog macros are quoted against, for display. */
