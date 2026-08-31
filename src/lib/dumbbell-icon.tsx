@@ -22,9 +22,13 @@ const PATHS = [
 ];
 
 export function DumbbellMark({ size }: { size: number }) {
-  // 60% of the canvas. The rest is the safe zone Android's maskable crop eats
-  // into -- a glyph drawn edge to edge loses its corners to a circle mask.
-  const glyph = Math.round(size * 0.6);
+  // 55% of the canvas, and the exact figure matters. The manifest declares this
+  // icon `maskable`, so Android may crop it to a circle of 80% diameter -- and
+  // Lucide's dumbbell runs corner to corner, so it is the DIAGONAL that has to
+  // fit, not the width. A square of side g has half-diagonal g*sqrt(2)/2, which
+  // must stay inside the safe radius of 0.4, giving g <= 0.8/sqrt(2) = 0.566.
+  // At 0.6 the two ends of the dumbbell clip; at 0.55 they do not.
+  const glyph = Math.round(size * 0.55);
 
   return (
     <div
