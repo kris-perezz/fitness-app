@@ -39,5 +39,10 @@ export async function middleware(request: NextRequest) {
 }
 
 export const config = {
-  matcher: ["/((?!_next/static|_next/image|favicon.ico|.*\.(?:svg|png|jpg|webp)$).*)"],
+  matcher: [
+    // Metadata routes are excluded deliberately: a browser fetches the manifest
+    // and icons without credentials, so redirecting them to /login breaks
+    // installing the app.
+    "/((?!_next/static|_next/image|favicon.ico|manifest.webmanifest|icon|apple-icon|.*\.(?:svg|png|jpg|webp)$).*)",
+  ],
 };
