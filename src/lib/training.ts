@@ -18,7 +18,14 @@ export type Exercise = {
   equipment: string | null;
   /** S29. Null means this is not a bodyweight movement. Nothing reads it yet. */
   bodyweight_fraction: number | null;
+  /** Open decision 4, still deferred. Not the same question as the next field. */
   is_unilateral: boolean;
+  /**
+   * S49. Whether `load_lb` is the weight in ONE hand or on one side -- a
+   * dumbbell, a plate-loaded arm -- rather than the whole movement. Nothing is
+   * ever doubled from it; it exists so the field says which number to type.
+   */
+  load_is_per_side: boolean;
 };
 
 /** Only the two that are implemented; the column pins the rest (decision 5). */
@@ -103,6 +110,16 @@ export const EQUIPMENT = [
 export function allowsBodyweight(exercise: Exercise | null): boolean {
   if (!exercise) return false;
   return exercise.bodyweight_fraction != null || exercise.equipment === "Bodyweight";
+}
+
+/**
+ * What to call the load field (S49). The convention is stated at the point of
+ * entry so the same lift cannot be logged 140 one week and 70 the next -- which
+ * is the failure that actually corrupts a series, and the one no amount of
+ * arithmetic downstream can undo.
+ */
+export function loadLabel(exercise: Exercise | null): string {
+  return exercise?.load_is_per_side ? "Load per side (lb)" : "Load (lb)";
 }
 
 /** S27: the same ranking the food picker uses, because it is the same function. */

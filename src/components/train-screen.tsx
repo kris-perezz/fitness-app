@@ -6,6 +6,7 @@ import { Check, Dumbbell, Pencil, Plus, Trash2, X } from "lucide-react";
 import {
   allowsBodyweight,
   isHardSet,
+  loadLabel,
   suggestFor,
   trim,
   type Exercise,
@@ -161,12 +162,10 @@ export function TrainScreen({
             key={slot.id}
             slot={slot}
             last={lastSessions[slot.id] ?? null}
-            // Looked up rather than denormalised onto the slot: this decides how
-            // a form BEHAVES today, not what a past set meant, so it is the one
-            // thing here that should follow the catalog rather than be frozen.
-            bodyweight={allowsBodyweight(
-              exercises.find((e) => e.id === slot.exercise_id) ?? null,
-            )}
+            // Looked up rather than denormalised onto the slot: these decide how
+            // a form BEHAVES today, not what a past set meant, so they are the
+            // things here that follow the catalog rather than freeze at log time.
+            exercise={exercises.find((e) => e.id === slot.exercise_id) ?? null}
             onChanged={() => router.refresh()}
           />
         ))}
@@ -232,13 +231,13 @@ export function TrainScreen({
 function SlotSection({
   slot,
   last,
-  bodyweight,
+  exercise,
   onChanged,
 }: {
   slot: WorkoutSlot;
   last: LastSession | null;
-  /** Whether a blank load is a legitimate answer for this lift (S47). */
-  bodyweight: boolean;
+  /** The catalog row, for the two things that govern how the form behaves. */
+  exercise: Exercise | null;
   onChanged: () => void;
 }) {
   const [adding, setAdding] = useState(false);
@@ -286,7 +285,7 @@ function SlotSection({
                 #
               </th>
               <th scope="col" className="py-1 text-left font-normal">
-                Load
+                {exercise?.load_is_per_side ? "Load / side" : "Load"}
               </th>
               <th scope="col" className="py-1 text-left font-normal">
                 Reps
@@ -346,7 +345,7 @@ function SlotSection({
             suggestion={null}
             initial={{ reps: editing.reps, load_lb: editing.load_lb, set_type: editing.set_type }}
             initialRir={editing.rir}
-            bodyweight={bodyweight}
+            exercise={exercise}
             confirmLabel="Save"
             onCancel={() => setEditing(null)}
             onSubmit={(draft, rir) =>
@@ -401,7 +400,7 @@ function SlotSection({
               suggestion={suggestion}
               initial={suggestion?.draft ?? { reps: null, load_lb: 0, set_type: "straight" }}
               initialRir={null}
-              bodyweight={bodyweight}
+              exercise={exercise}
               confirmLabel="Add set"
               onCancel={() => setAdding(false)}
               onSubmit={(draft, rir) =>
@@ -441,7 +440,7 @@ function SetForm({
   suggestion,
   initial,
   initialRir,
-  bodyweight,
+  exercise,
   confirmLabel,
   onSubmit,
   onCancel,
@@ -451,7 +450,7 @@ function SetForm({
   suggestion: { from: string; detail: string } | null;
   initial: SetDraft;
   initialRir: number | null;
-  bodyweight: boolean;
+  exercise: Exercise | null;
   confirmLabel: string;
   onSubmit: (draft: SetDraft, rir: number | null) => void;
   onCancel: () => void;
@@ -476,8 +475,8 @@ function SetForm({
   // a bench press -- so it is only accepted where the exercise says it can be.
   // Everywhere else the load has to be typed, rather than silently logging a
   // barbell lift as though it were lifted with nothing on it.
-  const ready =
-    reps.trim() !== "" && Number(reps) > 0 && (bodyweight || load.trim() !== "");
+  const bodyweight = allowsBodyweight(exercise);
+  const ready = reps.trim() !== "" && Number(reps) > 0 && (bodyweight || load.trim() !== "");
 
   function submit() {
     onSubmit(
@@ -511,7 +510,7 @@ function SetForm({
             htmlFor={`load_${title}`}
             className="text-[11px] font-normal text-muted-foreground"
           >
-            Load (lb)
+            {loadLabel(exercise)}
           </FieldLabel>
           <Input
             id={`load_${title}`}
