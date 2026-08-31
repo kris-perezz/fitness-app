@@ -328,12 +328,14 @@ function LabelStep({
   return (
     <div className="flex min-h-0 flex-1 flex-col">
       <div className="min-h-0 flex-1 overflow-y-auto overscroll-contain px-5 pb-4">
-        <button
+        <Button
+          variant="ghost"
+          size="sm"
           onClick={onBack}
-          className="-ml-1 mb-4 flex items-center gap-1 text-sm text-muted-foreground"
+          className="-ml-2 mb-4 text-muted-foreground"
         >
           <ChevronLeft className="size-4" /> Back
-        </button>
+        </Button>
 
         <input
           ref={fileRef}

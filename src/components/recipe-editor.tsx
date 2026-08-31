@@ -194,6 +194,8 @@ export function RecipeEditor({
         </section>
 
         <section className="border-b border-border px-5 py-5">
+          {/* Hand-rolled: Chart is the only registry option for a figure and it
+              would pull recharts in to render four numbers. */}
           <div className="grid grid-cols-4 gap-2 text-center">
             {[
               ["Calories", per.kcal],
@@ -269,6 +271,8 @@ export function RecipeEditor({
           )}
 
           {lines.length > 0 && (
+            // A real <ul>, not ItemGroup: ItemGroup is a div with role="list"
+            // that spaces children with a gap, and these rows are flush.
             <ul>
               {lines.map((line) => (
                 <IngredientRow key={line.id} line={line} onChanged={() => router.refresh()} />
@@ -276,6 +280,9 @@ export function RecipeEditor({
             </ul>
           )}
 
+          {/* Hand-rolled: a full-bleed borderless row is not a Button shape --
+              every registry variant is an inset control with its own hit area.
+              Matches the "Add food" row in log-screen.tsx, deliberately. */}
           <button
             onClick={() => setAdding(true)}
             className="flex w-full items-center gap-1.5 px-5 py-3 text-left text-sm font-medium text-primary transition-colors active:bg-accent"

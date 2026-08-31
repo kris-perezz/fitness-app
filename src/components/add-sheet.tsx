@@ -14,6 +14,7 @@ import {
   DrawerTitle,
 } from "@/components/ui/drawer";
 import { Button } from "@/components/ui/button";
+import { ButtonGroup } from "@/components/ui/button-group";
 import { ToggleGroup, ToggleGroupItem } from "@/components/ui/toggle-group";
 import { Input } from "@/components/ui/input";
 import { Field, FieldGroup, FieldLabel } from "@/components/ui/field";
@@ -249,12 +250,14 @@ function QtyStep({
   return (
     <div className="flex min-h-0 flex-1 flex-col">
       <div className="min-h-0 flex-1 overflow-y-auto overscroll-contain px-5 pb-4">
-        <button
+        <Button
+          variant="ghost"
+          size="sm"
           onClick={onBack}
-          className="-ml-1 mb-4 flex items-center gap-1 text-sm text-muted-foreground"
+          className="-ml-2 mb-4 text-muted-foreground"
         >
           <ChevronLeft className="size-4" /> Back
-        </button>
+        </Button>
 
         <div className="flex items-center gap-2">
           <h3 className="text-base font-semibold leading-tight">{food.name}</h3>
@@ -311,18 +314,21 @@ function QtyStep({
           />
         </Field>
 
-        <div className="mt-3 flex gap-2">
+        <ButtonGroup className="mt-3 w-full">
           {presets.map((p) => (
-            <button
+            <Button
               key={p}
+              variant="outline"
+              className="h-11 flex-1 tabular-nums"
               onClick={() => setQty(String(p))}
-              className="h-11 flex-1 rounded-md border border-border text-sm tabular-nums transition-colors active:bg-accent"
             >
               {p}
-            </button>
+            </Button>
           ))}
-        </div>
+        </ButtonGroup>
 
+        {/* Hand-rolled: see ingredient-sheet.tsx -- Chart is the only registry
+            option and it would pull recharts in to render four numbers. */}
         <dl className="mt-6 grid grid-cols-4 gap-2 border-t border-border pt-4 text-center">
           {previewRows.map((row) => (
             <div key={row.label}>
@@ -407,12 +413,14 @@ function CustomStep({
   return (
     <div className="flex min-h-0 flex-1 flex-col">
       <div className="min-h-0 flex-1 overflow-y-auto overscroll-contain px-5 pb-4">
-        <button
+        <Button
+          variant="ghost"
+          size="sm"
           onClick={onBack}
-          className="-ml-1 mb-4 flex items-center gap-1 text-sm text-muted-foreground"
+          className="-ml-2 mb-4 text-muted-foreground"
         >
           <ChevronLeft className="size-4" /> Back
-        </button>
+        </Button>
 
         <Input
           placeholder="Food name"

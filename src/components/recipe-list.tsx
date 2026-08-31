@@ -88,6 +88,8 @@ export function RecipeList({ recipes }: { recipes: RecipeSummary[] }) {
           </ul>
         )}
 
+        {/* Hand-rolled for the same reason as the "Add ingredient" row in
+            recipe-editor.tsx: a full-bleed borderless row is not a Button. */}
         <button
           onClick={() => setNaming(true)}
           className="flex w-full items-center gap-1.5 border-b border-border px-5 py-3 text-left text-sm font-medium text-primary transition-colors active:bg-accent"
