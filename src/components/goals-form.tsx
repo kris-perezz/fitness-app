@@ -4,7 +4,13 @@ import { useState, useTransition } from "react";
 import { saveGoals, signOut } from "@/app/actions";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
-import { Label } from "@/components/ui/label";
+import {
+  Field,
+  FieldContent,
+  FieldDescription,
+  FieldGroup,
+  FieldLabel,
+} from "@/components/ui/field";
 import {
   MACRO_KEYS,
   balance,
@@ -19,7 +25,7 @@ import { toast } from "sonner";
 
 type Goals = ({ calorie_goal: number } & MacroGoals) | null;
 
-type Field = "calorie_goal" | MacroKey;
+type FieldName = "calorie_goal" | MacroKey;
 
 const MACRO_LABELS: Record<MacroKey, string> = {
   protein_goal_g: "Protein (g)",
@@ -66,7 +72,7 @@ export function GoalsForm({ goals }: { goals: Goals }) {
    * macro keeps that number and moves the other two. Runs on blur rather than
    * on each keystroke so the fields never rewrite themselves mid-type.
    */
-  function reconcile(edited: Field) {
+  function reconcile(edited: FieldName) {
     const values = numbers();
     const fixed =
       edited === "calorie_goal"
@@ -104,10 +110,10 @@ export function GoalsForm({ goals }: { goals: Goals }) {
       </header>
 
       <div className="space-y-6 px-5 py-6">
-        <div className="space-y-1.5">
-          <Label htmlFor="calorie_goal" className="text-xs text-muted-foreground">
+        <Field>
+          <FieldLabel htmlFor="calorie_goal" className="text-xs font-normal text-muted-foreground">
             Daily calories
-          </Label>
+          </FieldLabel>
           <Input
             id="calorie_goal"
             type="number"
@@ -117,32 +123,41 @@ export function GoalsForm({ goals }: { goals: Goals }) {
             onBlur={() => reconcile("calorie_goal")}
             className="h-12 text-base tabular-nums"
           />
-        </div>
+        </Field>
 
-        <div className="grid grid-cols-3 gap-3">
-          {MACRO_KEYS.map((key) => (
-            <div key={key} className="space-y-1.5">
-              <Label htmlFor={key} className="text-xs text-muted-foreground">
-                {MACRO_LABELS[key]}
-              </Label>
-              <Input
-                id={key}
-                type="number"
-                inputMode="decimal"
-                value={form[key]}
-                onChange={(e) => setForm({ ...form, [key]: e.target.value })}
-                onBlur={() => reconcile(key)}
-                className="h-12 text-base tabular-nums"
-              />
-            </div>
-          ))}
-        </div>
-
-        <p className="text-xs text-muted-foreground">
-          Those macros add up to{" "}
-          <span className="tabular-nums text-foreground">{caloriesOf(current)}</span> calories.
-          Change any field and the rest follow.
-        </p>
+        {/* The running total is Field's description slot rather than a loose
+            paragraph: it describes the macro group as a whole, which is why it
+            sits on the group and not on any one macro. It is not FieldError --
+            a split that disagrees with the calorie goal is a transient state
+            mid-type that `reconcile` fixes on blur, not something the user has
+            to correct. */}
+        <FieldGroup className="gap-2">
+          <div className="grid grid-cols-3 gap-3">
+            {MACRO_KEYS.map((key) => (
+              <Field key={key}>
+                <FieldLabel htmlFor={key} className="text-xs font-normal text-muted-foreground">
+                  {MACRO_LABELS[key]}
+                </FieldLabel>
+                <Input
+                  id={key}
+                  type="number"
+                  inputMode="decimal"
+                  value={form[key]}
+                  onChange={(e) => setForm({ ...form, [key]: e.target.value })}
+                  onBlur={() => reconcile(key)}
+                  className="h-12 text-base tabular-nums"
+                />
+              </Field>
+            ))}
+          </div>
+          <FieldContent>
+            <FieldDescription className="text-xs">
+              Those macros add up to{" "}
+              <span className="tabular-nums text-foreground">{caloriesOf(current)}</span> calories.
+              Change any field and the rest follow.
+            </FieldDescription>
+          </FieldContent>
+        </FieldGroup>
 
         <Button className="h-11 w-full text-base" onClick={save} disabled={pending}>
           {pending ? "Saving" : "Save"}

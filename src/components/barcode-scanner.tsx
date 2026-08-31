@@ -1,11 +1,11 @@
 "use client";
 
 import { useEffect, useRef, useState } from "react";
-import { Loader2 } from "lucide-react";
 import type { IScannerControls } from "@zxing/browser";
 import { lookupBarcode } from "@/app/actions";
 import type { Food } from "@/lib/food";
 import { Button } from "@/components/ui/button";
+import { Spinner } from "@/components/ui/spinner";
 import { toast } from "sonner";
 
 type Status =
@@ -161,7 +161,10 @@ export function BarcodeScanner({
               <div className="pointer-events-none absolute inset-x-8 inset-y-1/3 rounded-md border-2 border-white/70" />
               {status.kind !== "scanning" && (
                 <div className="absolute inset-0 flex items-center justify-center bg-black/50">
-                  <Loader2 className="size-6 animate-spin text-white" />
+                  {/* Hidden from assistive tech: Spinner carries role="status",
+                      and the aria-live line below already announces the same
+                      state in words. */}
+                  <Spinner aria-hidden className="size-6 text-white" />
                 </div>
               )}
             </div>

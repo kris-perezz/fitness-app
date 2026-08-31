@@ -14,7 +14,14 @@ import {
 } from "@/components/ui/drawer";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
-import { Label } from "@/components/ui/label";
+import { Field, FieldGroup, FieldLabel } from "@/components/ui/field";
+import {
+  InputGroup,
+  InputGroupAddon,
+  InputGroupButton,
+  InputGroupInput,
+} from "@/components/ui/input-group";
+import { Item, ItemContent, ItemDescription, ItemTitle } from "@/components/ui/item";
 import {
   Empty,
   EmptyDescription,
@@ -150,28 +157,32 @@ function SearchStep({
 
   return (
     <div className="flex min-h-0 flex-1 flex-col">
-      <div className="flex shrink-0 items-center gap-2 px-5 pb-3">
-        <div className="relative flex-1">
-          <Search className="pointer-events-none absolute left-3 top-1/2 size-4 -translate-y-1/2 text-muted-foreground" />
-          <Input
+      <div className="shrink-0 px-5 pb-3">
+        <InputGroup className="h-11">
+          <InputGroupAddon>
+            <Search />
+          </InputGroupAddon>
+          <InputGroupInput
             ref={inputRef}
             value={query}
             onChange={(e) => setQuery(e.target.value)}
             placeholder="Search for a food"
             autoComplete="off"
             enterKeyHint="search"
-            className="h-11 pl-9 text-base"
+            className="text-base"
           />
-        </div>
-        <Button
-          variant="outline"
-          size="icon"
-          className="size-11 shrink-0"
-          onClick={onScan}
-          aria-label="Scan a barcode"
-        >
-          <ScanBarcode className="size-5" />
-        </Button>
+          <InputGroupAddon align="inline-end">
+            <InputGroupButton
+              variant="outline"
+              size="icon-sm"
+              className="size-9"
+              onClick={onScan}
+              aria-label="Scan a barcode"
+            >
+              <ScanBarcode className="size-5" />
+            </InputGroupButton>
+          </InputGroupAddon>
+        </InputGroup>
       </div>
 
       <div className="min-h-0 flex-1 overflow-y-auto overscroll-contain">
@@ -204,17 +215,16 @@ function SearchStep({
           <ul className="divide-y divide-border">
             {results.map((f) => (
               <li key={f.id}>
-                <button
-                  onClick={() => onPick(f)}
-                  className="flex w-full items-center justify-between gap-4 px-5 py-3 text-left transition-colors active:bg-accent"
-                >
-                  <span className="min-w-0">
-                    <span className="block truncate text-sm">{f.name}</span>
-                    <span className="mt-0.5 block text-xs text-muted-foreground">
-                      {f.kcal} cal per {f.basis === "per_100g" ? "100 g" : f.unit}
-                    </span>
-                  </span>
-                </button>
+                <Item asChild size="sm" className="rounded-none px-5 py-3 active:bg-accent">
+                  <button onClick={() => onPick(f)} className="text-left">
+                    <ItemContent className="min-w-0">
+                      <ItemTitle className="font-normal">{f.name}</ItemTitle>
+                      <ItemDescription className="text-xs">
+                        {f.kcal} cal per {f.basis === "per_100g" ? "100 g" : f.unit}
+                      </ItemDescription>
+                    </ItemContent>
+                  </button>
+                </Item>
               </li>
             ))}
           </ul>
@@ -307,10 +317,10 @@ function QtyStep({
           per {food.basis === "per_100g" ? "100 g" : food.unit}
         </p>
 
-        <div className="mt-5 space-y-2">
-          <Label htmlFor="qty" className="text-xs text-muted-foreground">
+        <Field className="mt-5">
+          <FieldLabel htmlFor="qty" className="text-xs font-normal text-muted-foreground">
             Serving size ({qtyLabel(food)})
-          </Label>
+          </FieldLabel>
           <Input
             ref={inputRef}
             id="qty"
@@ -322,7 +332,7 @@ function QtyStep({
             onKeyDown={(e) => e.key === "Enter" && save()}
             className="h-12 text-base tabular-nums"
           />
-        </div>
+        </Field>
 
         <div className="mt-3 flex gap-2">
           {presets.map((p) => (
@@ -434,12 +444,12 @@ function CustomStep({
           className="h-11 text-base"
         />
 
-        <div className="mt-4 grid grid-cols-2 gap-3">
+        <FieldGroup className="mt-4 grid grid-cols-2 gap-3">
           {fields.map(([key, label]) => (
-            <div key={key} className="space-y-1.5">
-              <Label htmlFor={key} className="text-xs text-muted-foreground">
+            <Field key={key}>
+              <FieldLabel htmlFor={key} className="text-xs font-normal text-muted-foreground">
                 {label}
-              </Label>
+              </FieldLabel>
               <Input
                 id={key}
                 type="number"
@@ -449,9 +459,9 @@ function CustomStep({
                 className="h-11 text-base tabular-nums"
                 placeholder="0"
               />
-            </div>
+            </Field>
           ))}
-        </div>
+        </FieldGroup>
       </div>
 
       <div className="shrink-0 border-t border-border px-5 pt-3 pb-safe">

@@ -13,6 +13,13 @@ import {
   DrawerHeader,
   DrawerTitle,
 } from "@/components/ui/drawer";
+import {
+  Item,
+  ItemActions,
+  ItemContent,
+  ItemDescription,
+  ItemTitle,
+} from "@/components/ui/item";
 import { AddSheet } from "@/components/add-sheet";
 import { CalorieRing } from "@/components/calorie-ring";
 import { toast } from "sonner";
@@ -140,21 +147,24 @@ export function LogScreen({
                 <ul>
                   {items.map((e) => (
                     <li key={e.id}>
-                      <button
-                        onClick={() => setDetail(e)}
-                        className="flex w-full items-center justify-between gap-4 px-5 py-2.5 text-left transition-colors active:bg-accent"
+                      <Item
+                        asChild
+                        size="sm"
+                        className="rounded-none px-5 py-2.5 active:bg-accent"
                       >
-                        <span className="min-w-0">
-                          <span className="block truncate text-sm">{e.name}</span>
-                          <span className="mt-0.5 block text-xs text-muted-foreground">
-                            {e.qty} {e.unit}
-                            {e.estimate && " · estimate"}
-                          </span>
-                        </span>
-                        <span className="shrink-0 text-sm tabular-nums text-muted-foreground">
-                          {withCommas(e.kcal)}
-                        </span>
-                      </button>
+                        <button onClick={() => setDetail(e)} className="text-left">
+                          <ItemContent className="min-w-0">
+                            <ItemTitle className="font-normal">{e.name}</ItemTitle>
+                            <ItemDescription className="text-xs">
+                              {e.qty} {e.unit}
+                              {e.estimate && " · estimate"}
+                            </ItemDescription>
+                          </ItemContent>
+                          <ItemActions className="shrink-0 text-sm tabular-nums text-muted-foreground">
+                            {withCommas(e.kcal)}
+                          </ItemActions>
+                        </button>
+                      </Item>
                     </li>
                   ))}
                 </ul>
