@@ -128,51 +128,29 @@ export async function discardWorkout(id: string) {
 }
 
 /**
- * Add an exercise slot. The name and muscle group are copied onto the slot at
+ * Add an exercise slot.
+ *
+ * One statement (0014, add_workout_exercise) rather than five sequential round
+ * trips -- getUser, ownership, catalog lookup, max(sort_order), insert -- each
+ * of which was waiting on the one before it. RLS on `workouts` is what enforces
+ * ownership inside the function, so the check is no longer a separate query
+ * that could be forgotten.
+ *
+ * The name, muscle group and muscle lists are still copied onto the slot at
  * this moment and never read from `exercises` again, so recategorising a lift
  * cannot rewrite what past sessions say it was (S32 -- the same rule as S7 and
- * S19, third statement of it).
+ * S19). They are copied inside the function, from the catalog, so the client
+ * cannot assert what a lift trains.
  */
 export async function addWorkoutExercise(
   workoutId: string,
   exerciseId: string,
 ): Promise<{ error: string | null }> {
   const supabase = await createClient();
-  const {
-    data: { user },
-  } = await supabase.auth.getUser();
-  if (!user) return { error: "Not signed in" };
 
-  const owned = await ownsWorkout(supabase, workoutId, user.id);
-  if (owned) return { error: owned };
-
-  const { data: exercise, error: exerciseError } = await supabase
-    .from("exercises")
-    .select("id, name, muscle_group, primary_muscles, secondary_muscles")
-    .eq("id", exerciseId)
-    .maybeSingle();
-  if (exerciseError) return { error: exerciseError.message };
-  if (!exercise) return { error: "Exercise not found" };
-
-  const { data: last, error: lastError } = await supabase
-    .from("workout_exercises")
-    .select("sort_order")
-    .eq("workout_id", workoutId)
-    .order("sort_order", { ascending: false })
-    .limit(1)
-    .maybeSingle();
-  if (lastError) return { error: lastError.message };
-
-  const { error } = await supabase.from("workout_exercises").insert({
-    workout_id: workoutId,
-    exercise_id: exercise.id,
-    name: exercise.name,
-    muscle_group: exercise.muscle_group,
-    // Denormalised at log time like name and muscle_group above (S32):
-    // reclassifying the exercise later must not rewrite this session.
-    primary_muscles: exercise.primary_muscles,
-    secondary_muscles: exercise.secondary_muscles,
-    sort_order: last ? (last.sort_order as number) + 1 : 0,
+  const { error } = await supabase.rpc("add_workout_exercise", {
+    p_workout_id: workoutId,
+    p_exercise_id: exerciseId,
   });
   if (error) return { error: error.message };
 
@@ -320,22 +298,6 @@ function validateSet(input: Omit<SetInput, "set_index">): string | null {
   return null;
 }
 
-/** Null when the caller owns the workout, an error string otherwise. */
-async function ownsWorkout(
-  supabase: ServerClient,
-  workoutId: string,
-  userId: string,
-): Promise<string | null> {
-  const { data, error } = await supabase
-    .from("workouts")
-    .select("id")
-    .eq("id", workoutId)
-    .eq("user_id", userId)
-    .maybeSingle();
-  if (error) return error.message;
-  if (!data) return "Session not found";
-  return null;
-}
 
 /**
  * Closes a session, and deletes it instead if nothing was logged in it.

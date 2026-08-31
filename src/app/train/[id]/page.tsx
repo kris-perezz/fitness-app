@@ -1,7 +1,7 @@
 import { notFound } from "next/navigation";
 import { createClient } from "@/lib/supabase/server";
 import { wakingDate } from "@/lib/food";
-import { NO_BESTS, foldBest } from "@/lib/training";
+import { NO_BESTS } from "@/lib/training";
 import type {
   Bests,
   Exercise,
@@ -63,24 +63,21 @@ export default async function WorkoutPage({ params }: PageProps<"/train/[id]">) 
  * S42/S45/S33. Everything this session needs to know about what came before:
  * what each exercise did LAST time, and its best ever.
  *
- * One query serves both. The rows are already being fetched for the
- * suggestion -- every earlier slot for the exercises in play, newest first -- so
- * the all-time bests are a second fold over the same data rather than a second
- * round trip.
+ * Both come from the database as ANSWERS rather than as rows to fold here.
+ * This used to be one query that fetched every prior slot for every lift in
+ * the session with all their sets nested -- a payload that grew with the log
+ * for ever, and grew again each time you added a lift, which is what made
+ * adding one the slowest thing on the screen. The bests are now an aggregate
+ * (0014, exercise_bests); the last session is one slot per lift rather than
+ * every slot it has ever had.
  *
  * The unit is the EXERCISE, never the session. A week that runs full body,
  * upper, lower, arms shares almost no lifts between consecutive sessions, so
- * "what did I do last workout" is the wrong question -- "what did I do last
- * time I benched" is the right one, and it is the only one asked here.
+ * "last time" has to mean the last time you did THIS LIFT.
  *
- * Bounded by this session's DATE, not merely by its id (S51). A session added
- * for last Monday must not be pre-filled from last Friday: that is a suggestion
- * from the future, and left unchecked it quietly becomes the thing you "did".
- *
- * One query for the whole session rather than one per slot: pull every earlier
- * slot for the exercises in play, newest first, and keep the first one seen per
- * exercise. RLS already restricts this to the caller's own history, so there is
- * no user filter to forget.
+ * Sessions strictly BEFORE this one, so re-opening a past session cannot
+ * suggest itself back to you. RLS restricts all three functions to the caller's
+ * own history, so there is no user filter to forget.
  */
 async function historyFor(
   supabase: Awaited<ReturnType<typeof createClient>>,
@@ -90,33 +87,52 @@ async function historyFor(
   const exerciseIds = [...new Set(slots.map((s) => s.exercise_id))];
   if (exerciseIds.length === 0) return { lastSessions: {}, bests: {} };
 
-  const { data } = await supabase
-    .from("workout_exercises")
-    .select("exercise_id, created_at, workout:workouts!inner(log_date), sets:workout_sets(*)")
-    .in("exercise_id", exerciseIds)
-    .neq("workout_id", workout.id)
-    .lt("workout.log_date", workout.log_date)
-    .order("created_at", { ascending: false });
+  const args = {
+    p_exercise_ids: exerciseIds,
+    p_before: workout.log_date,
+    p_exclude_workout: workout.id,
+  };
+
+  // Independent of each other, so they go together rather than in sequence.
+  const [bestRows, slotRows] = await Promise.all([
+    supabase.rpc("exercise_bests", args),
+    supabase.rpc("last_session_slots", args),
+  ]);
+
+  const bestByExercise: Record<string, Bests> = {};
+  for (const r of (bestRows.data ?? []) as BestRow[]) {
+    bestByExercise[r.exercise_id] = {
+      e1rm: Number(r.e1rm),
+      repBand: Number(r.rep_band),
+      single: Number(r.single),
+    };
+  }
+
+  const found = (slotRows.data ?? []) as LastSlotRow[];
+
+  // The one place real set rows are still needed -- and now only for the slots
+  // named above, which is one per lift.
+  const setsBySlot: Record<string, WorkoutSet[]> = {};
+  if (found.length > 0) {
+    const { data: setRows } = await supabase
+      .from("workout_sets")
+      .select("*")
+      .in(
+        "workout_exercise_id",
+        found.map((r) => r.workout_exercise_id),
+      );
+    for (const set of (setRows ?? []) as WorkoutSet[]) {
+      (setsBySlot[set.workout_exercise_id] ??= []).push(set);
+    }
+    for (const list of Object.values(setsBySlot)) {
+      list.sort((a, b) => a.set_index - b.set_index);
+    }
+  }
 
   const lastByExercise: Record<string, LastSession> = {};
-  const bestByExercise: Record<string, Bests> = {};
-
-  for (const row of data ?? []) {
-    const exerciseId = row.exercise_id as string;
-    const sets = ((row.sets ?? []) as WorkoutSet[])
-      .slice()
-      .sort((a, b) => a.set_index - b.set_index);
-    if (sets.length === 0) continue;
-
-    // Every row folds into the all-time bests (S33)...
-    bestByExercise[exerciseId] = sets.reduce(foldBest, bestByExercise[exerciseId] ?? NO_BESTS);
-
-    // ...but only the newest is the last session (S42/S45). Rows arrive newest
-    // first, so the first one seen per exercise wins.
-    if (!(exerciseId in lastByExercise)) {
-      const parent = row.workout as unknown as { log_date: string } | null;
-      lastByExercise[exerciseId] = { sets, date: parent?.log_date ?? "" };
-    }
+  for (const r of found) {
+    const sets = setsBySlot[r.workout_exercise_id] ?? [];
+    if (sets.length > 0) lastByExercise[r.exercise_id] = { sets, date: r.log_date };
   }
 
   // Keyed by slot, not by exercise, so the same lift twice in one session gets
@@ -130,6 +146,10 @@ async function historyFor(
   }
   return { lastSessions, bests };
 }
+
+/** Numeric comes back from PostgREST as a string; Number() at the boundary. */
+type BestRow = { exercise_id: string; e1rm: string; rep_band: string; single: string };
+type LastSlotRow = { exercise_id: string; workout_exercise_id: string; log_date: string };
 
 /**
  * S27's "recent exercises above search", in its thinnest form: the lifts from
