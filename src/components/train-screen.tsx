@@ -305,8 +305,20 @@ function SlotSection({
                 <td className="py-2 pl-5 tabular-nums text-muted-foreground">
                   {set.set_index + 1}
                 </td>
-                <td className="py-2 tabular-nums">
-                  {set.load_lb === 0 ? "BW" : `${trim(set.load_lb)} lb`}
+                <td className="py-2">
+                  <span className="flex items-center gap-1.5">
+                    <span className="tabular-nums">
+                      {set.load_lb === 0 ? "BW" : `${trim(set.load_lb)} lb`}
+                    </span>
+                    {/* A warm-up counts for nothing in volume (S32) but stays in
+                        history, so the row has to say which it is -- otherwise
+                        two identical-looking rows mean different things. */}
+                    {set.set_type === "warmup" && (
+                      <Badge variant="secondary" className="px-1.5 text-[10px]">
+                        Warm-up
+                      </Badge>
+                    )}
+                  </span>
                 </td>
                 <td className="py-2 tabular-nums">{set.reps ?? "—"}</td>
                 <td className="py-2 tabular-nums text-muted-foreground">{set.rir ?? "—"}</td>
