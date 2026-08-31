@@ -1,53 +1,54 @@
 import { createClient } from "@/lib/supabase/server";
 import { wakingDate } from "@/lib/food";
-import { MUSCLE_GROUPS, type MuscleVolume } from "@/lib/training";
-import { TrainHome, type SessionSummary } from "@/components/train-home";
+import { WINDOW_MONTHS, shiftMonth } from "@/lib/training";
+import { TrainHome, type DayVolume, type SessionSummary } from "@/components/train-home";
 
 export const dynamic = "force-dynamic";
 
 /**
- * S50. The train tab's resting state: a month of history, not an empty screen.
+ * S50. The train tab's resting state: history, not an empty screen.
  *
- * The month is a query parameter rather than client state so that paging back
- * is a real navigation -- shareable, back-button-able, and refetched on the
- * server instead of accumulating months in the browser.
+ * A WINDOW, FETCHED ONCE, EXTENDED BEFORE YOU REACH ITS EDGE. The month used to
+ * be a query parameter, so every tap of a calendar arrow was a server round
+ * trip -- three queries and a re-render before the numbers changed. That is
+ * never seamless however well it is optimised, because a round trip is a round
+ * trip: prefetching the neighbours hides it for two months, caching hides it
+ * the second time you visit one.
+ *
+ * So the month became client state and the data comes up front. Not ALL of it,
+ * though: that was the first attempt and it grows without limit -- fine at 175
+ * sessions, a liability at ten years. Six months is roughly what anyone pages
+ * through in one sitting, and train-home.tsx fetches the next six while you are
+ * still two months from needing them.
+ *
+ * What makes a window affordable at all is that 0018 and the muscle_volume view
+ * made the rows small: a session is one summary row rather than every set it
+ * contains, and volume is one row per day per muscle.
+ *
+ * The month is no longer in the URL, so it is not shareable and the back button
+ * does not step through months. Both were checked; neither is wanted here.
  */
-export default async function TrainPage({
-  searchParams,
-}: {
-  searchParams: Promise<{ month?: string }>;
-}) {
-  const { month: requested } = await searchParams;
+export default async function TrainPage() {
   const today = wakingDate();
-  const month = /^\d{4}-\d{2}$/.test(requested ?? "") ? requested! : today.slice(0, 7);
-
   const supabase = await createClient();
 
-  const [{ data: openRows }, { data: monthRows }, { data: volumeRows }] = await Promise.all([
+  // The window ends today and reaches back WINDOW_MONTHS, today's month
+  // included -- so six months means five back plus this one.
+  const from = `${shiftMonth(today.slice(0, 7), -(WINDOW_MONTHS - 1))}-01`;
+
+  const [{ data: openRows }, { data: sessionRows }, { data: volumeRows }] = await Promise.all([
     supabase.from("workouts").select("id, log_date").is("ended_at", null).limit(1),
-    // 0018. Names, set count and volume already totalled, instead of every set
-    // of every session in the month fetched so this file could count them.
     supabase
       .from("workout_summaries")
       .select("id, log_date, exercises, set_count, volume_lb")
-      .gte("log_date", `${month}-01`)
-      .lte("log_date", lastDayOf(month))
+      .gte("log_date", from)
       .order("log_date", { ascending: false }),
-    // S32, over the SAME month the calendar is showing. Day grain from the
-    // view, summed here -- the view deliberately picks no window at all, so
-    // this and S82's eight-week chart can ask the same rows different
-    // questions. Paging the calendar back re-runs this with it, which is the
-    // point: the totals belong to the month you are looking at.
-    supabase
-      .from("muscle_volume")
-      .select("muscle, sets")
-      .gte("log_date", `${month}-01`)
-      .lte("log_date", lastDayOf(month)),
+    supabase.from("muscle_volume").select("log_date, muscle, sets").gte("log_date", from),
   ]);
 
   const open = openRows?.[0] ?? null;
 
-  const sessions: SessionSummary[] = (monthRows ?? []).map((row) => ({
+  const sessions: SessionSummary[] = (sessionRows ?? []).map((row) => ({
     id: row.id as string,
     date: row.log_date as string,
     exercises: (row.exercises ?? []) as string[],
@@ -55,31 +56,22 @@ export default async function TrainPage({
     volumeLb: Number(row.volume_lb),
   }));
 
-  // Several days of the same muscle add up into one weekly figure. Numeric
-  // arrives from PostgREST as a string, so Number() at the boundary.
-  const byMuscle = new Map<string, number>();
-  for (const row of (volumeRows ?? []) as { muscle: string; sets: string }[]) {
-    byMuscle.set(row.muscle, (byMuscle.get(row.muscle) ?? 0) + Number(row.sets));
-  }
-  const volume: MuscleVolume[] = MUSCLE_GROUPS.map((muscle) => ({
-    muscle,
-    sets: byMuscle.get(muscle) ?? 0,
+  // Left at day grain and grouped in the browser, because the browser is what
+  // now decides which month is on screen. Numeric arrives from PostgREST as a
+  // string, so Number() at the boundary rather than at every use.
+  const volume: DayVolume[] = (volumeRows ?? []).map((row) => ({
+    date: row.log_date as string,
+    muscle: row.muscle as string,
+    sets: Number(row.sets),
   }));
 
   return (
     <TrainHome
-      month={month}
       today={today}
+      loadedFrom={from.slice(0, 7)}
       sessions={sessions}
       volume={volume}
       openSession={open ? { id: open.id as string, date: open.log_date as string } : null}
     />
   );
-}
-
-/** Last calendar day of a YYYY-MM, via day 0 of the following month. */
-function lastDayOf(month: string): string {
-  const [year, m] = month.split("-").map(Number);
-  const end = new Date(Date.UTC(year, m, 0));
-  return end.toISOString().slice(0, 10);
 }

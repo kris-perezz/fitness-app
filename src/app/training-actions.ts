@@ -376,3 +376,69 @@ async function closeStaleWorkout(
 
   return closeWorkout(supabase, data.id as string, userId);
 }
+
+/**
+ * S50. One more slice of history for the train tab, fetched in the background
+ * as the calendar approaches the edge of what is already loaded.
+ *
+ * Inclusive of both months. Returns rows, not components: the caller merges
+ * them into what it holds and keeps paging without a navigation, which is the
+ * whole point -- a month change must never wait on a network call.
+ *
+ * No revalidatePath. Nothing was written, and re-rendering the route would
+ * undo the reason this exists.
+ */
+export async function loadTrainingWindow(
+  fromMonth: string,
+  toMonth: string,
+): Promise<{
+  sessions: { id: string; date: string; exercises: string[]; setCount: number; volumeLb: number }[];
+  volume: { date: string; muscle: string; sets: number }[];
+  error: string | null;
+}> {
+  const empty = { sessions: [], volume: [] };
+  if (!/^\d{4}-\d{2}$/.test(fromMonth) || !/^\d{4}-\d{2}$/.test(toMonth)) {
+    return { ...empty, error: "Bad month range" };
+  }
+
+  const supabase = await createClient();
+  const from = `${fromMonth}-01`;
+  const to = lastDayOfMonth(toMonth);
+
+  const [{ data: sessionRows, error: se }, { data: volumeRows, error: ve }] = await Promise.all([
+    supabase
+      .from("workout_summaries")
+      .select("id, log_date, exercises, set_count, volume_lb")
+      .gte("log_date", from)
+      .lte("log_date", to)
+      .order("log_date", { ascending: false }),
+    supabase
+      .from("muscle_volume")
+      .select("log_date, muscle, sets")
+      .gte("log_date", from)
+      .lte("log_date", to),
+  ]);
+  if (se || ve) return { ...empty, error: (se ?? ve)!.message };
+
+  return {
+    sessions: (sessionRows ?? []).map((row) => ({
+      id: row.id as string,
+      date: row.log_date as string,
+      exercises: (row.exercises ?? []) as string[],
+      setCount: Number(row.set_count),
+      volumeLb: Number(row.volume_lb),
+    })),
+    volume: (volumeRows ?? []).map((row) => ({
+      date: row.log_date as string,
+      muscle: row.muscle as string,
+      sets: Number(row.sets),
+    })),
+    error: null,
+  };
+}
+
+/** Last calendar day of a YYYY-MM, via day 0 of the following month. */
+function lastDayOfMonth(month: string): string {
+  const [year, m] = month.split("-").map(Number);
+  return new Date(Date.UTC(year, m, 0)).toISOString().slice(0, 10);
+}

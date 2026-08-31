@@ -1,10 +1,18 @@
 "use client";
 
-import { useEffect, useRef, useState, useTransition } from "react";
+import { useEffect, useMemo, useRef, useState, useTransition } from "react";
 import { useRouter } from "next/navigation";
 import Link from "next/link";
 import { CalendarPlus, Dumbbell, Play } from "lucide-react";
-import { shortDate, trim, type MuscleVolume } from "@/lib/training";
+import {
+  MUSCLE_GROUPS,
+  WINDOW_BUFFER_MONTHS,
+  WINDOW_MONTHS,
+  shiftMonth,
+  shortDate,
+  trim,
+  type MuscleVolume,
+} from "@/lib/training";
 import { Bar, BarChart, LabelList, XAxis, YAxis } from "recharts";
 import {
   ChartContainer,
@@ -12,7 +20,7 @@ import {
   ChartTooltipContent,
   type ChartConfig,
 } from "@/components/ui/chart";
-import { closeStaleWorkouts, openWorkoutOn } from "@/app/training-actions";
+import { closeStaleWorkouts, loadTrainingWindow, openWorkoutOn } from "@/app/training-actions";
 import { Button } from "@/components/ui/button";
 import { Calendar } from "@/components/ui/calendar";
 import { Item, ItemActions, ItemContent, ItemDescription, ItemTitle } from "@/components/ui/item";
@@ -32,6 +40,9 @@ import {
 } from "@/components/ui/empty";
 import { toast } from "sonner";
 
+/** S32. One day's credit to one muscle, straight off the muscle_volume view. */
+export type DayVolume = { date: string; muscle: string; sets: number };
+
 export type SessionSummary = {
   id: string;
   date: string;
@@ -49,27 +60,77 @@ export type SessionSummary = {
  * under it for its contents.
  */
 export function TrainHome({
-  month,
   today,
-  sessions,
-  volume,
+  loadedFrom,
+  sessions: initialSessions,
+  volume: initialVolume,
   openSession,
 }: {
-  month: string;
   today: string;
+  /** Oldest month the server sent, as YYYY-MM. */
+  loadedFrom: string;
   sessions: SessionSummary[];
-  /** S32. Every muscle, in a fixed order, including the ones on zero. */
-  volume: MuscleVolume[];
+  /** Day grain; the month on screen is summed from it here. */
+  volume: DayVolume[];
   openSession: { id: string; date: string } | null;
 }) {
   const router = useRouter();
   const [adding, setAdding] = useState(false);
-  // `pending` is read: paging the calendar is a server navigation, and without
-  // a sign that it started, a slow month reads as a tap that missed.
-  const [pending, startTransition] = useTransition();
 
-  const byDate = new Map(sessions.map((s) => [s.date, s]));
-  const trainedDays = sessions.map((s) => toDate(s.date));
+  // The month is state, not a URL parameter and not a server round trip. Every
+  // session and every day of volume is already here, so paging is a filter
+  // rather than a fetch -- which is the only way it is ever instant.
+  const [month, setMonth] = useState(today.slice(0, 7));
+
+  // The window, and everything in it. Grown backwards in place rather than
+  // refetched, so a month already held is never asked for twice.
+  const [sessions, setSessions] = useState(initialSessions);
+  const [volume, setVolume] = useState(initialVolume);
+  const [from, setFrom] = useState(loadedFrom);
+  const loading = useRef(false);
+
+  /**
+   * Extend BEFORE the edge is reached, not when it is hit.
+   *
+   * The fetch happens while you are still looking at a month you already have,
+   * so by the time you page into the older ones they are simply there. Waiting
+   * for the edge would put the network call exactly where it is visible, which
+   * is the thing this whole approach exists to avoid.
+   */
+  useEffect(() => {
+    if (loading.current) return;
+    if (month > shiftMonth(from, WINDOW_BUFFER_MONTHS)) return;
+
+    loading.current = true;
+    const nextFrom = shiftMonth(from, -WINDOW_MONTHS);
+    void loadTrainingWindow(nextFrom, shiftMonth(from, -1)).then((res) => {
+      loading.current = false;
+      if (res.error) return; // Silent: nothing is broken, there is just less history on screen.
+      setSessions((prev) => [...prev, ...res.sessions]);
+      setVolume((prev) => [...prev, ...res.volume]);
+      setFrom(nextFrom);
+    });
+  }, [month, from]);
+
+  const monthSessions = useMemo(
+    () => sessions.filter((s) => s.date.startsWith(month)),
+    [sessions, month],
+  );
+
+  // Summed for the month on screen, then laid out in the fixed group order so
+  // untrained muscles still occupy a row (S32 -- the zeros are the point).
+  const monthVolume: MuscleVolume[] = useMemo(() => {
+    const byMuscle = new Map<string, number>();
+    for (const row of volume) {
+      if (!row.date.startsWith(month)) continue;
+      byMuscle.set(row.muscle, (byMuscle.get(row.muscle) ?? 0) + row.sets);
+    }
+    return MUSCLE_GROUPS.map((muscle) => ({ muscle, sets: byMuscle.get(muscle) ?? 0 }));
+  }, [volume, month]);
+  const [, startTransition] = useTransition();
+
+  const byDate = useMemo(() => new Map(sessions.map((s) => [s.date, s])), [sessions]);
+  const trainedDays = useMemo(() => sessions.map((s) => toDate(s.date)), [sessions]);
 
   /** Open a day's session, creating it if there is none (S52). */
   function open(date: string) {
@@ -103,13 +164,6 @@ export function TrainHome({
   return (
     <>
       <main className="mx-auto w-full max-w-md flex-1 pb-[calc(6rem+env(safe-area-inset-bottom))]">
-        <header className="flex items-center justify-between border-b border-border px-5 py-3">
-          <span className="text-sm font-medium">Train</span>
-          <span className="text-xs tabular-nums text-muted-foreground">
-            {sessions.length} {sessions.length === 1 ? "session" : "sessions"} this month
-          </span>
-        </header>
-
         {/* The primary action sits ABOVE the calendar and the list. It was under
             the list until a month with thirty sessions made the point: the one
             thing you came here to do should not be reachable only by scrolling
@@ -129,25 +183,25 @@ export function TrainHome({
           )}
         </div>
 
-        <div
-          className={`flex justify-center border-b border-border px-2 py-3 transition-opacity ${
-            pending ? "opacity-60" : ""
-          }`}
-        >
+        <div className="flex justify-center border-b border-border px-2 py-3">
           <Calendar
             month={toDate(`${month}-01`)}
-            onMonthChange={(next) =>
-              // In a transition, so React keeps the current month on screen and
-              // marks it stale instead of blanking the calendar while the next
-              // one is fetched.
-              startTransition(() => router.push(`/train?month=${monthKey(next)}`))
-            }
+            // Straight to state. There is nothing to fetch, so there is
+            // nothing to wait for and nothing to show a pending state about.
+            onMonthChange={(next) => setMonth(monthKey(next))}
             // Every day you have actually lived through is tappable, whether or
             // not it has a session yet: a trained day opens its session, an
             // untrained one starts it. Only the future is dead, because a
             // workout you have not done is a plan (open decision 2). Untrained
             // days used to be disabled, which made the obvious gesture -- tap
             // today, log today -- do nothing at all.
+            // Always six week rows, even in a month that only needs five.
+            // Without it the calendar is a different height month to month, so
+            // everything under it -- the chart especially -- jumps as you page.
+            // A grid that changes size is the opposite of the seamless switch
+            // this screen is built around, and the cost is one row of greyed
+            // next-month days in the months that do not need it.
+            fixedWeeks
             disabled={{ after: toDate(today) }}
             modifiers={{ trained: trainedDays }}
             modifiersClassNames={{
@@ -172,11 +226,9 @@ export function TrainHome({
           />
         </div>
 
-        <div className={pending ? "opacity-60 transition-opacity" : "transition-opacity"}>
-          <MonthVolume volume={volume} month={month} />
-        </div>
+        <MonthVolume volume={monthVolume} month={month} />
 
-        {sessions.length === 0 && (
+        {monthSessions.length === 0 && (
           <Empty className="py-12">
             <EmptyHeader>
               <EmptyMedia variant="icon">
@@ -191,9 +243,9 @@ export function TrainHome({
           </Empty>
         )}
 
-        {sessions.length > 0 && (
+        {monthSessions.length > 0 && (
           <ul className="divide-y divide-border">
-            {sessions.map((s) => (
+            {monthSessions.map((s) => (
               <li key={s.id}>
                 <Item asChild size="sm" className="rounded-none px-5 py-3 active:bg-accent">
                   <Link href={`/train/${s.id}`}>
@@ -405,6 +457,18 @@ function MonthVolume({ volume, month }: { volume: MuscleVolume[]; month: string 
               // and its code did not.
               radius={[0, 5, 5, 0]}
               barSize={11}
+              // Recharts animates a bar from its previous value to its new one,
+              // so switching months slides the bars across rather than cutting.
+              // That only works because the chart STAYS MOUNTED -- keying it on
+              // the month, or swapping it out while data loads, would restart
+              // every bar from zero and turn a transition into a flash.
+              //
+              // 420ms, not the 1500ms default: at a second and a half you are
+              // watching an animation, and the numbers arrive long after you
+              // have decided what you wanted to know.
+              isAnimationActive
+              animationDuration={420}
+              animationEasing="ease-out"
             >
               <LabelList
                 dataKey="sets"
@@ -425,6 +489,7 @@ function MonthVolume({ volume, month }: { volume: MuscleVolume[]; month: string 
 function monthLabel(month: string): string {
   return toDate(`${month}-01`).toLocaleDateString("en-CA", { month: "long", year: "numeric" });
 }
+
 
 function toDate(key: string): Date {
   return new Date(`${key.length === 7 ? `${key}-01` : key}T12:00:00`);

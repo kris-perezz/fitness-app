@@ -137,6 +137,29 @@ export const MUSCLE_GROUPS = [
 export type MuscleVolume = { muscle: string; sets: number };
 
 
+/**
+ * How many months the train tab holds at once, and the buffer it keeps ahead of
+ * you (S50).
+ *
+ * Fetching the whole log made paging instant but grew without limit -- fine at
+ * 175 sessions, a liability at ten years. Six months is roughly what anyone
+ * scrolls back through in one sitting, and the window extends BEFORE you reach
+ * its edge, so the fetch happens while you are still looking at a month you
+ * already have. Same idea as a search box querying on your third keystroke: the
+ * work is real, it just never happens where you can see it.
+ */
+export const WINDOW_MONTHS = 6;
+
+/** Extend once you are this close to the oldest month held. */
+export const WINDOW_BUFFER_MONTHS = 2;
+
+/** A YYYY-MM shifted by whole months, valid across a year boundary. */
+export function shiftMonth(month: string, by: number): string {
+  const [year, m] = month.split("-").map(Number);
+  const d = new Date(year, m - 1 + by, 1);
+  return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}`;
+}
+
 export const EQUIPMENT = [
   "Barbell",
   "Dumbbell",
