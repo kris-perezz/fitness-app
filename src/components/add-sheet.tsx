@@ -2,7 +2,15 @@
 
 import { useEffect, useMemo, useRef, useState, useTransition } from "react";
 import { ChevronLeft, ScanBarcode, Search } from "lucide-react";
-import { searchFoods, scale, show, qtyLabel, type Food, type Meal } from "@/lib/food";
+import {
+  searchFoods,
+  scale,
+  show,
+  qtyLabel,
+  basisLabel,
+  type Food,
+  type Meal,
+} from "@/lib/food";
 import { addEntry, saveScannedFood } from "@/app/actions";
 import { BarcodeScanner } from "@/components/barcode-scanner";
 import {
@@ -225,7 +233,7 @@ function SearchStep({
                     <ItemContent className="min-w-0">
                       <ItemTitle className="font-normal">{f.name}</ItemTitle>
                       <ItemDescription className="text-xs">
-                        {show(f.kcal)} cal per {f.basis === "per_100g" ? "100 g" : f.unit}
+                        {show(f.kcal)} cal per {basisLabel(f)}
                       </ItemDescription>
                     </ItemContent>
                   </button>
@@ -352,9 +360,9 @@ function QtyStep({
         <h3 className="text-base font-semibold leading-tight">{food.name}</h3>
         <p className="mt-0.5 text-xs text-muted-foreground">
           {show(food.kcal)} cal · {show(food.protein_g)}g protein · {show(food.carb_g)}g carbs ·{" "}
-          {show(food.fat_g)}g fat per {food.basis === "per_100g" ? "100 g" : food.unit}
+          {show(food.fat_g)}g fat per {basisLabel(food)}
           {food.basis === "per_100g" && food.grams_per_unit
-            ? ` · 1 serving = ${food.grams_per_unit} g`
+            ? ` · 1 serving = ${food.grams_per_unit} ${food.unit}`
             : ""}
         </p>
 

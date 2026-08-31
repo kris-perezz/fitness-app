@@ -30,6 +30,7 @@ type OffProduct = {
   generic_name?: unknown;
   brands?: unknown;
   serving_quantity?: unknown;
+  serving_quantity_unit?: unknown;
   nutriments?: Nutriments;
 };
 
@@ -61,12 +62,13 @@ function displayName(product: OffProduct, barcode: string): string {
  * The label's own serving size, which is what makes "one shake" loggable
  * without the user knowing it weighs 325 g.
  *
- * For liquids OFF reports millilitres here, not grams, so storing it in
- * `grams_per_unit` is loose about the word "grams" -- a 325 mL shake weighs
- * nearer 335 g. The macros stay exact regardless, because OFF derived its
- * per-100g figures by dividing the label's per-serving numbers by this same
- * value: multiplying back by it returns the label. The round trip is
- * self-consistent even where the unit is not.
+ * For liquids OFF measures in millilitres, and so does the label: a Canadian
+ * drink is declared per mL, and OFF's "per 100g" figures for it are really per
+ * 100 mL. The number is therefore correct and only the column name is not --
+ * `grams_per_unit` holds whatever the product is measured in, and `unit`
+ * records which that is so nothing ever tells the user a 325 mL shake weighs
+ * 325 g. Converting to real grams would need a density we do not have and
+ * would break the round trip back to the label.
  *
  * Null rather than a guess when the field is missing or absurd -- an unknown
  * serving size is unknown, not 100 g.
@@ -95,7 +97,8 @@ function toFood(product: OffProduct, barcode: string): Food | null {
     name: displayName(product, barcode),
     aliases: [],
     basis: "per_100g",
-    unit: "g",
+    // "ml" for drinks, "g" for everything else -- see servingGrams above.
+    unit: text(product.serving_quantity_unit).toLowerCase() === "ml" ? "ml" : "g",
     grams_per_unit: servingGrams(product),
     // Stored at OFF's full precision, deliberately unrounded. These are
     // per-100g figures that OFF derived by DIVIDING the label's per-serving

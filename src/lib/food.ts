@@ -54,8 +54,20 @@ export function show(n: number | null): number {
   return Math.round(((n ?? 0) + Number.EPSILON) * 10) / 10;
 }
 
+/**
+ * What `qty` counts. A per_100g food is measured by weight or by volume, and
+ * `unit` says which -- drinks are declared in millilitres on the label and in
+ * Open Food Facts, so calling them grams would be wrong on both counts.
+ */
 export function qtyLabel(food: Food): string {
-  return food.basis === "per_100g" ? "grams" : food.unit;
+  if (food.basis !== "per_100g") return food.unit;
+  return food.unit === "ml" ? "millilitres" : "grams";
+}
+
+/** The amount the catalog macros are quoted against, for display. */
+export function basisLabel(food: Food): string {
+  if (food.basis !== "per_100g") return food.unit;
+  return food.unit === "ml" ? "100 ml" : "100 g";
 }
 
 /** Ranked substring match over name + aliases. Exact prefix wins. */
