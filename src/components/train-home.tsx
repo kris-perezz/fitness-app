@@ -130,7 +130,20 @@ export function TrainHome({
             disabled={{ after: toDate(today) }}
             modifiers={{ trained: trainedDays }}
             modifiersClassNames={{
-              trained: "font-semibold underline decoration-primary decoration-2 underline-offset-4",
+              // A solid fill, not an underline. The point of a training
+              // calendar is to make a month of work feel like something, and a
+              // thin line under a numeral has the visual weight of a footnote:
+              // streaks do not read, gaps do not read, and you end up hunting
+              // for the marks instead of seeing the shape of the month.
+              //
+              // Marked important because the calendar paints `today` with
+              // bg-muted on this same element, and a trained today must read as
+              // trained. Class order alone would not settle that reliably.
+              trained: "bg-primary! text-primary-foreground! rounded-md font-medium",
+              // Today keeps a ring rather than a background, so it stays
+              // identifiable whether or not it is also filled -- the two facts
+              // are independent and must not compete for one channel.
+              today: "rounded-md ring-2 ring-ring ring-inset",
             }}
             onSelect={(day) => day && open(dateKey(day))}
             mode="single"
@@ -146,7 +159,7 @@ export function TrainHome({
               </EmptyMedia>
               <EmptyTitle>Nothing logged this month</EmptyTitle>
               <EmptyDescription>
-                Underlined days are days you trained. Tap any day up to today, or use
+                Filled days are days you trained. Tap any day up to today, or use
                 Add session above.
               </EmptyDescription>
             </EmptyHeader>
