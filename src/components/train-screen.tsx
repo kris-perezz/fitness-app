@@ -46,6 +46,7 @@ import {
 import { Input } from "@/components/ui/input";
 import { Field, FieldLabel } from "@/components/ui/field";
 import { Toggle } from "@/components/ui/toggle";
+import { Spinner } from "@/components/ui/spinner";
 import {
   Table,
   TableBody,
@@ -103,6 +104,18 @@ export function TrainScreen({
   const stale = workout.ended_at === null && workout.log_date !== today;
   const past = workout.log_date !== today;
 
+  /**
+   * Lifts picked but not yet confirmed by the server, by name.
+   *
+   * useOptimistic resets to [] on its own once the action settles and the new
+   * props arrive, which is exactly the handover wanted: the placeholder is
+   * replaced by the real slot rather than both being on screen at once.
+   */
+  const [addingNames, addOptimisticName] = useOptimistic<string[], string>(
+    [],
+    (current, name) => [...current, name],
+  );
+
   function run(action: () => Promise<{ error: string | null }>, done?: () => void) {
     startTransition(async () => {
       const res = await action();
@@ -111,7 +124,11 @@ export function TrainScreen({
         return;
       }
       done?.();
-      router.refresh();
+      // No router.refresh() here. Every action in training-actions.ts calls
+      // revalidatePath, and a Server Action that revalidates re-renders the
+      // route and ships the new RSC payload in the SAME response -- refreshing
+      // again was a second round trip and a second render of a page that had
+      // just been rendered.
     });
   }
 
@@ -174,6 +191,10 @@ export function TrainScreen({
           />
         ))}
 
+        {addingNames.map((name, i) => (
+          <PendingSlot key={`${name}_${i}`} name={name} />
+        ))}
+
         <div className="px-5 py-4">
           <Button
             variant="outline"
@@ -227,14 +248,38 @@ export function TrainScreen({
         onOpenChange={setPicking}
         exercises={exercises}
         recentExerciseIds={recentExerciseIds}
-        onPick={(exercise) =>
-          run(
-            () => addWorkoutExercise(workout.id, exercise.id),
-            () => setPicking(false),
-          )
-        }
+        onPick={(exercise) => {
+          // Closed and drawn before the round trip, not after it. Adding a lift
+          // is a decision you have already made by the time you tap it; making
+          // it wait on the network is what made the app feel slow even once
+          // the query behind it was cheap.
+          setPicking(false);
+          startTransition(async () => {
+            addOptimisticName(exercise.name);
+            const res = await addWorkoutExercise(workout.id, exercise.id);
+            // On failure the placeholder disappears with the transition, which
+            // is the honest outcome: the lift was not added.
+            if (res.error) toast.error(res.error);
+          });
+        }}
       />
     </>
+  );
+}
+
+/**
+ * A lift that has been picked but not yet confirmed. Deliberately not a
+ * skeleton: the name is already known, so showing it is more honest than
+ * showing a grey box, and the spinner says the rest is on its way.
+ */
+function PendingSlot({ name }: { name: string }) {
+  return (
+    <section className="border-t border-border px-5 py-4">
+      <div className="flex items-center gap-2 text-sm font-medium text-muted-foreground">
+        <Spinner />
+        {name}
+      </div>
+    </section>
   );
 }
 
