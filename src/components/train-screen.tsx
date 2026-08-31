@@ -4,6 +4,7 @@ import { useState, useTransition } from "react";
 import { useRouter } from "next/navigation";
 import { Check, Dumbbell, Pencil, Plus, Trash2, X } from "lucide-react";
 import {
+  allowsBodyweight,
   isHardSet,
   suggestFor,
   trim,
@@ -160,6 +161,12 @@ export function TrainScreen({
             key={slot.id}
             slot={slot}
             last={lastSessions[slot.id] ?? null}
+            // Looked up rather than denormalised onto the slot: this decides how
+            // a form BEHAVES today, not what a past set meant, so it is the one
+            // thing here that should follow the catalog rather than be frozen.
+            bodyweight={allowsBodyweight(
+              exercises.find((e) => e.id === slot.exercise_id) ?? null,
+            )}
             onChanged={() => router.refresh()}
           />
         ))}
@@ -225,10 +232,13 @@ export function TrainScreen({
 function SlotSection({
   slot,
   last,
+  bodyweight,
   onChanged,
 }: {
   slot: WorkoutSlot;
   last: LastSession | null;
+  /** Whether a blank load is a legitimate answer for this lift (S47). */
+  bodyweight: boolean;
   onChanged: () => void;
 }) {
   const [adding, setAdding] = useState(false);
@@ -324,6 +334,7 @@ function SlotSection({
             suggestion={null}
             initial={{ reps: editing.reps, load_lb: editing.load_lb, set_type: editing.set_type }}
             initialRir={editing.rir}
+            bodyweight={bodyweight}
             confirmLabel="Save"
             onCancel={() => setEditing(null)}
             onSubmit={(draft, rir) =>
@@ -378,6 +389,7 @@ function SlotSection({
               suggestion={suggestion}
               initial={suggestion?.draft ?? { reps: null, load_lb: 0, set_type: "straight" }}
               initialRir={null}
+              bodyweight={bodyweight}
               confirmLabel="Add set"
               onCancel={() => setAdding(false)}
               onSubmit={(draft, rir) =>
@@ -417,6 +429,7 @@ function SetForm({
   suggestion,
   initial,
   initialRir,
+  bodyweight,
   confirmLabel,
   onSubmit,
   onCancel,
@@ -426,6 +439,7 @@ function SetForm({
   suggestion: { from: string; detail: string } | null;
   initial: SetDraft;
   initialRir: number | null;
+  bodyweight: boolean;
   confirmLabel: string;
   onSubmit: (draft: SetDraft, rir: number | null) => void;
   onCancel: () => void;
@@ -446,7 +460,12 @@ function SetForm({
     apply(v);
   };
 
-  const ready = reps.trim() !== "" && Number(reps) > 0;
+  // S47. A blank load means BODYWEIGHT, which is true of a pull-up and absurd of
+  // a bench press -- so it is only accepted where the exercise says it can be.
+  // Everywhere else the load has to be typed, rather than silently logging a
+  // barbell lift as though it were lifted with nothing on it.
+  const ready =
+    reps.trim() !== "" && Number(reps) > 0 && (bodyweight || load.trim() !== "");
 
   function submit() {
     onSubmit(
@@ -489,7 +508,8 @@ function SetForm({
             value={load}
             onChange={(e) => edit("load", setLoad)(e.target.value)}
             className={`h-12 text-base tabular-nums${tone("load", load)}`}
-            placeholder="BW"
+            // "BW" is an answer, so it is only offered where it is a true one.
+            placeholder={bodyweight ? "BW" : "—"}
           />
         </Field>
         <Field className="min-w-0 flex-1 gap-1">

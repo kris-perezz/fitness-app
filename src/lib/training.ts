@@ -92,6 +92,19 @@ export const EQUIPMENT = [
   "Other",
 ] as const;
 
+/**
+ * Can this lift honestly be logged with no external load? (S47)
+ *
+ * `load_lb = 0` means bodyweight, which is a real answer for a pull-up and a
+ * nonsense one for a bench press. Either signal is enough: the seed set seeds
+ * `bodyweight_fraction` for genuine bodyweight movements, and a user-created
+ * exercise only carries `equipment`, so both are checked.
+ */
+export function allowsBodyweight(exercise: Exercise | null): boolean {
+  if (!exercise) return false;
+  return exercise.bodyweight_fraction != null || exercise.equipment === "Bodyweight";
+}
+
 /** S27: the same ranking the food picker uses, because it is the same function. */
 export function searchExercises(exercises: Exercise[], query: string): Exercise[] {
   return searchNamed(exercises, query);
