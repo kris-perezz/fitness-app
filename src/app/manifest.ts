@@ -16,10 +16,13 @@ export default function manifest(): MetadataRoute.Manifest {
     // the splash and status bar do not flash a colour the app never uses.
     background_color: "#ffffff",
     theme_color: "#ffffff",
-    // Served by app/icon.tsx, which generates the PNG at build time.
+    // Served by app/pwa-icon/route.tsx, NOT by app/icon.tsx. The tab icon is a
+    // transparent SVG so it does not paint a dark rectangle into the browser
+    // chrome; a home-screen tile has to be an opaque square, so it is its own
+    // image with the background this app actually uses.
     icons: [
-      { src: "/icon", sizes: "512x512", type: "image/png", purpose: "any" },
-      { src: "/icon", sizes: "512x512", type: "image/png", purpose: "maskable" },
+      { src: "/pwa-icon", sizes: "512x512", type: "image/png", purpose: "any" },
+      { src: "/pwa-icon", sizes: "512x512", type: "image/png", purpose: "maskable" },
     ],
   };
 }
