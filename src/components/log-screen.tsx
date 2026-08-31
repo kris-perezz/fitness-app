@@ -2,10 +2,11 @@
 
 import { useState, useTransition } from "react";
 import { useRouter } from "next/navigation";
-import { ChevronLeft, ChevronRight, Plus } from "lucide-react";
+import { ChevronLeft, ChevronRight, Pencil, Plus } from "lucide-react";
 import { MEALS, shiftDate, wakingDate, type Food, type Meal } from "@/lib/food";
 import { deleteEntry } from "@/app/actions";
 import { Button } from "@/components/ui/button";
+import { ButtonGroup } from "@/components/ui/button-group";
 import {
   Drawer,
   DrawerContent,
@@ -21,11 +22,16 @@ import {
   ItemTitle,
 } from "@/components/ui/item";
 import { AddSheet } from "@/components/add-sheet";
+import { EditFoodSheet } from "@/components/edit-food-sheet";
+import { FoodSourceBadge } from "@/components/food-source-badge";
 import { CalorieRing } from "@/components/calorie-ring";
 import { toast } from "sonner";
 
 type Entry = {
   id: string;
+  /** Null for a one-off typed straight into the log -- there is no catalog row
+   * behind it, so there is nothing to correct (S7). */
+  food_id: string | null;
   name: string;
   meal: Meal;
   qty: number;
@@ -63,6 +69,7 @@ export function LogScreen({
   const router = useRouter();
   const [addingTo, setAddingTo] = useState<Meal | null>(null);
   const [detail, setDetail] = useState<Entry | null>(null);
+  const [editing, setEditing] = useState<Food | null>(null);
 
   const totals = entries.reduce(
     (a, e) => ({
@@ -187,7 +194,25 @@ export function LogScreen({
         foods={foods}
         date={date}
       />
-      <EntryDetail entry={detail} onClose={() => setDetail(null)} />
+      <EntryDetail
+        entry={detail}
+        food={detail?.food_id ? (foods.find((f) => f.id === detail.food_id) ?? null) : null}
+        onClose={() => setDetail(null)}
+        onEditFood={(food) => {
+          // Close the entry first: two stacked drawers fight over the scroll
+          // lock, and the detail has nothing left to say once the form is up.
+          setDetail(null);
+          setEditing(food);
+        }}
+      />
+      <EditFoodSheet
+        food={editing}
+        onOpenChange={(open) => !open && setEditing(null)}
+        // The corrected row (or its fork) has to reach the catalog this screen
+        // was rendered with, and a fork is a new row entirely -- a refresh is
+        // the honest way to get both.
+        onSaved={() => router.refresh()}
+      />
     </>
   );
 }
@@ -217,7 +242,18 @@ function MacroMeter({ label, value, goal }: { label: string; value: number; goal
   );
 }
 
-function EntryDetail({ entry, onClose }: { entry: Entry | null; onClose: () => void }) {
+function EntryDetail({
+  entry,
+  food,
+  onClose,
+  onEditFood,
+}: {
+  entry: Entry | null;
+  /** The catalog row this entry was logged against, when it still exists. */
+  food: Food | null;
+  onClose: () => void;
+  onEditFood: (food: Food) => void;
+}) {
   const [pending, startTransition] = useTransition();
 
   return (
@@ -231,7 +267,10 @@ function EntryDetail({ entry, onClose }: { entry: Entry | null; onClose: () => v
         {entry && (
           <div className="flex min-h-0 flex-1 flex-col">
             <div className="min-h-0 flex-1 overflow-y-auto overscroll-contain px-5 pb-4">
-              <h2 className="text-lg font-semibold leading-tight">{entry.name}</h2>
+              <div className="flex items-center gap-2">
+                <h2 className="text-lg font-semibold leading-tight">{entry.name}</h2>
+                {food && <FoodSourceBadge source={food.source} />}
+              </div>
               <p className="mt-0.5 text-sm text-muted-foreground">
                 {entry.qty} {entry.unit} · {entry.meal}
                 {entry.estimate && " · estimate"}
@@ -256,23 +295,39 @@ function EntryDetail({ entry, onClose }: { entry: Entry | null; onClose: () => v
             </div>
 
             <div className="shrink-0 border-t border-border px-5 pt-3 pb-safe">
-              <Button
-                variant="outline"
-                className="h-11 w-full text-destructive"
-                disabled={pending}
-                onClick={() =>
-                  startTransition(async () => {
-                    const res = await deleteEntry(entry.id);
-                    if (res.error) {
-                      toast.error(res.error);
-                      return;
-                    }
-                    onClose();
-                  })
-                }
-              >
-                {pending ? "Deleting" : "Delete"}
-              </Button>
+              {/* S7 lives here rather than behind an overflow menu: the entry
+                  detail IS this screen's overflow, and a drawer already open
+                  under a thumb should not need a second menu inside it.
+                  Offered only when there is a catalog row to correct. */}
+              <ButtonGroup className="w-full">
+                {food && (
+                  <Button
+                    variant="outline"
+                    className="h-11 flex-1"
+                    disabled={pending}
+                    onClick={() => onEditFood(food)}
+                  >
+                    <Pencil className="size-4" /> Edit food
+                  </Button>
+                )}
+                <Button
+                  variant="outline"
+                  className="h-11 flex-1 text-destructive"
+                  disabled={pending}
+                  onClick={() =>
+                    startTransition(async () => {
+                      const res = await deleteEntry(entry.id);
+                      if (res.error) {
+                        toast.error(res.error);
+                        return;
+                      }
+                      onClose();
+                    })
+                  }
+                >
+                  {pending ? "Deleting" : "Delete"}
+                </Button>
+              </ButtonGroup>
             </div>
           </div>
         )}

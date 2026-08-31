@@ -1,3 +1,11 @@
+/**
+ * Where a food's numbers came from (S6). Not the same question as `verified`,
+ * which is one bit ("transcribed from a label") for a question with four
+ * answers, and not the same question as an entry's `estimate` flag, which is
+ * about how much you ate rather than what the food is.
+ */
+export type FoodSource = "seed" | "off" | "label" | "manual" | "recipe";
+
 export type Food = {
   id: string;
   name: string;
@@ -12,9 +20,66 @@ export type Food = {
   fiber_g: number;
   sodium_mg: number | null;
   verified: boolean;
+  source: FoodSource;
   /** Set for scanned packaged goods; null for whole foods and recipe outputs. */
   barcode?: string | null;
 };
+
+/**
+ * The source hierarchy (open decision 2). A composition table describes a
+ * reference product; a label describes the packet in your hand, so no database
+ * outranks one -- Open Food Facts often carries the US version of a product
+ * sold here, and it says itself that it offers no assurance of accuracy.
+ *
+ * `manual` sits above `off` because the only way a row becomes manual is that
+ * somebody looked at the packet and typed what it actually said. `recipe` is
+ * computed from ingredients that carry their own sources and never competes for
+ * a barcode, so it ranks last by default rather than by judgement.
+ */
+const SOURCE_RANK: Record<FoodSource, number> = {
+  label: 4,
+  seed: 3,
+  manual: 2,
+  off: 1,
+  recipe: 0,
+};
+
+/** Higher is more trustworthy. Ties are broken by the caller, not here. */
+export function sourceRank(source: FoodSource): number {
+  return SOURCE_RANK[source] ?? 0;
+}
+
+/** Badge text. Short enough to sit beside a food name on a phone. */
+export function sourceLabel(source: FoodSource): string {
+  switch (source) {
+    case "label":
+      return "Label";
+    case "seed":
+      return "Verified";
+    case "manual":
+      return "Manual";
+    case "off":
+      return "Open Food Facts";
+    case "recipe":
+      return "Recipe";
+  }
+}
+
+/** One line saying how much salt to take the numbers with. */
+export function sourceHint(source: FoodSource): string {
+  switch (source) {
+    case "label":
+      return "Read from a photo of the nutrition panel and confirmed field by field.";
+    case "seed":
+      return "Transcribed from the package by hand.";
+    case "manual":
+      return "Entered or corrected by you.";
+    case "off":
+      return "From the Open Food Facts database, unconfirmed. It is often the US version of a product sold here.";
+    case "recipe":
+      return "Computed from the recipe's ingredients.";
+  }
+}
 
 export const MEALS = ["Breakfast", "Lunch", "Dinner", "Snacks"] as const;
 export type Meal = (typeof MEALS)[number];
