@@ -29,6 +29,7 @@ type OffProduct = {
   product_name_en?: unknown;
   generic_name?: unknown;
   brands?: unknown;
+  serving_quantity?: unknown;
   nutriments?: Nutriments;
 };
 
@@ -61,6 +62,26 @@ function displayName(product: OffProduct, barcode: string): string {
 }
 
 /**
+ * The label's own serving size, which is what makes "one shake" loggable
+ * without the user knowing it weighs 325 g.
+ *
+ * For liquids OFF reports millilitres here, not grams, so storing it in
+ * `grams_per_unit` is loose about the word "grams" -- a 325 mL shake weighs
+ * nearer 335 g. The macros stay exact regardless, because OFF derived its
+ * per-100g figures by dividing the label's per-serving numbers by this same
+ * value: multiplying back by it returns the label. The round trip is
+ * self-consistent even where the unit is not.
+ *
+ * Null rather than a guess when the field is missing or absurd -- an unknown
+ * serving size is unknown, not 100 g.
+ */
+function servingGrams(product: OffProduct): number | null {
+  const raw = num(product.serving_quantity);
+  if (raw === null || raw <= 0 || raw > 5000) return null;
+  return Math.round(raw);
+}
+
+/**
  * OFF publishes per-100g nutriments, which maps straight onto our per_100g
  * basis. Sodium is the one unit mismatch: they give grams, we store mg.
  */
@@ -79,7 +100,7 @@ function toFood(product: OffProduct, barcode: string): Food | null {
     aliases: [],
     basis: "per_100g",
     unit: "g",
-    grams_per_unit: null,
+    grams_per_unit: servingGrams(product),
     kcal: Math.round(kcal),
     protein_g: round(num(n["proteins_100g"]) ?? 0),
     fat_g: round(num(n["fat_100g"]) ?? 0),

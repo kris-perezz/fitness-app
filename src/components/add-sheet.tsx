@@ -3,7 +3,7 @@
 import { useEffect, useMemo, useRef, useState, useTransition } from "react";
 import { ChevronLeft, ScanBarcode, Search } from "lucide-react";
 import { searchFoods, scale, qtyLabel, type Food, type Meal } from "@/lib/food";
-import { addEntry } from "@/app/actions";
+import { addEntry, saveScannedFood } from "@/app/actions";
 import { BarcodeScanner } from "@/components/barcode-scanner";
 import {
   Drawer,
@@ -42,7 +42,11 @@ const SNAP_POINTS = [0.6, 1] as const;
 type Step =
   | { kind: "search" }
   | { kind: "scan" }
-  | { kind: "qty"; food: Food }
+  // `scanned` foods may not exist in `foods` yet -- a fresh Open Food Facts
+  // result is assembled in memory and has never been written. Since
+  // intake_entries.food_id is a foreign key, the catalog row has to land
+  // before the entry does (S3).
+  | { kind: "qty"; food: Food; scanned: boolean }
   | { kind: "custom" };
 
 export function AddSheet({
@@ -99,7 +103,7 @@ export function AddSheet({
         {meal && step.kind === "search" && (
           <SearchStep
             foods={foods}
-            onPick={(food) => go({ kind: "qty", food })}
+            onPick={(food) => go({ kind: "qty", food, scanned: false })}
             onScan={() => go({ kind: "scan" })}
             onCustom={() => go({ kind: "custom" })}
           />
@@ -107,7 +111,7 @@ export function AddSheet({
 
         {meal && step.kind === "scan" && (
           <BarcodeScanner
-            onFood={(food) => go({ kind: "qty", food })}
+            onFood={(food) => go({ kind: "qty", food, scanned: true })}
             onBack={() => go({ kind: "search" })}
           />
         )}
@@ -115,6 +119,7 @@ export function AddSheet({
         {meal && step.kind === "qty" && (
           <QtyStep
             food={step.food}
+            scanned={step.scanned}
             date={date}
             meal={meal}
             onBack={() => go({ kind: "search" })}
@@ -243,22 +248,43 @@ function SearchStep({
 
 function QtyStep({
   food,
+  scanned,
   date,
   meal,
   onBack,
   onDone,
 }: {
   food: Food;
+  scanned: boolean;
   date: string;
   meal: Meal;
   onBack: () => void;
   onDone: () => void;
 }) {
-  const [qty, setQty] = useState("1");
+  // A per_100g food is measured in grams, so opening at "1" asks the user to
+  // confirm one gram of a protein shake. Prefer the label's own serving when
+  // the scan captured one -- one shake is what was actually drunk -- and fall
+  // back to 100, which is at least the basis the numbers are quoted in.
+  const [qty, setQty] = useState(() =>
+    food.basis === "per_100g" ? String(food.grams_per_unit ?? 100) : "1",
+  );
   const [pending, startTransition] = useTransition();
   const inputRef = useRef<HTMLInputElement>(null);
 
-  const presets = food.basis === "per_100g" ? [100, 150, 200, 300] : [0.5, 1, 2, 3];
+  // With a known serving, half and double it are the useful jumps; the round
+  // hundreds only make sense when nothing better is known. Sorted so the row
+  // reads left to right.
+  const presets =
+    food.basis !== "per_100g"
+      ? [0.5, 1, 2, 3]
+      : food.grams_per_unit
+        ? [
+            Math.round(food.grams_per_unit / 2),
+            food.grams_per_unit,
+            Math.round(food.grams_per_unit * 1.5),
+            food.grams_per_unit * 2,
+          ]
+        : [100, 150, 200, 300];
   const n = Number(qty);
   // Null, never undefined: a half-typed quantity has no preview, and the
   // difference between "not yet known" and "zero" has to survive into the UI.
@@ -282,6 +308,18 @@ function QtyStep({
   function save() {
     if (!preview) return;
     startTransition(async () => {
+      // Write the catalog row first: the entry's food_id references it, so a
+      // never-before-seen scan would otherwise fail the foreign key. Saving is
+      // idempotent -- a barcode already in the catalog is somebody's confirmed
+      // food and is left exactly as it is (S3).
+      if (scanned) {
+        const saved = await saveScannedFood(food);
+        if (saved.error) {
+          toast.error(saved.error);
+          return;
+        }
+      }
+
       const res = await addEntry({
         log_date: date,
         meal,
@@ -315,6 +353,9 @@ function QtyStep({
         <p className="mt-0.5 text-xs text-muted-foreground">
           {food.kcal} cal · {food.protein_g}g protein · {food.carb_g}g carbs · {food.fat_g}g fat
           per {food.basis === "per_100g" ? "100 g" : food.unit}
+          {food.basis === "per_100g" && food.grams_per_unit
+            ? ` · 1 serving = ${food.grams_per_unit} g`
+            : ""}
         </p>
 
         <Field className="mt-5">
