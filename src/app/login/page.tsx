@@ -3,13 +3,15 @@
 import { useEffect, useState } from "react";
 import { createClient } from "@/lib/supabase/client";
 import { Button } from "@/components/ui/button";
+import { Field, FieldLabel } from "@/components/ui/field";
 import { Input } from "@/components/ui/input";
-import { Label } from "@/components/ui/label";
+import { InputOTP, InputOTPGroup, InputOTPSlot } from "@/components/ui/input-otp";
+import { REGEXP_ONLY_DIGITS } from "input-otp";
 
 type Mode = "password" | "email";
 type Status = "idle" | "working" | "sent";
 
-const fieldLabel = "text-xs text-muted-foreground";
+const fieldLabel = "text-xs font-normal text-muted-foreground";
 
 export default function LoginPage() {
   const [mode, setMode] = useState<Mode>("password");
@@ -107,21 +109,36 @@ export default function LoginPage() {
             six-digit code from the same email.
           </p>
 
-          <div className="space-y-2">
-            <Label htmlFor="code" className={fieldLabel}>
+          <Field>
+            <FieldLabel htmlFor="code" className={fieldLabel}>
               Code
-            </Label>
-            <Input
+            </FieldLabel>
+            {/* Six slots rather than one tracked input: the digit-only filter,
+                paste handling and the caret all come with the component, and a
+                code typed on a phone is better shown as six things you have got
+                right so far than as one string you might have fumbled. */}
+            <InputOTP
               id="code"
-              inputMode="numeric"
-              autoComplete="one-time-code"
               maxLength={6}
+              // Replaces the hand-written replace(/\D/g, ""): the component
+              // rejects a non-digit at the keystroke rather than after it.
+              pattern={REGEXP_ONLY_DIGITS}
               value={code}
-              onChange={(e) => setCode(e.target.value.replace(/\D/g, ""))}
-              className="h-12 text-center text-xl tabular-nums tracking-[0.3em]"
-              placeholder="000000"
-            />
-          </div>
+              onChange={setCode}
+              containerClassName="w-full"
+              autoFocus
+            >
+              <InputOTPGroup className="w-full gap-2">
+                {[0, 1, 2, 3, 4, 5].map((i) => (
+                  <InputOTPSlot
+                    key={i}
+                    index={i}
+                    className="h-12 flex-1 rounded-lg border text-lg tabular-nums"
+                  />
+                ))}
+              </InputOTPGroup>
+            </InputOTP>
+          </Field>
 
           {error && <p className="text-sm text-destructive">{error}</p>}
 
@@ -147,10 +164,10 @@ export default function LoginPage() {
           onSubmit={mode === "password" ? signInWithPassword : sendLink}
           className="mt-4 space-y-5"
         >
-          <div className="space-y-2">
-            <Label htmlFor="email" className={fieldLabel}>
+          <Field>
+            <FieldLabel htmlFor="email" className={fieldLabel}>
               Email
-            </Label>
+            </FieldLabel>
             <Input
               id="email"
               type="email"
@@ -161,13 +178,13 @@ export default function LoginPage() {
               onChange={(e) => setEmail(e.target.value)}
               className="h-12 text-base"
             />
-          </div>
+          </Field>
 
           {mode === "password" && (
-            <div className="space-y-2">
-              <Label htmlFor="password" className={fieldLabel}>
+            <Field>
+              <FieldLabel htmlFor="password" className={fieldLabel}>
                 Password
-              </Label>
+              </FieldLabel>
               <Input
                 id="password"
                 type="password"
@@ -177,7 +194,7 @@ export default function LoginPage() {
                 onChange={(e) => setPassword(e.target.value)}
                 className="h-12 text-base"
               />
-            </div>
+            </Field>
           )}
 
           {error && <p className="text-sm text-destructive">{error}</p>}

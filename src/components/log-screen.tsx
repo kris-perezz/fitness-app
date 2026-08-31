@@ -294,6 +294,9 @@ function EntryDetail({
                 {entry.estimate && " · estimate"}
               </p>
 
+              {/* Hand-rolled: see ingredient-sheet.tsx -- Chart is the only
+                  registry option and it would pull recharts in to render six
+                  numbers. */}
               <dl className="mt-6 grid grid-cols-3 gap-y-5 border-t border-border pt-5">
                 {[
                   ["Calories", withCommas(entry.kcal)],

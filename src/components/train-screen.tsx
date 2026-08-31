@@ -35,6 +35,14 @@ import { ExercisePicker } from "@/components/exercise-picker";
 import { Button } from "@/components/ui/button";
 import { ButtonGroup } from "@/components/ui/button-group";
 import { Badge } from "@/components/ui/badge";
+import {
+  Card,
+  CardAction,
+  CardContent,
+  CardFooter,
+  CardHeader,
+  CardTitle,
+} from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
 import { Field, FieldLabel } from "@/components/ui/field";
 import { Toggle } from "@/components/ui/toggle";
@@ -554,18 +562,21 @@ function SetForm({
   }
 
   return (
-    <div className="rounded-lg border border-border p-3">
-      <div className="flex items-center justify-between gap-2">
-        <span className="text-xs font-medium">{title}</span>
+    <Card size="sm">
+      <CardHeader>
+        <CardTitle className="text-xs font-medium">{title}</CardTitle>
         {suggestion && (
-          <span className="flex items-center gap-1.5 text-xs text-muted-foreground">
+          // CardAction, not a sibling span: the header grid grows a second
+          // column on its own when this slot is present, so the badge lands
+          // right-aligned without a justify-between that the title has to fight.
+          <CardAction className="flex items-center gap-1.5 text-xs text-muted-foreground">
             <Badge variant="outline">{suggestion.from}</Badge>
             <span className="tabular-nums">{suggestion.detail}</span>
-          </span>
+          </CardAction>
         )}
-      </div>
+      </CardHeader>
 
-      <div className="mt-2 flex items-end gap-2">
+      <CardContent className="flex items-end gap-2">
         <Field className="min-w-0 flex-1 gap-1">
           <FieldLabel
             htmlFor={`load_${title}`}
@@ -618,9 +629,9 @@ function SetForm({
             placeholder="—"
           />
         </Field>
-      </div>
+      </CardContent>
 
-      <div className="mt-3 flex items-center gap-2">
+      <CardFooter className="gap-2">
         {/* Warm-ups stay in history but out of volume (S32 / decision 5). */}
         <Toggle
           pressed={warmup}
@@ -651,7 +662,7 @@ function SetForm({
             <Check className="size-4" /> {confirmLabel}
           </Button>
         </ButtonGroup>
-      </div>
-    </div>
+      </CardFooter>
+    </Card>
   );
 }
