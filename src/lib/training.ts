@@ -118,20 +118,29 @@ export function setSummary(set: WorkoutSet): string {
 }
 
 /**
- * Estimated one-rep max, Epley. Used to pick which of last week's sets to
- * suggest (S45) and, later, to notice a PR when more reps at the same weight
- * beat a heavier single (S33). One formula, defined once, so those two can
- * never disagree about what "better" means.
+ * Estimated one-rep max, Brzycki: `load × 36 / (37 - reps)`.
  *
- * Epley over Brzycki purely for behaviour at the edges: it degrades gracefully
- * past 10 reps where Brzycki starts misbehaving, and at 1 rep both return the
- * load itself.
+ * Used to pick which of last session's sets to suggest (S45) and, later, to
+ * notice a PR when more reps at the same weight beat a heavier single (S33).
+ * One formula, defined once, so those two can never disagree about what
+ * "better" means.
+ *
+ * Brzycki and Epley agree exactly at 10 reps. Below that Brzycki is the more
+ * conservative of the two; above it, it climbs faster -- so on this formula a
+ * set of 20 is ranked further ahead of a heavy triple than Epley would rank it.
+ * That is a real difference for a log with 15- and 20-rep accessory work in it,
+ * and it is the intended behaviour, not a side effect.
+ *
+ * The denominator reaches zero at 37 reps and turns negative past it, which
+ * would sort a genuine top set BELOW a light one. Reps are clamped to 36 so the
+ * result stays positive and stays monotonic in reps -- an estimate off a set of
+ * 37+ is meaningless either way, but a negative one would be actively wrong.
  */
 export function estimated1RM(loadLb: number, reps: number | null): number {
   const r = reps ?? 0;
   if (r <= 0) return 0;
   if (r === 1) return loadLb;
-  return loadLb * (1 + r / 30);
+  return (loadLb * 36) / (37 - Math.min(r, 36));
 }
 
 /**
