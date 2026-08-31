@@ -1,8 +1,6 @@
 "use client";
 
 import { useState, useTransition } from "react";
-import Link from "next/link";
-import { ChevronLeft } from "lucide-react";
 import { saveGoals, signOut } from "@/app/actions";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -16,6 +14,7 @@ import {
   type MacroGoals,
   type MacroKey,
 } from "@/lib/goals";
+import { ThemeToggle } from "@/components/theme-toggle";
 import { toast } from "sonner";
 
 type Goals = ({ calorie_goal: number } & MacroGoals) | null;
@@ -99,13 +98,8 @@ export function GoalsForm({ goals }: { goals: Goals }) {
   }
 
   return (
-    <main className="mx-auto w-full max-w-md flex-1 pb-16">
-      <header className="flex items-center gap-1 border-b border-border px-2 py-2">
-        <Button size="icon" variant="ghost" asChild aria-label="Back">
-          <Link href="/log">
-            <ChevronLeft className="size-5" />
-          </Link>
-        </Button>
+    <main className="mx-auto w-full max-w-md flex-1 pb-[calc(6rem+env(safe-area-inset-bottom))]">
+      <header className="flex items-center border-b border-border px-5 py-3">
         <span className="text-sm font-medium">Goals</span>
       </header>
 
@@ -153,6 +147,8 @@ export function GoalsForm({ goals }: { goals: Goals }) {
         <Button className="h-11 w-full text-base" onClick={save} disabled={pending}>
           {pending ? "Saving" : "Save"}
         </Button>
+
+        <ThemeToggle />
 
         <form action={signOut}>
           <Button type="submit" variant="ghost" className="w-full text-muted-foreground">
