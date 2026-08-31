@@ -55,6 +55,41 @@ export async function currentWorkout(): Promise<{ id: string | null; error: stri
   return { id: data.id as string, error: null };
 }
 
+/**
+ * S51. A session for a day already gone.
+ *
+ * Created ALREADY FINISHED, unlike today's: "open" means "I am training right
+ * now", which can only be one thing and can only be today. That keeps
+ * workouts_one_open meaningful and leaves S26's resume with exactly one answer,
+ * at the cost of nothing -- a back-dated session is edited in place from the
+ * same screen either way.
+ */
+export async function createWorkoutOn(
+  date: string,
+): Promise<{ id: string | null; error: string | null }> {
+  const supabase = await createClient();
+  const {
+    data: { user },
+  } = await supabase.auth.getUser();
+  if (!user) return { id: null, error: "Not signed in" };
+
+  if (!/^\d{4}-\d{2}-\d{2}$/.test(date)) return { id: null, error: "Not a valid date" };
+  // A workout you have not done yet is a plan, and planning is out of scope
+  // (open decision 2). The picker does not offer future dates; this is the
+  // check that makes that a rule rather than a convention.
+  if (date > wakingDate()) return { id: null, error: "That day has not happened yet" };
+
+  const { data, error } = await supabase
+    .from("workouts")
+    .insert({ user_id: user.id, log_date: date, ended_at: new Date().toISOString() })
+    .select("id")
+    .single();
+  if (error) return { id: null, error: error.message };
+
+  revalidatePath("/train");
+  return { id: data.id as string, error: null };
+}
+
 export async function finishWorkout(id: string) {
   const supabase = await createClient();
   const {
@@ -65,7 +100,7 @@ export async function finishWorkout(id: string) {
   const failed = await closeWorkout(supabase, id, user.id);
   if (failed) return { error: failed };
 
-  revalidatePath("/train");
+  revalidatePath("/train", "layout");
   return { error: null };
 }
 
@@ -84,7 +119,7 @@ export async function discardWorkout(id: string) {
   const { error } = await supabase.from("workouts").delete().eq("id", id).eq("user_id", user.id);
   if (error) return { error: error.message };
 
-  revalidatePath("/train");
+  revalidatePath("/train", "layout");
   return { error: null };
 }
 
@@ -133,7 +168,7 @@ export async function addWorkoutExercise(
   });
   if (error) return { error: error.message };
 
-  revalidatePath("/train");
+  revalidatePath("/train", "layout");
   return { error: null };
 }
 
@@ -142,7 +177,7 @@ export async function removeWorkoutExercise(id: string) {
   const { error } = await supabase.from("workout_exercises").delete().eq("id", id);
   if (error) return { error: error.message };
 
-  revalidatePath("/train");
+  revalidatePath("/train", "layout");
   return { error: null };
 }
 
@@ -178,7 +213,7 @@ export async function logSet(workoutExerciseId: string, input: SetInput) {
   });
   if (error) return { error: error.message };
 
-  revalidatePath("/train");
+  revalidatePath("/train", "layout");
   return { error: null };
 }
 
@@ -190,7 +225,7 @@ export async function updateSet(id: string, input: Omit<SetInput, "set_index">) 
   const { error } = await supabase.from("workout_sets").update(input).eq("id", id);
   if (error) return { error: error.message };
 
-  revalidatePath("/train");
+  revalidatePath("/train", "layout");
   return { error: null };
 }
 
@@ -199,7 +234,7 @@ export async function deleteSet(id: string) {
   const { error } = await supabase.from("workout_sets").delete().eq("id", id);
   if (error) return { error: error.message };
 
-  revalidatePath("/train");
+  revalidatePath("/train", "layout");
   return { error: null };
 }
 

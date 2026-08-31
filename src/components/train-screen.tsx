@@ -2,11 +2,13 @@
 
 import { useState, useTransition } from "react";
 import { useRouter } from "next/navigation";
-import { Check, Dumbbell, Pencil, Plus, Trash2, X } from "lucide-react";
+import Link from "next/link";
+import { Check, ChevronLeft, Dumbbell, Pencil, Plus, Trash2, X } from "lucide-react";
 import {
   allowsBodyweight,
   isHardSet,
   loadLabel,
+  shortDate,
   suggestFor,
   trim,
   type Exercise,
@@ -15,10 +17,9 @@ import {
   type WorkoutSet,
   type WorkoutSlot,
 } from "@/lib/training";
-import type { LastSession } from "@/app/train/page";
+import type { LastSession } from "@/app/train/[id]/page";
 import {
   addWorkoutExercise,
-  currentWorkout,
   deleteSet,
   discardWorkout,
   finishWorkout,
@@ -63,7 +64,7 @@ export function TrainScreen({
   today,
   recentExerciseIds,
 }: {
-  workout: Workout | null;
+  workout: Workout;
   slots: WorkoutSlot[];
   lastSessions: Record<string, LastSession>;
   exercises: Exercise[];
@@ -74,9 +75,10 @@ export function TrainScreen({
   const [picking, setPicking] = useState(false);
   const [pending, startTransition] = useTransition();
 
-  // S26. A session from a previous day is closed rather than resumed, so it
-  // cannot absorb today's sets.
-  const stale = workout !== null && workout.log_date !== today;
+  // S26. A session left open from a previous day cannot absorb today's sets, so
+  // it is closed where it stands rather than continued.
+  const stale = workout.ended_at === null && workout.log_date !== today;
+  const past = workout.log_date !== today;
 
   function run(action: () => Promise<{ error: string | null }>, done?: () => void) {
     startTransition(async () => {
@@ -96,52 +98,30 @@ export function TrainScreen({
     0,
   );
 
-  if (workout === null || stale) {
-    return (
-      <main className="mx-auto w-full max-w-md flex-1 pb-[calc(6rem+env(safe-area-inset-bottom))]">
-        <header className="flex items-center justify-between border-b border-border px-5 py-3">
-          <span className="text-sm font-medium">Train</span>
-        </header>
-
-        <Empty className="py-16">
-          <EmptyHeader>
-            <EmptyMedia variant="icon">
-              <Dumbbell />
-            </EmptyMedia>
-            <EmptyTitle>
-              {stale ? "Yesterday's session is still open" : "No session yet"}
-            </EmptyTitle>
-            <EmptyDescription>
-              {stale
-                ? "Starting today's session closes it where it stands, so today's sets stay on today."
-                : "Start one and add a lift. Each set opens with what you did last time, ready to change or accept."}
-            </EmptyDescription>
-          </EmptyHeader>
-        </Empty>
-
-        <div className="px-5">
-          <Button
-            className="h-12 w-full text-base"
-            disabled={pending}
-            onClick={() => run(async () => ({ error: (await currentWorkout()).error }))}
-          >
-            {pending ? "Starting" : "Start a session"}
-          </Button>
-        </div>
-      </main>
-    );
-  }
-
   return (
     <>
       <main className="mx-auto w-full max-w-md flex-1 pb-[calc(6rem+env(safe-area-inset-bottom))]">
-        <header className="flex items-center justify-between border-b border-border px-5 py-3">
-          <span className="text-sm font-medium">Today&rsquo;s session</span>
-          <span className="text-xs tabular-nums text-muted-foreground">
+        <header className="flex items-center gap-1 border-b border-border px-2 py-2">
+          <Button size="icon" variant="ghost" aria-label="All sessions" asChild>
+            <Link href="/train">
+              <ChevronLeft className="size-5" />
+            </Link>
+          </Button>
+          <span className="min-w-0 flex-1 truncate text-sm font-medium">
+            {past ? shortDate(workout.log_date) : "Today's session"}
+          </span>
+          <span className="shrink-0 pr-3 text-xs tabular-nums text-muted-foreground">
             {hardSets} {hardSets === 1 ? "set" : "sets"}
             {volume > 0 && ` · ${Math.round(volume).toLocaleString()} lb`}
           </span>
         </header>
+
+        {stale && (
+          <p className="border-b border-border px-5 py-3 text-xs text-muted-foreground">
+            Left open from {shortDate(workout.log_date)}. Finishing it keeps its sets on that
+            day rather than rolling them into today.
+          </p>
+        )}
 
         {slots.length === 0 && (
           <Empty className="py-14">
@@ -187,13 +167,13 @@ export function TrainScreen({
               className="h-11 flex-1"
               disabled={pending}
               onClick={() =>
-                run(
-                  () => finishWorkout(workout.id),
-                  () => toast.success("Session finished"),
-                )
+                run(() => finishWorkout(workout.id), () => {
+                  toast.success("Session finished");
+                  router.push("/train");
+                })
               }
             >
-              {pending ? "Finishing" : "Finish session"}
+              {pending ? "Finishing" : workout.ended_at ? "Done" : "Finish session"}
             </Button>
             {slots.length === 0 && (
               <Button
@@ -202,7 +182,7 @@ export function TrainScreen({
                 className="h-11 text-destructive"
                 aria-label="Discard session"
                 disabled={pending}
-                onClick={() => run(() => discardWorkout(workout.id))}
+                onClick={() => run(() => discardWorkout(workout.id), () => router.push("/train"))}
               >
                 <Trash2 className="size-4" />
               </Button>
