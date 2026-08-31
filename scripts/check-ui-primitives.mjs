@@ -42,14 +42,36 @@ const RULES = [
   },
   {
     registry: "card",
+    // Widened after a real miss. This used to require `bg-(card|background)` in
+    // the same class list, and the hand-rolled surface in train-screen.tsx set
+    // no background at all -- a rounded border with padding is already a card
+    // whether or not it is tinted, so requiring the tint asked for the one
+    // detail a hand-roll is least likely to bother with.
     hint: "hand-built surface; Card carries header, content and footer slots",
     test: (line) =>
-      /className="[^"]*\brounded-(lg|xl)\b[^"]*\bborder\b[^"]*\bbg-(card|background)\b/.test(line),
+      /className="[^"]*\brounded-(md|lg|xl|2xl)\b/.test(line) &&
+      /className="[^"]*\bborder\b/.test(line) &&
+      /className="[^"]*\bp[xy]?-\d/.test(line),
   },
   {
     registry: "field",
+    // Widened after a second miss. This matched the label's classes as a
+    // literal, so hoisting them into `const fieldLabel = "..."` made every
+    // field on the login page invisible to it. A rule that only sees one
+    // spelling of a shape is a rule that rewards renaming, so the const is now
+    // followed to its declaration.
     hint: "repeated label + control + hint; Field composes them with the error slot",
-    test: (line) => /<Label[^>]*className="[^"]*text-xs text-muted-foreground/.test(line),
+    test: (line, lines) => {
+      if (!/<Label\b/.test(line)) return false;
+      if (/className="[^"]*text-xs[^"]*text-muted-foreground/.test(line)) return true;
+      const ref = line.match(/className=\{(\w+)\}/);
+      if (!ref) return false;
+      const decl = lines.find((l) => {
+        const m = l.match(/(?:const|let|var)\s+(\w+)\s*=/);
+        return m !== null && m[1] === ref[1];
+      });
+      return decl ? /text-xs[^"]*text-muted-foreground/.test(decl) : false;
+    },
   },
 ];
 
@@ -77,7 +99,7 @@ for (const file of walk(SRC)) {
     if (exempt) return;
 
     for (const rule of RULES) {
-      if (rule.test(line)) {
+      if (rule.test(line, lines)) {
         findings.push({
           where: `${slash(relative(ROOT, file))}:${i + 1}`,
           registry: rule.registry,
