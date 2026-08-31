@@ -107,6 +107,7 @@ function SearchStep({
   onCustom?: () => void;
 }) {
   const [query, setQuery] = useState("");
+  const [picked, setPicked] = useState<string | null>(null);
   const inputRef = useRef<HTMLInputElement>(null);
   const results = useMemo(() => searchFoods(foods, query), [foods, query]);
 
@@ -185,7 +186,16 @@ function SearchStep({
             {results.map((f) => (
               <li key={f.id}>
                 <Item asChild size="sm" className="rounded-none px-5 py-3 active:bg-accent">
-                  <button onClick={() => onPick(f)} className="text-left">
+                  {/* Disabled while a pick is in flight: a slow request used
+                      to let a second tap fire a second insert. */}
+                  <button
+                    onClick={() => {
+                      setPicked(f.id);
+                      onPick(f);
+                    }}
+                    disabled={picked !== null}
+                    className="text-left disabled:opacity-60"
+                  >
                     <ItemContent className="min-w-0">
                       <ItemTitle className="font-normal">{f.name}</ItemTitle>
                       {/* S6. Below the name rather than beside it: the badge

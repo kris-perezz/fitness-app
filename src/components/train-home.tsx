@@ -54,9 +54,27 @@ export function TrainHome({
 }) {
   const router = useRouter();
   const [adding, setAdding] = useState(false);
+  const [, startTransition] = useTransition();
 
   const byDate = new Map(sessions.map((s) => [s.date, s]));
   const trainedDays = sessions.map((s) => toDate(s.date));
+
+  /** Open a day's session, creating it if there is none (S52). */
+  function open(date: string) {
+    const existing = byDate.get(date);
+    if (existing) {
+      router.push(`/train/${existing.id}`);
+      return;
+    }
+    startTransition(async () => {
+      const res = await openWorkoutOn(date);
+      if (res.error || !res.id) {
+        toast.error(res.error ?? "Could not open that session");
+        return;
+      }
+      router.push(`/train/${res.id}`);
+    });
+  }
 
   // S53. Forgetting to press Finish is the normal case -- the last thing you do
   // in a gym is leave -- so a session left open on an earlier day is closed on
@@ -80,34 +98,41 @@ export function TrainHome({
           </span>
         </header>
 
-        {/* Resuming beats browsing, so an open session sits above everything. */}
-        {openSession && (
-          <div className="border-b border-border px-5 py-4">
+        {/* The primary action sits ABOVE the calendar and the list. It was under
+            the list until a month with thirty sessions made the point: the one
+            thing you came here to do should not be reachable only by scrolling
+            past everything you have already done. Resuming beats browsing, so an
+            open session takes the slot when there is one. */}
+        <div className="border-b border-border px-5 py-4">
+          {openSession ? (
             <Button className="h-12 w-full text-base" asChild>
               <Link href={`/train/${openSession.id}`}>
                 <Play className="size-4" /> Resume session
               </Link>
             </Button>
-          </div>
-        )}
+          ) : (
+            <Button className="h-12 w-full text-base" onClick={() => setAdding(true)}>
+              <CalendarPlus className="size-4" /> Add session
+            </Button>
+          )}
+        </div>
 
         <div className="flex justify-center border-b border-border px-2 py-3">
           <Calendar
             month={toDate(`${month}-01`)}
             onMonthChange={(next) => router.push(`/train?month=${monthKey(next)}`)}
-            // Days without a session are not selectable: there is nothing to
-            // open, and a tap that silently does nothing is worse than a
-            // control that says it cannot be pressed.
-            disabled={(day) => !byDate.has(dateKey(day))}
+            // Every day you have actually lived through is tappable, whether or
+            // not it has a session yet: a trained day opens its session, an
+            // untrained one starts it. Only the future is dead, because a
+            // workout you have not done is a plan (open decision 2). Untrained
+            // days used to be disabled, which made the obvious gesture -- tap
+            // today, log today -- do nothing at all.
+            disabled={{ after: toDate(today) }}
             modifiers={{ trained: trainedDays }}
             modifiersClassNames={{
               trained: "font-semibold underline decoration-primary decoration-2 underline-offset-4",
             }}
-            onSelect={(day) => {
-              if (!day) return;
-              const found = byDate.get(dateKey(day));
-              if (found) router.push(`/train/${found.id}`);
-            }}
+            onSelect={(day) => day && open(dateKey(day))}
             mode="single"
             className="p-0"
           />
@@ -121,7 +146,8 @@ export function TrainHome({
               </EmptyMedia>
               <EmptyTitle>Nothing logged this month</EmptyTitle>
               <EmptyDescription>
-                Add a session for today, or for any day you trained without your phone.
+                Underlined days are days you trained. Tap any day up to today, or use
+                Add session above.
               </EmptyDescription>
             </EmptyHeader>
           </Empty>
@@ -153,15 +179,6 @@ export function TrainHome({
           </ul>
         )}
 
-        {/* S52. One button. With at most one session per date, picking a day IS
-            the whole interaction -- there is exactly one thing that date can
-            refer to, so "start today" and "add last Tuesday" stopped being
-            different questions. */}
-        <div className="px-5 py-4">
-          <Button className="h-12 w-full text-base" onClick={() => setAdding(true)}>
-            <CalendarPlus className="size-4" /> Add session
-          </Button>
-        </div>
       </main>
 
       <PickDay open={adding} onOpenChange={setAdding} today={today} />

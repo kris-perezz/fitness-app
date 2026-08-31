@@ -120,6 +120,7 @@ function SearchStep({
   onCreate: () => void;
 }) {
   const [query, setQuery] = useState("");
+  const [picked, setPicked] = useState<string | null>(null);
   const inputRef = useRef<HTMLInputElement>(null);
   const results = useMemo(() => searchExercises(exercises, query), [exercises, query]);
 
@@ -200,7 +201,16 @@ function SearchStep({
             {shown.map((e) => (
               <li key={e.id}>
                 <Item asChild size="sm" className="rounded-none px-5 py-3 active:bg-accent">
-                  <button onClick={() => onPick(e)} className="text-left">
+                  {/* Disabled while a pick is in flight: a slow request used
+                      to let a second tap fire a second insert. */}
+                  <button
+                    onClick={() => {
+                      setPicked(e.id);
+                      onPick(e);
+                    }}
+                    disabled={picked !== null}
+                    className="text-left disabled:opacity-60"
+                  >
                     <ItemContent className="min-w-0">
                       <ItemTitle className="font-normal">{e.name}</ItemTitle>
                       <ItemDescription className="text-xs">

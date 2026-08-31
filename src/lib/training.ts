@@ -186,6 +186,13 @@ export function bestSet(sets: WorkoutSet[]): WorkoutSet | null {
   );
 }
 
+/**
+ * The last time an exercise was trained: its sets, and when. Lives here rather
+ * than on the route that queries it -- a page file is a strange home for a type
+ * two other modules need.
+ */
+export type LastSession = { sets: WorkoutSet[]; date: string };
+
 /** Where a suggested set came from, so the sheet can say so out loud. */
 export type Suggestion = {
   draft: SetDraft;

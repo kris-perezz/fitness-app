@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useTransition } from "react";
+import { useOptimistic, useState, useTransition } from "react";
 import { useRouter } from "next/navigation";
 import Link from "next/link";
 import { Check, ChevronLeft, Dumbbell, Pencil, Plus, Trash2, X } from "lucide-react";
@@ -17,7 +17,7 @@ import {
   type WorkoutSet,
   type WorkoutSlot,
 } from "@/lib/training";
-import type { LastSession } from "@/app/train/[id]/page";
+import type { LastSession } from "@/lib/training";
 import {
   addWorkoutExercise,
   deleteSet,
@@ -34,6 +34,15 @@ import { Badge } from "@/components/ui/badge";
 import { Input } from "@/components/ui/input";
 import { Field, FieldLabel } from "@/components/ui/field";
 import { Toggle } from "@/components/ui/toggle";
+import {
+  Table,
+  TableBody,
+  TableCell,
+  TableHead,
+  TableHeader,
+  TableRow,
+} from "@/components/ui/table";
+import { ConfirmAction } from "@/components/confirm-action";
 import { Collapsible, CollapsibleContent, CollapsibleTrigger } from "@/components/ui/collapsible";
 import {
   Empty,
@@ -176,16 +185,23 @@ export function TrainScreen({
               {pending ? "Finishing" : workout.ended_at ? "Done" : "Finish session"}
             </Button>
             {slots.length === 0 && (
-              <Button
-                variant="outline"
-                size="icon"
-                className="h-11 text-destructive"
-                aria-label="Discard session"
-                disabled={pending}
-                onClick={() => run(() => discardWorkout(workout.id), () => router.push("/train"))}
-              >
-                <Trash2 className="size-4" />
-              </Button>
+              <ConfirmAction
+                title="Discard this session?"
+                description="Nothing has been logged in it yet, so nothing is lost -- the day simply goes back to being untrained."
+                confirmLabel="Discard"
+                onConfirm={() => run(() => discardWorkout(workout.id), () => router.push("/train"))}
+                trigger={
+                  <Button
+                    variant="outline"
+                    size="icon"
+                    className="h-11 text-destructive"
+                    aria-label="Discard session"
+                    disabled={pending}
+                  >
+                    <Trash2 className="size-4" />
+                  </Button>
+                }
+              />
             )}
           </ButtonGroup>
         </section>
@@ -224,7 +240,25 @@ function SlotSection({
   const [editing, setEditing] = useState<WorkoutSet | null>(null);
   const [pending, startTransition] = useTransition();
 
-  const suggestion = suggestFor(slot.sets, last);
+  /**
+   * The set appears the instant you press the button, not when the server
+   * answers. Logging a set is the one interaction that happens standing up with
+   * a barbell waiting, and a gym is the worst network you will ever use it on;
+   * a round trip before anything moves is felt every single time.
+   *
+   * The optimistic row is discarded automatically when the transition ends and
+   * the refreshed server data arrives, so a failed write corrects itself rather
+   * than leaving a set that was never saved.
+   */
+  const [sets, applyOptimistic] = useOptimistic(
+    slot.sets,
+    (current: WorkoutSet[], action: { kind: "add"; set: WorkoutSet } | { kind: "remove"; id: string }) =>
+      action.kind === "add"
+        ? [...current, action.set]
+        : current.filter((s) => s.id !== action.id),
+  );
+
+  const suggestion = suggestFor(sets, last);
 
   return (
     <section className="border-b border-border">
@@ -233,13 +267,15 @@ function SlotSection({
           <h2 className="truncate text-sm font-semibold">{slot.name}</h2>
           <p className="text-xs text-muted-foreground">{slot.muscle_group}</p>
         </div>
-        <Button
-          size="icon"
-          variant="ghost"
-          className="shrink-0 text-muted-foreground"
-          aria-label={`Remove ${slot.name}`}
-          disabled={pending}
-          onClick={() =>
+        <ConfirmAction
+          title={`Remove ${slot.name}?`}
+          description={
+            sets.length === 0
+              ? "Nothing has been logged against it yet."
+              : `Its ${sets.length} logged ${sets.length === 1 ? "set goes" : "sets go"} with it. This cannot be undone.`
+          }
+          confirmLabel="Remove"
+          onConfirm={() =>
             startTransition(async () => {
               const res = await removeWorkoutExercise(slot.id);
               if (res.error) {
@@ -249,72 +285,79 @@ function SlotSection({
               onChanged();
             })
           }
-        >
-          <X className="size-4" />
-        </Button>
+          trigger={
+            <Button
+              size="icon"
+              variant="ghost"
+              className="shrink-0 text-muted-foreground"
+              aria-label={`Remove ${slot.name}`}
+              disabled={pending}
+            >
+              <X className="size-4" />
+            </Button>
+          }
+        />
       </div>
 
-      {/* A real table: these are rows of the same four measurements, which is
-          what a table is for, and it keeps the columns aligned down the
-          session the way the food list keeps calories aligned. */}
-      {slot.sets.length > 0 && (
-        <table className="w-full text-sm">
-          <thead>
-            <tr className="text-[11px] text-muted-foreground">
-              <th scope="col" className="w-8 py-1 pl-5 text-left font-normal">
-                #
-              </th>
-              <th scope="col" className="py-1 text-left font-normal">
-                {exercise?.load_is_per_side ? "Load / side" : "Load"}
-              </th>
-              <th scope="col" className="py-1 text-left font-normal">
-                Reps
-              </th>
-              <th scope="col" className="py-1 text-left font-normal">
-                RIR
-              </th>
-              <th scope="col" className="w-10 py-1 pr-5">
+      {/* Rows of the same four measurements, which is what a table is for --
+          and it keeps the columns aligned down the session the way the food
+          list keeps calories aligned. */}
+      {sets.length > 0 && (
+        <Table>
+          <TableHeader>
+            <TableRow className="hover:bg-transparent">
+              <TableHead className="w-10 pl-5">#</TableHead>
+              <TableHead>{exercise?.load_is_per_side ? "Load / side" : "Load"}</TableHead>
+              <TableHead>Reps</TableHead>
+              <TableHead>RIR</TableHead>
+              <TableHead className="w-14 pr-3">
                 <span className="sr-only">Edit</span>
-              </th>
-            </tr>
-          </thead>
-          <tbody>
-            {slot.sets.map((set) => (
-              <tr key={set.id} className="border-t border-border/60">
-                <td className="py-2 pl-5 tabular-nums text-muted-foreground">
+              </TableHead>
+            </TableRow>
+          </TableHeader>
+          <TableBody>
+            {sets.map((set) => (
+              <TableRow key={set.id}>
+                <TableCell className="pl-5 tabular-nums text-muted-foreground">
                   {set.set_index + 1}
-                </td>
-                <td className="py-2">
+                </TableCell>
+                <TableCell>
                   <span className="flex items-center gap-1.5">
                     <span className="tabular-nums">
                       {set.load_lb === 0 ? "BW" : `${trim(set.load_lb)} lb`}
                     </span>
                     {/* A warm-up counts for nothing in volume (S32) but stays in
-                        history, so the row has to say which it is -- otherwise
-                        two identical-looking rows mean different things. */}
+                        history, so the row has to say which it is -- the light
+                        load that would otherwise hint at it is exactly what a
+                        warm-up shares with a bad day. */}
                     {set.set_type === "warmup" && (
                       <Badge variant="secondary" className="px-1.5 text-[10px]">
                         Warm-up
                       </Badge>
                     )}
                   </span>
-                </td>
-                <td className="py-2 tabular-nums">{set.reps ?? "—"}</td>
-                <td className="py-2 tabular-nums text-muted-foreground">{set.rir ?? "—"}</td>
-                <td className="py-2 pr-3 text-right">
+                </TableCell>
+                <TableCell className="tabular-nums">{set.reps ?? "—"}</TableCell>
+                <TableCell className="tabular-nums text-muted-foreground">
+                  {set.rir ?? "—"}
+                </TableCell>
+                <TableCell className="pr-3 text-right">
+                  {/* 44px, not the 28px an icon-sm gives: this is the app's own
+                      floor, stated in bottom-nav.tsx, and it sits on every set. */}
                   <Button
-                    size="icon-sm"
+                    size="icon"
                     variant="ghost"
+                    className="size-11 text-muted-foreground"
                     aria-label={`Edit set ${set.set_index + 1}`}
                     onClick={() => setEditing(set)}
                   >
-                    <Pencil />
+                    <Pencil className="size-4" />
                   </Button>
-                </td>
-              </tr>
+                </TableCell>
+              </TableRow>
             ))}
-          </tbody>
-        </table>
+          </TableBody>
+        </Table>
       )}
 
       {editing && (
@@ -345,12 +388,13 @@ function SlotSection({
             }
             onDelete={() =>
               startTransition(async () => {
+                applyOptimistic({ kind: "remove", id: editing.id });
+                setEditing(null);
                 const res = await deleteSet(editing.id);
                 if (res.error) {
                   toast.error(res.error);
                   return;
                 }
-                setEditing(null);
                 onChanged();
               })
             }
@@ -375,8 +419,8 @@ function SlotSection({
             <SetForm
               // Re-keyed on the set count so each new set opens with a fresh
               // suggestion rather than the previous row's edited state.
-              key={slot.sets.length}
-              title={`Set ${slot.sets.length + 1}`}
+              key={sets.length}
+              title={`Set ${sets.length + 1}`}
               suggestion={suggestion}
               initial={suggestion?.draft ?? { reps: null, load_lb: 0, set_type: "straight" }}
               initialRir={null}
@@ -385,8 +429,22 @@ function SlotSection({
               onCancel={() => setAdding(false)}
               onSubmit={(draft, rir) =>
                 startTransition(async () => {
+                  const setIndex = sets.length;
+                  applyOptimistic({
+                    kind: "add",
+                    set: {
+                      // A temporary id: this row exists only until the server
+                      // answers and the refreshed data replaces it.
+                      id: `pending-${setIndex}`,
+                      workout_exercise_id: slot.id,
+                      set_index: setIndex,
+                      ...draft,
+                      rir,
+                      skipped: false,
+                    },
+                  });
                   const res = await logSet(slot.id, {
-                    set_index: slot.sets.length,
+                    set_index: setIndex,
                     ...draft,
                     rir,
                     skipped: false,

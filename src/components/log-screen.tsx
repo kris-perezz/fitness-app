@@ -7,6 +7,7 @@ import { ChevronLeft, ChevronRight, CookingPot, Pencil, Plus } from "lucide-reac
 import { MEALS, shiftDate, wakingDate, type Food, type Meal } from "@/lib/food";
 import { deleteEntry } from "@/app/actions";
 import { Button } from "@/components/ui/button";
+import { Progress } from "@/components/ui/progress";
 import { ButtonGroup } from "@/components/ui/button-group";
 import {
   Drawer,
@@ -22,7 +23,9 @@ import {
   ItemDescription,
   ItemTitle,
 } from "@/components/ui/item";
+import { cn } from "@/lib/utils";
 import { AddSheet } from "@/components/add-sheet";
+import { ConfirmAction } from "@/components/confirm-action";
 import { EditFoodSheet } from "@/components/edit-food-sheet";
 import { FoodSourceBadge } from "@/components/food-source-badge";
 import { CalorieRing } from "@/components/calorie-ring";
@@ -186,12 +189,18 @@ export function LogScreen({
                 </ul>
               )}
 
-              <button
-                onClick={() => setAddingTo(meal)}
-                className="flex w-full items-center gap-1.5 px-5 py-3 text-left text-sm font-medium text-primary transition-colors active:bg-accent"
-              >
-                <Plus className="size-4" /> Add food
-              </button>
+              {/* A button, not a full-bleed strip. The strip read as another
+                  row of the meal's list, which is a thing you open rather than
+                  a thing you do. */}
+              <div className="px-5 pb-4 pt-1">
+                <Button
+                  variant="outline"
+                  className="h-11 w-full"
+                  onClick={() => setAddingTo(meal)}
+                >
+                  <Plus className="size-4" /> Add food
+                </Button>
+              </div>
             </section>
           );
         })}
@@ -239,14 +248,14 @@ function MacroMeter({ label, value, goal }: { label: string; value: number; goal
           {goal !== null && <span className="text-muted-foreground"> / {round(goal)}g</span>}
         </span>
       </div>
-      <div className="mt-1.5 h-1 overflow-hidden rounded-full bg-muted">
-        <div
-          className={
-            "h-full rounded-full transition-[width] " + (over ? "bg-destructive" : "bg-primary")
-          }
-          style={{ width: `${pct}%` }}
-        />
-      </div>
+      {/* The registry's Progress, not a hand-built bar. It carries the
+          progressbar role and its aria-valuenow, which two divs and an inline
+          width never did. */}
+      <Progress
+        value={pct}
+        aria-label={`${label}: ${round(value)} of ${goal === null ? "no" : round(goal)} grams`}
+        className={cn("mt-1.5 h-1", over && "[&>[data-slot=progress-indicator]]:bg-destructive")}
+      />
     </div>
   );
 }
@@ -319,11 +328,10 @@ function EntryDetail({
                     <Pencil className="size-4" /> Edit food
                   </Button>
                 )}
-                <Button
-                  variant="outline"
-                  className="h-11 flex-1 text-destructive"
-                  disabled={pending}
-                  onClick={() =>
+                <ConfirmAction
+                  title={`Delete ${entry.name}?`}
+                  description={`${round(entry.kcal)} calories come off ${entry.meal}. This cannot be undone.`}
+                  onConfirm={() =>
                     startTransition(async () => {
                       const res = await deleteEntry(entry.id);
                       if (res.error) {
@@ -333,9 +341,16 @@ function EntryDetail({
                       onClose();
                     })
                   }
-                >
-                  {pending ? "Deleting" : "Delete"}
-                </Button>
+                  trigger={
+                    <Button
+                      variant="outline"
+                      className="h-11 flex-1 text-destructive"
+                      disabled={pending}
+                    >
+                      {pending ? "Deleting" : "Delete"}
+                    </Button>
+                  }
+                />
               </ButtonGroup>
             </div>
           </div>

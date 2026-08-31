@@ -1,13 +1,10 @@
 import { notFound } from "next/navigation";
 import { createClient } from "@/lib/supabase/server";
 import { wakingDate } from "@/lib/food";
-import type { Exercise, Workout, WorkoutSet, WorkoutSlot } from "@/lib/training";
+import type { Exercise, LastSession, Workout, WorkoutSet, WorkoutSlot } from "@/lib/training";
 import { TrainScreen } from "@/components/train-screen";
 
 export const dynamic = "force-dynamic";
-
-/** Last time this exercise was trained: its sets, and when. */
-export type LastSession = { sets: WorkoutSet[]; date: string };
 
 export default async function WorkoutPage({ params }: PageProps<"/train/[id]">) {
   const { id } = await params;

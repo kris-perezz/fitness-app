@@ -20,6 +20,7 @@ import {
   type RecipeRow,
 } from "@/app/actions";
 import { IngredientSheet } from "@/components/ingredient-sheet";
+import { ConfirmAction } from "@/components/confirm-action";
 import { Button } from "@/components/ui/button";
 import { ButtonGroup } from "@/components/ui/button-group";
 import { Input } from "@/components/ui/input";
@@ -280,15 +281,11 @@ export function RecipeEditor({
             </ul>
           )}
 
-          {/* Hand-rolled: a full-bleed borderless row is not a Button shape --
-              every registry variant is an inset control with its own hit area.
-              Matches the "Add food" row in log-screen.tsx, deliberately. */}
-          <button
-            onClick={() => setAdding(true)}
-            className="flex w-full items-center gap-1.5 px-5 py-3 text-left text-sm font-medium text-primary transition-colors active:bg-accent"
-          >
-            <Plus className="size-4" /> Add ingredient
-          </button>
+          <div className="px-5 pb-4 pt-1">
+            <Button variant="outline" className="h-11 w-full" onClick={() => setAdding(true)}>
+              <Plus className="size-4" /> Add ingredient
+            </Button>
+          </div>
         </section>
 
         <section className="px-5 py-5">
@@ -411,16 +408,23 @@ function IngredientRow({ line, onChanged }: { line: EditorLine; onChanged: () =>
             className="h-9 w-16 text-base tabular-nums"
           />
           <span className="w-8 shrink-0 text-xs text-muted-foreground">{unit}</span>
-          <Button
-            size="icon"
-            variant="ghost"
-            className="text-muted-foreground"
-            aria-label={`Remove ${line.food.name}`}
-            disabled={pending}
-            onClick={remove}
-          >
-            <Trash2 className="size-4" />
-          </Button>
+          <ConfirmAction
+            title={`Remove ${line.food.name}?`}
+            description="It comes out of the recipe's totals. Portions already logged keep the numbers they were logged with."
+            confirmLabel="Remove"
+            onConfirm={remove}
+            trigger={
+              <Button
+                size="icon"
+                variant="ghost"
+                className="text-muted-foreground"
+                aria-label={`Remove ${line.food.name}`}
+                disabled={pending}
+              >
+                <Trash2 className="size-4" />
+              </Button>
+            }
+          />
         </ItemActions>
       </Item>
     </li>
