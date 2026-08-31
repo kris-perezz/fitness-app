@@ -13,11 +13,19 @@ import { cn } from "@/lib/utils";
  * because that is the reachable half of a phone screen held one-handed.
  */
 const TABS = [
-  { href: "/log", label: "Food", icon: UtensilsCrossed },
-  { href: "/train", label: "Train", icon: Dumbbell },
-  { href: "/progress", label: "Progress", icon: TrendingUp },
-  { href: "/goals", label: "Profile", icon: User },
-] as const;
+  // `also` keeps a tab lit on the section's other routes. Recipes are part of
+  // Food, not a fifth destination: you go there to define a dish, and the dish
+  // then shows up in the food list like anything else (S16).
+  { href: "/log", label: "Food", icon: UtensilsCrossed, also: ["/recipes"] },
+  { href: "/train", label: "Train", icon: Dumbbell, also: [] },
+  { href: "/progress", label: "Progress", icon: TrendingUp, also: [] },
+  { href: "/goals", label: "Profile", icon: User, also: [] },
+] as const satisfies readonly {
+  href: string;
+  label: string;
+  icon: typeof Dumbbell;
+  also: readonly string[];
+}[];
 
 /** Routes that are not part of the signed-in app shell. */
 const CHROMELESS = ["/login", "/auth"];
@@ -36,9 +44,12 @@ export function BottomNav() {
       className="fixed inset-x-0 bottom-0 z-40 pb-safe"
     >
       <ul className="mx-auto flex max-w-md items-stretch justify-around gap-1 border-t border-border bg-background/85 px-2 py-1 backdrop-blur-md">
-        {TABS.map(({ href, label, icon: Icon }) => {
+        {TABS.map(({ href, label, icon: Icon, also }) => {
           // Prefix match so nested routes keep their tab lit.
-          const active = pathname === href || pathname.startsWith(`${href}/`);
+          const active =
+            pathname === href ||
+            pathname.startsWith(`${href}/`) ||
+            also.some((r: string) => pathname === r || pathname.startsWith(`${r}/`));
 
           return (
             <li key={href} className="flex-1">
