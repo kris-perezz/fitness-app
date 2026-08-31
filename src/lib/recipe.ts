@@ -100,6 +100,11 @@ export function perServingMacros(lines: RecipeLine[], servings: number): Macros 
  * a food nobody has weighed.
  */
 export function ingredientGrams(food: Food, qty: number): number | null {
+  // Millilitres are summed as if they were grams. Every liquid in the catalog
+  // is water-based (milk, juice, stock) and sits within a few percent of 1
+  // g/ml, which is far inside the band S21 flags on -- and the alternative is a
+  // density column nobody can fill in. Revisit only if oils or syrups start
+  // appearing as recipe ingredients by volume.
   if (food.basis === "per_100g") return qty;
   if (food.grams_per_unit == null) return null;
   return qty * food.grams_per_unit;
@@ -201,6 +206,8 @@ export function generatedFood(
     // One serving is the unit, which is what makes a portion one entry.
     basis: "per_unit",
     unit: "serving",
+    // A cooked weight is weighed on a scale, so a serving of a dish is grams.
+    weight_unit: "g",
     // With a cooked weight, a serving has a real gram weight and an odd-sized
     // portion becomes loggable by grams (S17). Without one the weight is
     // genuinely unknown -- null, not zero.

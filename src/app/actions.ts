@@ -217,6 +217,9 @@ export async function saveLabelFood(
 export type FoodEdit = {
   name: string;
   grams_per_unit: number | null;
+  /** What `grams_per_unit` is measured in (S40). Editable because it was
+   * backfilled by inspection in 0008 and can therefore be wrong. */
+  weight_unit: "g" | "ml";
   kcal: number;
   protein_g: number;
   carb_g: number;
@@ -262,6 +265,9 @@ export async function updateFood(
   const fields = {
     name: edit.name.trim(),
     grams_per_unit: edit.grams_per_unit,
+    // On a per_100g basis the measure IS the unit (0008), so accepting a
+    // conflicting value here would break that rule from the outside.
+    weight_unit: current.basis === "per_100g" ? current.unit : edit.weight_unit,
     kcal: edit.kcal,
     protein_g: edit.protein_g,
     carb_g: edit.carb_g,
@@ -317,6 +323,7 @@ export async function updateFood(
 
 function validateEdit(edit: FoodEdit): string | null {
   if (!edit.name.trim()) return "Name is required";
+  if (edit.weight_unit !== "g" && edit.weight_unit !== "ml") return "Measure must be g or ml";
   const numbers: (number | null)[] = [
     edit.grams_per_unit,
     edit.kcal,

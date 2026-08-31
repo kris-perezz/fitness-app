@@ -2,7 +2,21 @@
 
 import { useEffect, useRef, useState, useTransition } from "react";
 import { ChevronLeft } from "lucide-react";
-import { scale, show, qtyLabel, basisLabel, sourceHint, type Food, type Meal } from "@/lib/food";
+import {
+  scale,
+  show,
+  basisLabel,
+  canMeasure,
+  countLabel,
+  countToMeasure,
+  measureLabel,
+  measureToCount,
+  qtyFromCount,
+  qtyFromMeasure,
+  sourceHint,
+  type Food,
+  type Meal,
+} from "@/lib/food";
 import { addEntry, saveScannedFood } from "@/app/actions";
 import { FoodPicker, type PickerStep } from "@/components/food-picker";
 import { FoodSourceBadge } from "@/components/food-source-badge";
@@ -126,6 +140,12 @@ export function AddSheet({
   );
 }
 
+/** "Servings", "Cups", "Slices" -- the counting noun as a field label. */
+function countFieldLabel(food: Food): string {
+  const label = countLabel(food, 2);
+  return label.charAt(0).toUpperCase() + label.slice(1);
+}
+
 function QtyStep({
   food,
   scanned,
@@ -141,37 +161,42 @@ function QtyStep({
   onBack: () => void;
   onDone: () => void;
 }) {
-  // S5. A packaged food knows what one serving is, so it can be logged either
-  // way: "1 shake" is what a person drinks, "260 ml" is what is left in the
-  // carton. Only offered when the serving size is actually known -- inventing
-  // one would make "1 serving" mean nothing.
-  const canServe =
-    food.basis === "per_100g" && food.grams_per_unit !== null && food.grams_per_unit > 0;
-  const [mode, setMode] = useState<"serving" | "amount">(canServe ? "serving" : "amount");
+  // S5 and S40. A food that knows what one of it weighs can be logged either
+  // way: "1 cup" is what you pour, "150 ml" is what you actually poured. The
+  // gate asks only whether that weight is known -- NOT how the food arrived,
+  // which is what used to confine this to scanned per_100g products and left
+  // milk countable in whole cups only. Inventing a serving size for a food that
+  // has none would make "1 serving" mean nothing, so that case stays counted.
+  const switchable = canMeasure(food);
+  const [mode, setMode] = useState<"count" | "measure">(
+    // Counting is the default wherever there is something to count: "1 bottle"
+    // and "1 cup" are how people describe what they had. A per_100g food with
+    // no serving size has nothing countable, so it opens on grams.
+    switchable || food.basis === "per_unit" ? "count" : "measure",
+  );
 
-  const [qty, setQty] = useState(() => (canServe || food.basis !== "per_100g" ? "1" : "100"));
+  const [qty, setQty] = useState(() => (switchable || food.basis === "per_unit" ? "1" : "100"));
   const [pending, startTransition] = useTransition();
   const inputRef = useRef<HTMLInputElement>(null);
 
   /** Carry the amount across the switch, so toggling never silently changes it. */
-  function switchMode(next: "serving" | "amount") {
+  function switchMode(next: "count" | "measure") {
     const current = Number(qty);
-    const per = food.grams_per_unit ?? 100;
     if (Number.isFinite(current) && current > 0) {
       setQty(
-        next === "amount"
-          ? String(Math.round(current * per))
-          : String(Math.round((current / per) * 100) / 100),
+        next === "measure"
+          ? String(Math.round(countToMeasure(food, current)))
+          : String(Math.round(measureToCount(food, current) * 100) / 100),
       );
     }
     setMode(next);
   }
 
-  // Whole and half servings when counting servings. When counting grams or
-  // millilitres: multiples of the real serving where one is known, and round
-  // hundreds only when nothing better is available.
+  // Whole and half of the countable thing when counting. When measuring:
+  // multiples of one of it where that is known, and round hundreds only when
+  // nothing better is available.
   const presets =
-    food.basis !== "per_100g" || mode === "serving"
+    mode === "count"
       ? [0.5, 1, 2, 3]
       : food.grams_per_unit
         ? [
@@ -184,16 +209,15 @@ function QtyStep({
   const n = Number(qty);
 
   /**
-   * `scale()` takes grams for a per_100g food and a count for a per_unit one,
-   * so servings are converted here and nowhere else.
+   * `scale()` takes grams for a per_100g food and a count for a per_unit one.
+   * Both input modes land back on that convention here and nowhere else.
    */
-  const scaleQty = mode === "serving" && canServe ? n * food.grams_per_unit! : n;
+  const scaleQty = mode === "count" ? qtyFromCount(food, n) : qtyFromMeasure(food, n);
 
   /** How the entry reads back in the log. Entries denormalise qty and unit for
-   * display only -- the macros are stored separately -- so "1 serving" is an
-   * honest label for a portion that was logged as one. */
-  const entryUnit =
-    mode === "serving" && canServe ? (n === 1 ? "serving" : "servings") : qtyLabel(food);
+   * display only -- the macros are stored separately -- so "1 cup" is an
+   * honest label for a portion that was poured as one. */
+  const entryUnit = mode === "count" ? countLabel(food, n) : measureLabel(food);
   // Null, never undefined: a half-typed quantity has no preview, and the
   // difference between "not yet known" and "zero" has to survive into the UI.
   const preview = Number.isFinite(n) && n > 0 ? scale(food, scaleQty) : null;
@@ -272,17 +296,17 @@ function QtyStep({
         <p className="mt-1 text-xs text-muted-foreground">
           {show(food.kcal)} cal · {show(food.protein_g)}g protein · {show(food.carb_g)}g carbs ·{" "}
           {show(food.fat_g)}g fat per {basisLabel(food)}
-          {food.basis === "per_100g" && food.grams_per_unit
-            ? ` · 1 serving = ${food.grams_per_unit} ${food.unit}`
+          {food.grams_per_unit
+            ? ` · 1 ${countLabel(food, 1)} = ${food.grams_per_unit} ${food.weight_unit}`
             : ""}
         </p>
 
         <Field className="mt-5">
           <div className="flex items-center justify-between gap-3">
             <FieldLabel htmlFor="qty" className="text-xs font-normal text-muted-foreground">
-              {mode === "serving" && canServe ? "Servings" : `Amount (${qtyLabel(food)})`}
+              {mode === "count" ? countFieldLabel(food) : `Amount (${measureLabel(food)})`}
             </FieldLabel>
-            {canServe && (
+            {switchable && (
               <ToggleGroup
                 type="single"
                 size="sm"
@@ -290,13 +314,13 @@ function QtyStep({
                 value={mode}
                 // A single ToggleGroup deselects when its active item is pressed
                 // again, which would leave no mode at all; ignore the empty value.
-                onValueChange={(next) => next && switchMode(next as "serving" | "amount")}
+                onValueChange={(next) => next && switchMode(next as "count" | "measure")}
               >
-                <ToggleGroupItem value="serving" className="px-3 text-xs">
-                  Servings
+                <ToggleGroupItem value="count" className="px-3 text-xs">
+                  {countLabel(food, 2)}
                 </ToggleGroupItem>
-                <ToggleGroupItem value="amount" className="px-3 text-xs">
-                  {food.unit === "ml" ? "ml" : "g"}
+                <ToggleGroupItem value="measure" className="px-3 text-xs">
+                  {food.weight_unit}
                 </ToggleGroupItem>
               </ToggleGroup>
             )}

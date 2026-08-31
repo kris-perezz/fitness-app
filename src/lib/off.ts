@@ -99,6 +99,9 @@ function toFood(product: OffProduct, barcode: string): Food | null {
     basis: "per_100g",
     // "ml" for drinks, "g" for everything else -- see servingGrams above.
     unit: text(product.serving_quantity_unit).toLowerCase() === "ml" ? "ml" : "g",
+    // Mirrors `unit` on this basis, by the rule in 0008: a per_100g food's unit
+    // IS its measure, so the two must not be allowed to disagree.
+    weight_unit: text(product.serving_quantity_unit).toLowerCase() === "ml" ? "ml" : "g",
     grams_per_unit: servingGrams(product),
     // Stored at OFF's full precision, deliberately unrounded. These are
     // per-100g figures that OFF derived by DIVIDING the label's per-serving
