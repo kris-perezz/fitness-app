@@ -6,7 +6,7 @@ import { createClient } from "@/lib/supabase/server";
 import { fetchOffProduct, isBarcode } from "@/lib/off";
 import { extractLabel, type LabelDraft, type LabelResult } from "@/lib/label";
 import { generatedFood, type RecipeDetails, type RecipeLine } from "@/lib/recipe";
-import type { Food, Macros, Meal } from "@/lib/food";
+import { sourceRank, type Food, type FoodSource, type Macros, type Meal } from "@/lib/food";
 
 export type NewEntry = Macros & {
   log_date: string;
@@ -76,18 +76,44 @@ export async function lookupBarcode(code: string): Promise<BarcodeResult> {
   if (!isBarcode(barcode)) return { source: "error", food: null, error: "Not a valid barcode" };
 
   const supabase = await createClient();
-  const { data, error } = await supabase
-    .from("foods")
-    .select("*")
-    .eq("barcode", barcode)
-    .maybeSingle();
+  const {
+    data: { user },
+  } = await supabase.auth.getUser();
+
+  // Plural now, not `.maybeSingle()`: since 0007 a barcode is unique per
+  // creator rather than globally, so the same product can legitimately carry
+  // one row per person. Which of them to believe is what the hierarchy decides.
+  const { data, error } = await supabase.from("foods").select("*").eq("barcode", barcode);
   if (error) return { source: "error", food: null, error: error.message };
-  if (data) return { source: "catalog", food: data as Food, error: null };
+
+  const rows = (data ?? []) as (Food & { created_by: string | null })[];
+  const best = bestBarcodeMatch(rows, user?.id ?? null);
+  if (best) return { source: "catalog", food: best, error: null };
 
   const remote = await fetchOffProduct(barcode);
   if (remote.status === "error") return { source: "error", food: null, error: remote.message };
   if (remote.status === "miss") return { source: "miss", food: null, error: null };
   return { source: "remote", food: remote.food, error: null };
+}
+
+/**
+ * Your own row always wins -- a correction you made to this product is the
+ * whole reason you made it. Failing that, the most trustworthy source wins, and
+ * a tie goes to whichever row was written last on the grounds that it saw the
+ * more recent package.
+ */
+function bestBarcodeMatch<T extends Food & { created_by: string | null; created_at?: string }>(
+  rows: T[],
+  userId: string | null,
+): T | null {
+  if (rows.length === 0) return null;
+  return rows.reduce((best, row) => {
+    const mine = (r: T) => (userId !== null && r.created_by === userId ? 1 : 0);
+    if (mine(row) !== mine(best)) return mine(row) > mine(best) ? row : best;
+    const rank = sourceRank(row.source) - sourceRank(best.source);
+    if (rank !== 0) return rank > 0 ? row : best;
+    return (row.created_at ?? "") > (best.created_at ?? "") ? row : best;
+  });
 }
 
 export async function saveScannedFood(food: Food) {
@@ -99,12 +125,17 @@ export async function saveScannedFood(food: Food) {
 
   const barcode = food.barcode ?? null;
 
-  // A row already sitting on this barcode is somebody's correction, and a
-  // correction outranks whatever the remote database says -- so leave it alone
-  // and report success. Re-scanning a known product is not a conflict.
+  // Anything already sitting on this id or on this barcode is a row the lookup
+  // would have found and preferred -- yours if you have one, somebody else's
+  // otherwise. Either way it is the row the entry is about to point at, so
+  // leave it exactly as it is and report success. Re-scanning a known product
+  // is not a conflict, and overwriting it would undo a correction (S7).
+  //
+  // The barcode arm is scoped to the caller because uniqueness is (0007): a row
+  // belonging to someone else does not stop you from keeping your own.
   const match = supabase.from("foods").select("id");
   const { data: existing, error: existingError } = await (barcode
-    ? match.eq("barcode", barcode)
+    ? match.eq("barcode", barcode).eq("created_by", user.id)
     : match.eq("id", food.id)
   ).maybeSingle();
   if (existingError) return { error: existingError.message };
@@ -164,6 +195,7 @@ export async function saveLabelFood(
     aliases: [],
     barcode,
     verified: true,
+    source: "label",
   };
 
   const { error } = await supabase.from("foods").insert({ ...food, created_by: user.id });
@@ -171,6 +203,138 @@ export async function saveLabelFood(
 
   revalidatePath("/log");
   return { food, error: null };
+}
+
+// ------------------------------------------------------------- corrections
+// S7. Open Food Facts has the US Premier Protein shake at 230 mg sodium; the
+// Canadian packet says 250. Fixing that is a forward-looking edit and only ever
+// a forward-looking edit -- intake_entries denormalises macros at log time, so
+// every portion already logged keeps exactly what it was logged with, and the
+// UI says so rather than leaving the user to wonder.
+
+/** The fields a person can correct. Basis and unit are not among them: changing
+ * what the numbers are quoted against would silently rescale the food. */
+export type FoodEdit = {
+  name: string;
+  grams_per_unit: number | null;
+  kcal: number;
+  protein_g: number;
+  carb_g: number;
+  fat_g: number;
+  fiber_g: number;
+  sodium_mg: number | null;
+};
+
+/**
+ * Update in place when the row is yours, fork it when it is not.
+ *
+ * Both paths end with a row you own carrying your numbers; the difference is
+ * only whether anybody else was relying on the old one. The seed set has no
+ * creator at all, so every correction to it forks.
+ */
+export async function updateFood(
+  id: string,
+  edit: FoodEdit,
+): Promise<{ food: Food | null; error: string | null }> {
+  const supabase = await createClient();
+  const {
+    data: { user },
+  } = await supabase.auth.getUser();
+  if (!user) return { food: null, error: "Not signed in" };
+
+  const invalid = validateEdit(edit);
+  if (invalid) return { food: null, error: invalid };
+
+  const { data, error } = await supabase.from("foods").select("*").eq("id", id).maybeSingle();
+  if (error) return { food: null, error: error.message };
+  if (!data) return { food: null, error: "Food not found" };
+
+  const current = data as Food & { created_by: string | null };
+
+  // A recipe's foods row is generated output -- editing it here would be undone
+  // by the next save. The recipe itself is the thing to change (S19).
+  if (current.source === "recipe") {
+    return { food: null, error: "Edit the recipe instead -- saving it rewrites these numbers." };
+  }
+
+  const source: FoodSource = current.source === "label" ? "label" : "manual";
+
+  const fields = {
+    name: edit.name.trim(),
+    grams_per_unit: edit.grams_per_unit,
+    kcal: edit.kcal,
+    protein_g: edit.protein_g,
+    carb_g: edit.carb_g,
+    fat_g: edit.fat_g,
+    fiber_g: edit.fiber_g,
+    sodium_mg: edit.sodium_mg,
+    // A label row stays a label row: correcting a misread digit does not change
+    // where the numbers came from. Anything else becomes `manual`, because
+    // after this they are no longer the database's numbers -- they are yours,
+    // and the hierarchy ranks them above Open Food Facts accordingly.
+    source,
+    // Somebody has now checked these against a package, which is what the
+    // column has meant since 0001.
+    verified: true,
+  };
+
+  if (current.created_by === user.id) {
+    const { data: updated, error: updateError } = await supabase
+      .from("foods")
+      .update(fields)
+      .eq("id", id)
+      .select("*")
+      .single();
+    if (updateError) return { food: null, error: updateError.message };
+
+    revalidatePath("/log");
+    return { food: updated as Food, error: null };
+  }
+
+  // Fork. The barcode comes along -- per-owner uniqueness (0007) is what makes
+  // that legal -- so the next scan of this product finds your row first.
+  const fork = {
+    ...current,
+    ...fields,
+    id: `food_${crypto.randomUUID()}`,
+    aliases: current.aliases,
+    created_by: user.id,
+    created_at: undefined,
+    supersedes: current.id,
+  };
+  delete (fork as { created_at?: unknown }).created_at;
+
+  const { data: inserted, error: insertError } = await supabase
+    .from("foods")
+    .insert(fork)
+    .select("*")
+    .single();
+  if (insertError) return { food: null, error: insertError.message };
+
+  revalidatePath("/log");
+  return { food: inserted as Food, error: null };
+}
+
+function validateEdit(edit: FoodEdit): string | null {
+  if (!edit.name.trim()) return "Name is required";
+  const numbers: (number | null)[] = [
+    edit.grams_per_unit,
+    edit.kcal,
+    edit.protein_g,
+    edit.carb_g,
+    edit.fat_g,
+    edit.fiber_g,
+    edit.sodium_mg,
+  ];
+  for (const n of numbers) {
+    if (n === null) continue;
+    if (!Number.isFinite(n) || n < 0) return "Every number has to be zero or more";
+  }
+  if (edit.grams_per_unit !== null && edit.grams_per_unit <= 0) {
+    // Absent is fine (an unknown serving size is unknown); zero is a typo.
+    return "Serving size must be greater than zero, or left blank";
+  }
+  return null;
 }
 
 export async function signOut() {

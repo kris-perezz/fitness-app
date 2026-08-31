@@ -217,6 +217,9 @@ export function generatedFood(
     // `verified` means "transcribed from a label" (0001_init.sql). A computed
     // dish never is, however trustworthy its ingredients.
     verified: false,
+    // Its numbers are as good as its ingredients', which carry their own
+    // sources; the dish itself was computed, and says so (S6).
+    source: "recipe",
     // Homemade dishes have no barcode.
     barcode: null,
   };

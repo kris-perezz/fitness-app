@@ -8,6 +8,7 @@ import {
   show,
   qtyLabel,
   basisLabel,
+  sourceHint,
   type Food,
   type Meal,
 } from "@/lib/food";
@@ -15,6 +16,7 @@ import { addEntry, readLabel, saveLabelFood, saveScannedFood } from "@/app/actio
 import { downscaleToDataUrl } from "@/lib/image";
 import type { LabelDraft } from "@/lib/label";
 import { BarcodeScanner } from "@/components/barcode-scanner";
+import { FoodSourceBadge } from "@/components/food-source-badge";
 import {
   Drawer,
   DrawerContent,
@@ -252,8 +254,15 @@ function SearchStep({
                   <button onClick={() => onPick(f)} className="text-left">
                     <ItemContent className="min-w-0">
                       <ItemTitle className="font-normal">{f.name}</ItemTitle>
-                      <ItemDescription className="text-xs">
-                        {show(f.kcal)} cal per {basisLabel(f)}
+                      {/* S6. Below the name rather than beside it: the badge
+                          must never push the name into an ellipsis, and the
+                          description line is where the row already answers
+                          "what am I looking at". */}
+                      <ItemDescription className="flex items-center gap-1.5 text-xs">
+                        <span>
+                          {show(f.kcal)} cal per {basisLabel(f)}
+                        </span>
+                        <FoodSourceBadge source={f.source} />
                       </ItemDescription>
                     </ItemContent>
                   </button>
@@ -652,8 +661,17 @@ function QtyStep({
           <ChevronLeft className="size-4" /> Back
         </button>
 
-        <h3 className="text-base font-semibold leading-tight">{food.name}</h3>
-        <p className="mt-0.5 text-xs text-muted-foreground">
+        <div className="flex items-center gap-2">
+          <h3 className="text-base font-semibold leading-tight">{food.name}</h3>
+          <FoodSourceBadge source={food.source} />
+        </div>
+        {/* The scanned path is the one that lands here with numbers nobody has
+            checked, so the hierarchy gets a full sentence rather than a badge
+            at the moment it matters -- just before the entry is written. */}
+        {food.source === "off" && (
+          <p className="mt-1 text-xs text-muted-foreground">{sourceHint(food.source)}</p>
+        )}
+        <p className="mt-1 text-xs text-muted-foreground">
           {show(food.kcal)} cal · {show(food.protein_g)}g protein · {show(food.carb_g)}g carbs ·{" "}
           {show(food.fat_g)}g fat per {basisLabel(food)}
           {food.basis === "per_100g" && food.grams_per_unit

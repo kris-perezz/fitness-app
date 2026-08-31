@@ -46,7 +46,7 @@ type Extracted = {
 };
 
 /** A draft food, not a saved one: every field is editable before it is written. */
-export type LabelDraft = Omit<Food, "id" | "aliases" | "barcode">;
+export type LabelDraft = Omit<Food, "id" | "aliases" | "barcode" | "source">;
 
 export type LabelResult =
   | { status: "found"; draft: LabelDraft; warning: string | null }

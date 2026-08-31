@@ -113,6 +113,7 @@ function toFood(product: OffProduct, barcode: string): Food | null {
     fiber_g: num(n["fiber_100g"]) ?? 0,
     sodium_mg: sodium_g === null ? null : sodium_g * 1000,
     verified: false,
+    source: "off",
     barcode,
   };
 }
