@@ -21,11 +21,20 @@ export default function LoginPage() {
 
   // Supabase reports link failures in the fragment, which never reaches the
   // server. Read it here, then strip it so a refresh does not re-show it.
+  //
+  // This deliberately stays in an effect rather than moving to a render-time
+  // read the way add-sheet.tsx does. That pattern works there because the value
+  // comes from a prop, which exists on the server too. Here it comes from
+  // `location`, and /login is prerendered -- so the build-time HTML carries no
+  // error, and computing one during the first client render would disagree with
+  // it and trip a hydration mismatch. One extra render on a page that renders
+  // once is the cheaper of the two.
   useEffect(() => {
     const query = new URLSearchParams(location.search);
     const hash = new URLSearchParams(location.hash.slice(1));
     const described = hash.get("error_description") ?? query.get("error");
     if (described) {
+      // eslint-disable-next-line react-hooks/set-state-in-effect
       setError(described.replace(/\+/g, " "));
       history.replaceState(null, "", location.pathname);
     }
@@ -43,6 +52,11 @@ export default function LoginPage() {
 
     const { error } = await createClient().auth.signInWithPassword({ email, password });
     if (error) return fail(error.message);
+    // A full reload, not router.push(): the browser client has just written the
+    // session cookie, and only a fresh document request makes the server read it
+    // and render as the signed-in user. A client-side navigation would keep the
+    // signed-out server state and bounce straight back off the middleware.
+    // eslint-disable-next-line @next/next/no-location-assign-relative-destination
     location.assign("/log");
   }
 
@@ -74,6 +88,9 @@ export default function LoginPage() {
       setStatus("sent");
       return;
     }
+    // Same reason as signInWithPassword above: the reload is what hands the
+    // freshly written session cookie to the server.
+    // eslint-disable-next-line @next/next/no-location-assign-relative-destination
     location.assign("/log");
   }
 
