@@ -115,8 +115,13 @@ serving_label: how the package names one serving in English -- "1 shake", "1 bar
 Amounts are in grams except sodium, which is in milligrams. Convert if the panel
 prints sodium in grams. Fat means total fat, not saturated or trans.
 
-name: the product name from the front of the package if it is visible, otherwise
-null. Do not invent one from the ingredients.`;
+name: the product's brand and name, read from ANY text visible in the photo --
+the front of the package, a side panel, or the manufacturer and trademark lines
+that usually sit just below the nutrition panel ("PREMIER PROTEIN IS A REGISTERED
+TRADEMARK OF..."). A photo framed on the panel alone still normally shows one of
+these. Give the brand and the flavour together when both are readable. Null only
+when no product name appears anywhere in the photo -- never invent one from the
+ingredients, and never describe the package.`;
 
 function envKey(): string | null {
   const key = process.env.OPENAI_API_KEY;
@@ -173,7 +178,10 @@ function toDraft(x: Extracted): LabelDraft | null {
   const at = (v: number | null) => (clean(v, 100_000) ?? 0) * factor;
 
   return {
-    name: x.name?.trim() || "Scanned label",
+    // Empty rather than a stand-in like "Scanned label": a placeholder in a
+    // name field is indistinguishable from something that was actually read,
+    // and the save button already refuses to submit a blank name.
+    name: x.name?.trim() || "",
     basis: countable ? "per_unit" : "per_100g",
     unit: countable ? x.serving_label?.trim() || "serving" : unit,
     grams_per_unit: countable ? null : amount,

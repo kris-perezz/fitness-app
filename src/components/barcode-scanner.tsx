@@ -38,9 +38,12 @@ function cameraMessage(err: unknown): string {
 
 export function BarcodeScanner({
   onFood,
+  onMiss,
   onBack,
 }: {
   onFood: (food: Food) => void;
+  /** A readable code no database knows. The label is the way forward (S2). */
+  onMiss: (barcode: string) => void;
   onBack: () => void;
 }) {
   const videoRef = useRef<HTMLVideoElement>(null);
@@ -48,9 +51,9 @@ export function BarcodeScanner({
 
   // Callbacks are read through a ref so the camera effect can run exactly once:
   // re-running it would tear down and re-acquire the stream on every render.
-  const handlers = useRef({ onFood, onBack });
+  const handlers = useRef({ onFood, onMiss, onBack });
   useEffect(() => {
-    handlers.current = { onFood, onBack };
+    handlers.current = { onFood, onMiss, onBack };
   });
 
   useEffect(() => {
@@ -72,11 +75,15 @@ export function BarcodeScanner({
         handlers.current.onFood(res.food);
         return;
       }
+      // A miss is not a dead end: the code scanned fine, no database has the
+      // product, and the packet with the panel on it is already in the user's
+      // hand. Hand the barcode to the label reader so the food it saves is
+      // found instantly on the next scan (S2, S3).
       if (res.source === "miss") {
-        toast.info("That product isn't in the food list yet. Try searching for it.");
-      } else {
-        toast.error(res.error);
+        handlers.current.onMiss(code);
+        return;
       }
+      toast.error(res.error);
       handlers.current.onBack();
     }
 

@@ -1,7 +1,7 @@
 "use client";
 
 import { useEffect, useMemo, useRef, useState, useTransition } from "react";
-import { Camera, ChevronLeft, ScanBarcode, Search } from "lucide-react";
+import { Camera, ChevronLeft, Plus, ScanBarcode, Search } from "lucide-react";
 import {
   searchFoods,
   scale,
@@ -25,12 +25,7 @@ import {
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Field, FieldGroup, FieldLabel } from "@/components/ui/field";
-import {
-  InputGroup,
-  InputGroupAddon,
-  InputGroupButton,
-  InputGroupInput,
-} from "@/components/ui/input-group";
+import { InputGroup, InputGroupAddon, InputGroupInput } from "@/components/ui/input-group";
 import { Item, ItemContent, ItemDescription, ItemTitle } from "@/components/ui/item";
 import { Spinner } from "@/components/ui/spinner";
 import {
@@ -58,7 +53,7 @@ type Step =
   // intake_entries.food_id is a foreign key, the catalog row has to land
   // before the entry does (S3).
   | { kind: "qty"; food: Food; scanned: boolean }
-  | { kind: "label" }
+  | { kind: "label"; barcode: string | null }
   | { kind: "custom" };
 
 export function AddSheet({
@@ -117,13 +112,14 @@ export function AddSheet({
             foods={foods}
             onPick={(food) => go({ kind: "qty", food, scanned: false })}
             onScan={() => go({ kind: "scan" })}
-            onLabel={() => go({ kind: "label" })}
+            onLabel={() => go({ kind: "label", barcode: null })}
             onCustom={() => go({ kind: "custom" })}
           />
         )}
 
         {meal && step.kind === "label" && (
           <LabelStep
+            barcode={step.barcode}
             onFood={(food) => go({ kind: "qty", food, scanned: false })}
             onBack={() => go({ kind: "search" })}
           />
@@ -132,6 +128,7 @@ export function AddSheet({
         {meal && step.kind === "scan" && (
           <BarcodeScanner
             onFood={(food) => go({ kind: "qty", food, scanned: true })}
+            onMiss={(barcode) => go({ kind: "label", barcode })}
             onBack={() => go({ kind: "search" })}
           />
         )}
@@ -198,17 +195,6 @@ function SearchStep({
             enterKeyHint="search"
             className="text-base"
           />
-          <InputGroupAddon align="inline-end">
-            <InputGroupButton
-              variant="outline"
-              size="icon-sm"
-              className="size-9"
-              onClick={onScan}
-              aria-label="Scan a barcode"
-            >
-              <ScanBarcode className="size-5" />
-            </InputGroupButton>
-          </InputGroupAddon>
         </InputGroup>
       </div>
 
@@ -259,13 +245,20 @@ function SearchStep({
 
       </div>
 
+      {/* The three ways to get a food that searching cannot reach, at equal
+          weight and in one place. The barcode button used to live inside the
+          search field, which split the two camera actions across two unrelated
+          parts of the sheet and squeezed its own tap target to 36px. */}
       <div className="shrink-0 border-t border-border px-5 pt-3 pb-safe">
         <div className="flex gap-2">
-          <Button variant="outline" className="h-11 flex-1 text-base" onClick={onLabel}>
-            <Camera className="size-4" /> Read a label
+          <Button variant="outline" className="h-11 flex-1" onClick={onScan}>
+            <ScanBarcode className="size-4" /> Scan
           </Button>
-          <Button variant="outline" className="h-11 flex-1 text-base" onClick={onCustom}>
-            Create a food
+          <Button variant="outline" className="h-11 flex-1" onClick={onLabel}>
+            <Camera className="size-4" /> Label
+          </Button>
+          <Button variant="outline" className="h-11 flex-1" onClick={onCustom}>
+            <Plus className="size-4" /> Create
           </Button>
         </div>
       </div>
@@ -281,7 +274,15 @@ function SearchStep({
  * in your hand, and "49.2 per 100 ml" cannot be checked against a panel that
  * says 160. It is converted back to the app's per-100 basis on save.
  */
-function LabelStep({ onFood, onBack }: { onFood: (food: Food) => void; onBack: () => void }) {
+function LabelStep({
+  barcode,
+  onFood,
+  onBack,
+}: {
+  barcode: string | null;
+  onFood: (food: Food) => void;
+  onBack: () => void;
+}) {
   type Phase =
     | { kind: "idle" }
     | { kind: "reading" }
@@ -340,7 +341,7 @@ function LabelStep({ onFood, onBack }: { onFood: (food: Food) => void; onBack: (
       const res = await saveLabelFood(
         {
           ...phase.draft,
-          name: form.name.trim() || phase.draft.name,
+          name: form.name.trim(),
           kcal: num("kcal"),
           protein_g: num("protein_g"),
           carb_g: num("carb_g"),
@@ -348,7 +349,7 @@ function LabelStep({ onFood, onBack }: { onFood: (food: Food) => void; onBack: (
           fiber_g: num("fiber_g"),
           sodium_mg: num("sodium_mg"),
         },
-        null,
+        barcode,
       );
       if (res.error || !res.food) {
         toast.error(res.error ?? "Could not save that food");
@@ -443,6 +444,12 @@ function LabelStep({ onFood, onBack }: { onFood: (food: Food) => void; onBack: (
               <p className="mt-3 text-xs text-destructive">{phase.warning}</p>
             )}
 
+            {barcode !== null && (
+              <p className="mt-3 text-xs text-muted-foreground">
+                Saved against barcode {barcode}, so the next scan finds it straight away.
+              </p>
+            )}
+
             <Field className="mt-4">
               <FieldLabel htmlFor="label_name" className="text-xs font-normal text-muted-foreground">
                 Name
@@ -452,6 +459,11 @@ function LabelStep({ onFood, onBack }: { onFood: (food: Food) => void; onBack: (
                 value={form.name ?? ""}
                 onChange={(e) => setForm({ ...form, name: e.target.value })}
                 className="h-11 text-base"
+                placeholder="Product name"
+                // Nothing legible on the packet, so this is the one field the
+                // user has to supply; put the cursor in it rather than making
+                // them hunt for the reason Save is disabled.
+                autoFocus={(form.name ?? "") === ""}
               />
             </Field>
 
