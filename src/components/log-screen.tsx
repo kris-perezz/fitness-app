@@ -1,9 +1,8 @@
 "use client";
 
 import { useState, useTransition } from "react";
-import Link from "next/link";
 import { useRouter } from "next/navigation";
-import { ChevronLeft, ChevronRight, Plus, Settings } from "lucide-react";
+import { ChevronLeft, ChevronRight, Plus } from "lucide-react";
 import { MEALS, shiftDate, wakingDate, type Food, type Meal } from "@/lib/food";
 import { deleteEntry } from "@/app/actions";
 import { Button } from "@/components/ui/button";
@@ -15,6 +14,7 @@ import {
   DrawerTitle,
 } from "@/components/ui/drawer";
 import { AddSheet } from "@/components/add-sheet";
+import { CalorieRing } from "@/components/calorie-ring";
 import { toast } from "sonner";
 
 type Entry = {
@@ -68,7 +68,6 @@ export function LogScreen({
   );
 
   const calorieGoal = goals?.calorie_goal ?? 2000;
-  const remaining = calorieGoal - totals.kcal;
 
   const today = wakingDate();
   const label =
@@ -107,27 +106,11 @@ export function LogScreen({
             >
               <ChevronRight className="size-5" />
             </Button>
-            <Button size="icon" variant="ghost" asChild aria-label="Goals">
-              <Link href="/goals">
-                <Settings className="size-4" />
-              </Link>
-            </Button>
           </div>
         </header>
 
         <section className="border-b border-border px-5 py-6">
-          <div className="flex items-end justify-between text-center">
-            <Stat label="Goal" value={withCommas(calorieGoal)} />
-            <Operator>-</Operator>
-            <Stat label="Food" value={withCommas(totals.kcal)} />
-            <Operator>=</Operator>
-            <Stat
-              label="Remaining"
-              value={withCommas(remaining)}
-              emphasis
-              negative={remaining < 0}
-            />
-          </div>
+          <CalorieRing consumed={totals.kcal} goal={calorieGoal} />
 
           <div className="mt-6 grid grid-cols-3 gap-4">
             <MacroMeter
@@ -197,37 +180,6 @@ export function LogScreen({
       <EntryDetail entry={detail} onClose={() => setDetail(null)} />
     </>
   );
-}
-
-function Stat({
-  label,
-  value,
-  emphasis,
-  negative,
-}: {
-  label: string;
-  value: string;
-  emphasis?: boolean;
-  negative?: boolean;
-}) {
-  return (
-    <div className="flex-1">
-      <p
-        className={
-          "tabular-nums leading-none " +
-          (emphasis ? "text-2xl font-semibold " : "text-lg ") +
-          (negative ? "text-destructive" : "")
-        }
-      >
-        {value}
-      </p>
-      <p className="mt-1.5 text-[11px] text-muted-foreground">{label}</p>
-    </div>
-  );
-}
-
-function Operator({ children }: { children: React.ReactNode }) {
-  return <span className="pb-5 text-sm text-muted-foreground">{children}</span>;
 }
 
 function MacroMeter({ label, value, goal }: { label: string; value: number; goal: number | null }) {
