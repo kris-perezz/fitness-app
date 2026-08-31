@@ -63,7 +63,14 @@ export type WorkoutSlot = {
   exercise_id: string;
   /** Denormalised at log time so recategorising an exercise cannot rewrite it. */
   name: string;
+  /**
+   * Still written, no longer read. primary_muscles below is the real answer and
+   * this is a second copy of the same fact -- which is how a deadlift came to
+   * display as "Back" while counting toward Glutes and Hamstrings. Kept because
+   * the column is `not null` and dropping it is a migration nothing needs.
+   */
   muscle_group: string;
+  primary_muscles: string[];
   sort_order: number;
   sets: WorkoutSet[];
 };
@@ -100,7 +107,11 @@ export const MUSCLE_GROUPS = [
   "Upper back",
   "Lower back",
   "Traps",
-  "Shoulders",
+  // Three heads, not one lump beside one head. 0019 has the argument: front is
+  // pressing and gets huge indirect volume, side and rear get almost none, and
+  // splitting only rear made the other two uncountable.
+  "Front delts",
+  "Side delts",
   "Rear delts",
   "Biceps",
   "Triceps",
@@ -108,10 +119,23 @@ export const MUSCLE_GROUPS = [
   "Quads",
   "Hamstrings",
   "Glutes",
-  "Adductors",
   "Calves",
+  // Adductors and Core last, after the leg chain rather than inside it. The
+  // order is read top to bottom as push, pull, legs; adductors sat between
+  // glutes and calves and broke that reading for a group almost nothing trains
+  // directly. Core closes the list for the same reason.
+  "Adductors",
   "Core",
 ] as const;
+
+/**
+ * S32. Working sets credited to one muscle for one day, straight off the
+ * muscle_volume view. Fractional: a secondary muscle earns half a set, so 4.5
+ * is a normal value and rounding it to 5 would quietly re-inflate exactly what
+ * the 0.5 rule exists to deflate.
+ */
+export type MuscleVolume = { muscle: string; sets: number };
+
 
 export const EQUIPMENT = [
   "Barbell",

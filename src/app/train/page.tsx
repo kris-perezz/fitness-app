@@ -1,6 +1,6 @@
 import { createClient } from "@/lib/supabase/server";
 import { wakingDate } from "@/lib/food";
-import { isWorkingSet, type WorkoutSet } from "@/lib/training";
+import { MUSCLE_GROUPS, type MuscleVolume } from "@/lib/training";
 import { TrainHome, type SessionSummary } from "@/components/train-home";
 
 export const dynamic = "force-dynamic";
@@ -23,38 +23,55 @@ export default async function TrainPage({
 
   const supabase = await createClient();
 
-  const [{ data: openRows }, { data: monthRows }] = await Promise.all([
+  const [{ data: openRows }, { data: monthRows }, { data: volumeRows }] = await Promise.all([
     supabase.from("workouts").select("id, log_date").is("ended_at", null).limit(1),
+    // 0018. Names, set count and volume already totalled, instead of every set
+    // of every session in the month fetched so this file could count them.
     supabase
-      .from("workouts")
-      .select("id, log_date, exercises:workout_exercises(name, sets:workout_sets(*))")
+      .from("workout_summaries")
+      .select("id, log_date, exercises, set_count, volume_lb")
       .gte("log_date", `${month}-01`)
       .lte("log_date", lastDayOf(month))
       .order("log_date", { ascending: false }),
+    // S32, over the SAME month the calendar is showing. Day grain from the
+    // view, summed here -- the view deliberately picks no window at all, so
+    // this and S82's eight-week chart can ask the same rows different
+    // questions. Paging the calendar back re-runs this with it, which is the
+    // point: the totals belong to the month you are looking at.
+    supabase
+      .from("muscle_volume")
+      .select("muscle, sets")
+      .gte("log_date", `${month}-01`)
+      .lte("log_date", lastDayOf(month)),
   ]);
 
   const open = openRows?.[0] ?? null;
 
-  const sessions: SessionSummary[] = (monthRows ?? []).map((row) => {
-    const slots = (row.exercises ?? []) as { name: string; sets: WorkoutSet[] }[];
-    const sets = slots.flatMap((slot) => (slot.sets ?? []).filter(isWorkingSet));
+  const sessions: SessionSummary[] = (monthRows ?? []).map((row) => ({
+    id: row.id as string,
+    date: row.log_date as string,
+    exercises: (row.exercises ?? []) as string[],
+    setCount: Number(row.set_count),
+    volumeLb: Number(row.volume_lb),
+  }));
 
-    return {
-      id: row.id as string,
-      date: row.log_date as string,
-      exercises: slots.map((slot) => slot.name),
-      setCount: sets.length,
-      // Summed as logged, per S49: per-side work counts once. A figure for
-      // comparing sessions to each other, not a claim about physics.
-      volumeLb: Math.round(sets.reduce((t, s) => t + s.load_lb * (s.reps ?? 0), 0)),
-    };
-  });
+  // Several days of the same muscle add up into one weekly figure. Numeric
+  // arrives from PostgREST as a string, so Number() at the boundary.
+  const byMuscle = new Map<string, number>();
+  for (const row of (volumeRows ?? []) as { muscle: string; sets: string }[]) {
+    byMuscle.set(row.muscle, (byMuscle.get(row.muscle) ?? 0) + Number(row.sets));
+  }
+  const volume: MuscleVolume[] = MUSCLE_GROUPS.map((muscle) => ({
+    muscle,
+    sets: byMuscle.get(muscle) ?? 0,
+  }));
 
   return (
     <TrainHome
       month={month}
       today={today}
       sessions={sessions}
+      volume={volume}
       openSession={open ? { id: open.id as string, date: open.log_date as string } : null}
     />
   );
