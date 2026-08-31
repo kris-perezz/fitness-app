@@ -9,6 +9,9 @@
     "lint": "eslint",
     "check:ui": "node scripts/check-ui-primitives.mjs"
   },
+  "engines": {
+    "node": ">=24"
+  },
   "dependencies": {
     "@supabase/ssr": "^0.12.5",
     "@supabase/supabase-js": "^2.109.0",
