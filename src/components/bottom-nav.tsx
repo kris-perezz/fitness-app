@@ -39,11 +39,14 @@ export function BottomNav() {
   return (
     <nav
       aria-label="Sections"
-      // Floating rather than edge-glued, and inset from the bottom by the home
-      // indicator's own height so it never sits under the gesture bar.
-      className="fixed inset-x-0 bottom-0 z-40 pb-safe"
+      className="fixed inset-x-0 bottom-0 z-40"
     >
-      <ul className="mx-auto flex max-w-md items-stretch justify-around gap-1 border-t border-border bg-background/85 px-2 py-1 backdrop-blur-md">
+      {/* pb-safe belongs on the PAINTED element, not on the nav around it. On
+          the nav it left the home-indicator strip below the bar backed by
+          nothing, so page content scrolled through it sharp and unobscured --
+          which reads as broken rather than as translucent. The inset is still
+          there; it is now inside the surface doing the covering. */}
+      <ul className="mx-auto flex max-w-md items-stretch justify-around gap-1 border-t border-border bg-background/85 px-2 py-1 pb-safe backdrop-blur-md">
         {TABS.map(({ href, label, icon: Icon, also }) => {
           // Prefix match so nested routes keep their tab lit.
           const active =
