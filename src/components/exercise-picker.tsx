@@ -3,6 +3,7 @@
 import { useEffect, useMemo, useRef, useState, useTransition } from "react";
 import { ChevronLeft, Plus, Search } from "lucide-react";
 import { searchExercises, EQUIPMENT, MUSCLE_GROUPS, type Exercise } from "@/lib/training";
+import { matchedAlias } from "@/lib/search";
 import { createExercise } from "@/app/training-actions";
 import {
   Drawer,
@@ -140,6 +141,10 @@ function SearchStep({
 
   const shown = query === "" ? recent : results;
 
+  // Only meaningful while searching -- the recent list is not a match for
+  // anything, so nothing there has a reason to explain.
+  const aliasFor = (e: Exercise) => (query === "" ? null : matchedAlias(e, query));
+
   return (
     <div className="flex min-h-0 flex-1 flex-col">
       <div className="shrink-0 px-5 pb-3">
@@ -217,6 +222,14 @@ function SearchStep({
                       <ItemDescription className="text-xs">
                         {e.muscle_group}
                         {e.equipment ? ` · ${e.equipment}` : ""}
+                        {/* Why this row is in the list, when the reason is not
+                            its own name. Several terms deliberately return two
+                            lifts -- "pushdown", "chest fly", "bss" -- and
+                            without this the second one looks like a mistake.
+                            On the existing meta line rather than a line of its
+                            own: the row keeps its height, so a search still
+                            shows as many results on a phone as it did. */}
+                        {aliasFor(e) ? ` · “${aliasFor(e)}”` : ""}
                       </ItemDescription>
                     </ItemContent>
                   </button>
