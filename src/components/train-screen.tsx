@@ -5,10 +5,14 @@ import { useRouter } from "next/navigation";
 import Link from "next/link";
 import { Check, ChevronLeft, Dumbbell, Pencil, Plus, Trash2, X } from "lucide-react";
 import {
+  NO_BESTS,
   allowsBodyweight,
-  isHardSet,
+  foldBest,
+  isWorkingSet,
   loadLabel,
   shortDate,
+  prFor,
+  prMessage,
   suggestFor,
   trim,
   type Exercise,
@@ -17,7 +21,7 @@ import {
   type WorkoutSet,
   type WorkoutSlot,
 } from "@/lib/training";
-import type { LastSession } from "@/lib/training";
+import type { Bests, LastSession } from "@/lib/training";
 import {
   addWorkoutExercise,
   deleteSet,
@@ -69,6 +73,7 @@ export function TrainScreen({
   workout,
   slots,
   lastSessions,
+  bests,
   exercises,
   today,
   recentExerciseIds,
@@ -76,6 +81,7 @@ export function TrainScreen({
   workout: Workout;
   slots: WorkoutSlot[];
   lastSessions: Record<string, LastSession>;
+  bests: Record<string, Bests>;
   exercises: Exercise[];
   today: string;
   recentExerciseIds: string[];
@@ -101,9 +107,9 @@ export function TrainScreen({
     });
   }
 
-  const hardSets = slots.reduce((n, s) => n + s.sets.filter(isHardSet).length, 0);
+  const workingSets = slots.reduce((n, s) => n + s.sets.filter(isWorkingSet).length, 0);
   const volume = slots.reduce(
-    (v, s) => v + s.sets.filter(isHardSet).reduce((t, x) => t + x.load_lb * (x.reps ?? 0), 0),
+    (v, s) => v + s.sets.filter(isWorkingSet).reduce((t, x) => t + x.load_lb * (x.reps ?? 0), 0),
     0,
   );
 
@@ -120,7 +126,7 @@ export function TrainScreen({
             {past ? shortDate(workout.log_date) : "Today's session"}
           </span>
           <span className="shrink-0 pr-3 text-xs tabular-nums text-muted-foreground">
-            {hardSets} {hardSets === 1 ? "set" : "sets"}
+            {workingSets} {workingSets === 1 ? "set" : "sets"}
             {volume > 0 && ` · ${Math.round(volume).toLocaleString()} lb`}
           </span>
         </header>
@@ -151,6 +157,7 @@ export function TrainScreen({
             key={slot.id}
             slot={slot}
             last={lastSessions[slot.id] ?? null}
+            bests={bests[slot.id] ?? NO_BESTS}
             // Looked up rather than denormalised onto the slot: these decide how
             // a form BEHAVES today, not what a past set meant, so they are the
             // things here that follow the catalog rather than freeze at log time.
@@ -227,11 +234,14 @@ export function TrainScreen({
 function SlotSection({
   slot,
   last,
+  bests,
   exercise,
   onChanged,
 }: {
   slot: WorkoutSlot;
   last: LastSession | null;
+  /** All-time bests for this lift, for S33. Never includes today's sets. */
+  bests: Bests;
   /** The catalog row, for the two things that govern how the form behaves. */
   exercise: Exercise | null;
   onChanged: () => void;
@@ -453,6 +463,19 @@ function SlotSection({
                     toast.error(res.error);
                     return;
                   }
+
+                  // S33. Said at the moment it happens, not buried in a stats
+                  // tab -- a best you find out about a week later is a fact,
+                  // and a best you are told about mid-session is a reason to
+                  // keep showing up. Compared against sets ALREADY LOGGED TODAY
+                  // as well, or a second PR in the same session would go unsaid.
+                  const beforeToday = sets.reduce(foldBest, bests);
+                  const pr = prFor(
+                    { ...draft, rir, skipped: false, id: "", workout_exercise_id: slot.id, set_index: setIndex },
+                    beforeToday,
+                  );
+                  if (pr) toast.success(prMessage(pr, slot.name));
+
                   onChanged();
                 })
               }

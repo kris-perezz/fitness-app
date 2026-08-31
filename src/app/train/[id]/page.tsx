@@ -1,7 +1,15 @@
 import { notFound } from "next/navigation";
 import { createClient } from "@/lib/supabase/server";
 import { wakingDate } from "@/lib/food";
-import type { Exercise, LastSession, Workout, WorkoutSet, WorkoutSlot } from "@/lib/training";
+import { NO_BESTS, foldBest } from "@/lib/training";
+import type {
+  Bests,
+  Exercise,
+  LastSession,
+  Workout,
+  WorkoutSet,
+  WorkoutSlot,
+} from "@/lib/training";
 import { TrainScreen } from "@/components/train-screen";
 
 export const dynamic = "force-dynamic";
@@ -36,11 +44,14 @@ export default async function WorkoutPage({ params }: PageProps<"/train/[id]">) 
     sets: ((r.sets ?? []) as WorkoutSet[]).sort((a, b) => a.set_index - b.set_index),
   }));
 
+  const history = await historyFor(supabase, workout, slots);
+
   return (
     <TrainScreen
       workout={workout}
       slots={slots}
-      lastSessions={await lastSessionsFor(supabase, workout, slots)}
+      lastSessions={history.lastSessions}
+      bests={history.bests}
       exercises={(exercises ?? []) as Exercise[]}
       today={wakingDate()}
       recentExerciseIds={await recentExerciseIds(supabase)}
@@ -49,7 +60,13 @@ export default async function WorkoutPage({ params }: PageProps<"/train/[id]">) 
 }
 
 /**
- * S42/S45. What each exercise in this session did the last time it was trained.
+ * S42/S45/S33. Everything this session needs to know about what came before:
+ * what each exercise did LAST time, and its best ever.
+ *
+ * One query serves both. The rows are already being fetched for the
+ * suggestion -- every earlier slot for the exercises in play, newest first -- so
+ * the all-time bests are a second fold over the same data rather than a second
+ * round trip.
  *
  * The unit is the EXERCISE, never the session. A week that runs full body,
  * upper, lower, arms shares almost no lifts between consecutive sessions, so
@@ -65,13 +82,13 @@ export default async function WorkoutPage({ params }: PageProps<"/train/[id]">) 
  * exercise. RLS already restricts this to the caller's own history, so there is
  * no user filter to forget.
  */
-async function lastSessionsFor(
+async function historyFor(
   supabase: Awaited<ReturnType<typeof createClient>>,
   workout: Workout,
   slots: WorkoutSlot[],
-): Promise<Record<string, LastSession>> {
+): Promise<{ lastSessions: Record<string, LastSession>; bests: Record<string, Bests> }> {
   const exerciseIds = [...new Set(slots.map((s) => s.exercise_id))];
-  if (exerciseIds.length === 0) return {};
+  if (exerciseIds.length === 0) return { lastSessions: {}, bests: {} };
 
   const { data } = await supabase
     .from("workout_exercises")
@@ -81,28 +98,37 @@ async function lastSessionsFor(
     .lt("workout.log_date", workout.log_date)
     .order("created_at", { ascending: false });
 
-  const byExercise: Record<string, LastSession> = {};
+  const lastByExercise: Record<string, LastSession> = {};
+  const bestByExercise: Record<string, Bests> = {};
+
   for (const row of data ?? []) {
     const exerciseId = row.exercise_id as string;
-    if (exerciseId in byExercise) continue; // newest wins; the rest is older history
-
     const sets = ((row.sets ?? []) as WorkoutSet[])
       .slice()
       .sort((a, b) => a.set_index - b.set_index);
     if (sets.length === 0) continue;
 
-    const parent = row.workout as unknown as { log_date: string } | null;
-    byExercise[exerciseId] = { sets, date: parent?.log_date ?? "" };
+    // Every row folds into the all-time bests (S33)...
+    bestByExercise[exerciseId] = sets.reduce(foldBest, bestByExercise[exerciseId] ?? NO_BESTS);
+
+    // ...but only the newest is the last session (S42/S45). Rows arrive newest
+    // first, so the first one seen per exercise wins.
+    if (!(exerciseId in lastByExercise)) {
+      const parent = row.workout as unknown as { log_date: string } | null;
+      lastByExercise[exerciseId] = { sets, date: parent?.log_date ?? "" };
+    }
   }
 
   // Keyed by slot, not by exercise, so the same lift twice in one session gets
   // the same history in both slots without the caller re-mapping it.
-  const out: Record<string, LastSession> = {};
+  const lastSessions: Record<string, LastSession> = {};
+  const bests: Record<string, Bests> = {};
   for (const slot of slots) {
-    const found = byExercise[slot.exercise_id];
-    if (found) out[slot.id] = found;
+    const last = lastByExercise[slot.exercise_id];
+    if (last) lastSessions[slot.id] = last;
+    bests[slot.id] = bestByExercise[slot.exercise_id] ?? NO_BESTS;
   }
-  return out;
+  return { lastSessions, bests };
 }
 
 /**

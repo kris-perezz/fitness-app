@@ -1,6 +1,6 @@
 import { createClient } from "@/lib/supabase/server";
 import { wakingDate } from "@/lib/food";
-import { isHardSet, type WorkoutSet } from "@/lib/training";
+import { isWorkingSet, type WorkoutSet } from "@/lib/training";
 import { TrainHome, type SessionSummary } from "@/components/train-home";
 
 export const dynamic = "force-dynamic";
@@ -37,7 +37,7 @@ export default async function TrainPage({
 
   const sessions: SessionSummary[] = (monthRows ?? []).map((row) => {
     const slots = (row.exercises ?? []) as { name: string; sets: WorkoutSet[] }[];
-    const sets = slots.flatMap((slot) => (slot.sets ?? []).filter(isHardSet));
+    const sets = slots.flatMap((slot) => (slot.sets ?? []).filter(isWorkingSet));
 
     return {
       id: row.id as string,
