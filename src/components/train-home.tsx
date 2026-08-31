@@ -172,7 +172,12 @@ export function TrainHome({
         <div className="border-b border-border px-5 py-4">
           {openSession ? (
             <Button className="h-12 w-full text-base" asChild>
-              <Link href={`/train/${openSession.id}`}>
+              {/* Full prefetch, not the default. A dynamic route prefetched
+                  the ordinary way only fetches as far as its loading boundary,
+                  so the skeleton arrives instantly and the DATA still lands on
+                  tap -- the same wait, better dressed. prefetch={true} pulls the
+                  whole thing and holds it under the static stale time. */}
+              <Link href={`/train/${openSession.id}`} prefetch>
                 <Play className="size-4" /> Resume session
               </Link>
             </Button>
@@ -248,7 +253,8 @@ export function TrainHome({
             {monthSessions.map((s) => (
               <li key={s.id}>
                 <Item asChild size="sm" className="rounded-none px-5 py-3 active:bg-accent">
-                  <Link href={`/train/${s.id}`}>
+                  {/* Full prefetch -- see the resume link above. */}
+                  <Link href={`/train/${s.id}`} prefetch>
                     <ItemContent className="min-w-0">
                       <ItemTitle className="font-normal">{shortDate(s.date)}</ItemTitle>
                       <ItemDescription className="truncate text-xs">

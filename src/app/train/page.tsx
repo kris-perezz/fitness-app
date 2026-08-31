@@ -1,3 +1,4 @@
+import { redirect } from "next/navigation";
 import { createClient } from "@/lib/supabase/server";
 import { wakingDate } from "@/lib/food";
 import { WINDOW_MONTHS, shiftMonth } from "@/lib/training";
@@ -28,7 +29,11 @@ export const dynamic = "force-dynamic";
  * The month is no longer in the URL, so it is not shareable and the back button
  * does not step through months. Both were checked; neither is wanted here.
  */
-export default async function TrainPage() {
+export default async function TrainPage({
+  searchParams,
+}: {
+  searchParams: Promise<{ browse?: string }>;
+}) {
   const today = wakingDate();
   const supabase = await createClient();
 
@@ -47,6 +52,29 @@ export default async function TrainPage() {
   ]);
 
   const open = openRows?.[0] ?? null;
+
+  /**
+   * S26. An open session IS the train tab. "I want an unfinished session
+   * waiting exactly where I left it" means arriving here mid-workout should put
+   * you back in it, not offer a button that asks whether you meant it. Only an
+   * OPEN session does this -- a finished one is history and has no claim on you.
+   *
+   * `?browse=1` is the way out, and the back chevron inside a session sets it.
+   * Without an escape this is a trap: back would land on /train, /train would
+   * send you straight in, and the calendar and the volume chart would be
+   * unreachable for as long as a session stayed open -- which is exactly when
+   * you might want to check whether the month is short on back work.
+   *
+   * Stateless on purpose. The alternative is remembering "they just backed out,
+   * do not send them in again", and that is a flag with a lifetime, which is a
+   * flag that eventually gets it wrong.
+   */
+  const { browse } = await searchParams;
+  // TODAY'S open session only. A session left open overnight is not something
+  // to resume, it is something to close (S26, and closeStaleWorkouts on the
+  // screen below does it) -- redirecting into it would strand you in yesterday
+  // and put the sweep that ends it on a page you could no longer reach.
+  if (open && open.log_date === today && !browse) redirect(`/train/${open.id}`);
 
   const sessions: SessionSummary[] = (sessionRows ?? []).map((row) => ({
     id: row.id as string,

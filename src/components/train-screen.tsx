@@ -144,6 +144,10 @@ export function TrainScreen({
   }
 
   const workingSets = slots.reduce((n, s) => n + s.sets.filter(isWorkingSet).length, 0);
+  // Every row, warm-ups included. The header counts working sets because that
+  // is what the session amounts to; a deletion warning has to count what is
+  // actually destroyed, and the cascade takes warm-ups with everything else.
+  const allSets = slots.reduce((n, s) => n + s.sets.length, 0);
   const volume = slots.reduce(
     (v, s) => v + s.sets.filter(isWorkingSet).reduce((t, x) => t + x.load_lb * (x.reps ?? 0), 0),
     0,
@@ -154,7 +158,10 @@ export function TrainScreen({
       <main className="mx-auto w-full max-w-md flex-1 pb-[calc(6rem+env(safe-area-inset-bottom))]">
         <header className="flex items-center gap-1 border-b border-border px-2 py-2">
           <Button size="icon" variant="ghost" aria-label="All sessions" asChild>
-            <Link href="/train">
+            {/* ?browse=1, because /train sends you back into an open session on
+                sight (S26). Without it this chevron would bounce straight here
+                again and the calendar would be unreachable mid-workout. */}
+            <Link href="/train?browse=1">
               <ChevronLeft className="size-5" />
             </Link>
           </Button>
@@ -233,25 +240,35 @@ export function TrainScreen({
             >
               {pending ? "Finishing" : workout.ended_at ? "Done" : "Finish session"}
             </Button>
-            {slots.length === 0 && (
-              <ConfirmAction
-                title="Discard this session?"
-                description="Nothing has been logged in it yet, so nothing is lost -- the day simply goes back to being untrained."
-                confirmLabel="Discard"
-                onConfirm={() => run(() => discardWorkout(workout.id), () => router.push("/train"))}
-                trigger={
-                  <Button
-                    variant="outline"
-                    size="icon"
-                    className="h-11 text-destructive"
-                    aria-label="Discard session"
-                    disabled={pending}
-                  >
-                    <Trash2 className="size-4" />
-                  </Button>
-                }
-              />
-            )}
+            {/* Offered whatever is in the session, not only while it is empty.
+                It used to appear only for an empty one, which meant a single
+                logged set made a session permanent: a mistyped date or a day
+                opened by accident could never be removed. The wording carries
+                the weight instead -- an empty session says nothing is lost, a
+                full one counts out exactly what goes. */}
+            <ConfirmAction
+              title={allSets === 0 ? "Discard this session?" : "Delete this session?"}
+              description={
+                allSets === 0
+                  ? "Nothing has been logged in it yet, so nothing is lost -- the day simply goes back to being untrained."
+                  : `Its ${allSets} ${allSets === 1 ? "set" : "sets"} across ${slots.length} ${
+                      slots.length === 1 ? "exercise" : "exercises"
+                    } go with it. This cannot be undone.`
+              }
+              confirmLabel={allSets === 0 ? "Discard" : "Delete"}
+              onConfirm={() => run(() => discardWorkout(workout.id), () => router.push("/train"))}
+              trigger={
+                <Button
+                  variant="outline"
+                  size="icon"
+                  className="h-11 text-destructive"
+                  aria-label={allSets === 0 ? "Discard session" : "Delete session"}
+                  disabled={pending}
+                >
+                  <Trash2 className="size-4" />
+                </Button>
+              }
+            />
           </ButtonGroup>
         </section>
       </main>
