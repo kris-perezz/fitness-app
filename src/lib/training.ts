@@ -26,6 +26,13 @@ export type Exercise = {
    * ever doubled from it; it exists so the field says which number to type.
    */
   load_is_per_side: boolean;
+  /**
+   * S32. Volume counts a working set 1.0 for each primary muscle and 0.5 for
+   * each secondary one. Primary is a LIST because a dip is direct work for both
+   * chest and triceps, and forcing one winner makes it a lie either way.
+   */
+  primary_muscles: string[];
+  secondary_muscles: string[];
 };
 
 /** Only the two that are implemented; the column pins the rest (decision 5). */
@@ -76,16 +83,32 @@ export type SetDraft = {
   set_type: SetType;
 };
 
+/**
+ * S32. The volume vocabulary, and the only muscle names the database accepts --
+ * `exercises_muscles_known` in 0013 pins the same sixteen, so adding one here
+ * without a migration produces a constraint violation rather than a new group.
+ *
+ * Back is split into Lats / Upper back / Lower back because one Back group let
+ * a month of nothing but pulldowns read as a fully trained back. Exercises
+ * created before 0013 keep whatever `muscle_group` they were given, so "Back"
+ * still exists in that column and is still displayed; it is simply no longer
+ * offered.
+ */
 export const MUSCLE_GROUPS = [
   "Chest",
-  "Back",
+  "Lats",
+  "Upper back",
+  "Lower back",
+  "Traps",
   "Shoulders",
   "Rear delts",
   "Biceps",
   "Triceps",
+  "Forearms",
   "Quads",
   "Hamstrings",
   "Glutes",
+  "Adductors",
   "Calves",
   "Core",
 ] as const;

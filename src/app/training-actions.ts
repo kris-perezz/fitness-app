@@ -148,7 +148,7 @@ export async function addWorkoutExercise(
 
   const { data: exercise, error: exerciseError } = await supabase
     .from("exercises")
-    .select("id, name, muscle_group")
+    .select("id, name, muscle_group, primary_muscles, secondary_muscles")
     .eq("id", exerciseId)
     .maybeSingle();
   if (exerciseError) return { error: exerciseError.message };
@@ -168,6 +168,10 @@ export async function addWorkoutExercise(
     exercise_id: exercise.id,
     name: exercise.name,
     muscle_group: exercise.muscle_group,
+    // Denormalised at log time like name and muscle_group above (S32):
+    // reclassifying the exercise later must not rewrite this session.
+    primary_muscles: exercise.primary_muscles,
+    secondary_muscles: exercise.secondary_muscles,
     sort_order: last ? (last.sort_order as number) + 1 : 0,
   });
   if (error) return { error: error.message };
@@ -272,6 +276,13 @@ export async function createExercise(input: {
       name,
       aliases: [],
       muscle_group: input.muscle_group,
+      // S32. The one group chosen above IS the primary muscle -- without this a
+      // custom exercise is loggable but counts toward nothing, which is the one
+      // failure the volume view cannot show you. Secondaries are left empty
+      // rather than guessed; a blank 0.5 column is honest, an invented one is
+      // not. `exercises_muscles_known` rejects the row if this is ever empty.
+      primary_muscles: [input.muscle_group],
+      secondary_muscles: [],
       equipment: input.equipment,
       created_by: user.id,
     })
