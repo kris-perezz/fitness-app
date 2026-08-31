@@ -10,16 +10,29 @@
 
 import { searchNamed } from "./search";
 
+/**
+ * A catalog row, as far as the CLIENT is concerned -- which is deliberately
+ * less than the table holds.
+ *
+ * The session screen used to fetch `select("*")`, shipping every column of all
+ * hundred exercises to the browser on every open. Five of them were read by
+ * nothing: muscle_group (the picker shows primary_muscles now), is_unilateral
+ * (open decision 4, still deferred), secondary_muscles (volume is counted in
+ * the database, off the log, never here), and created_by / created_at, which
+ * are bookkeeping the UI has no business seeing.
+ *
+ * They are gone from this type as well as from the query, so the compiler is
+ * what stops the next person reading a field that is no longer fetched --
+ * otherwise the two drift and you get `undefined` at runtime instead of an
+ * error at build.
+ */
 export type Exercise = {
   id: string;
   name: string;
   aliases: string[];
-  muscle_group: string;
   equipment: string | null;
-  /** S29. Null means this is not a bodyweight movement. Nothing reads it yet. */
+  /** S29. Null means this is not a bodyweight movement. */
   bodyweight_fraction: number | null;
-  /** Open decision 4, still deferred. Not the same question as the next field. */
-  is_unilateral: boolean;
   /**
    * S49. Whether `load_lb` is the weight in ONE hand or on one side -- a
    * dumbbell, a plate-loaded arm -- rather than the whole movement. Nothing is
@@ -27,12 +40,10 @@ export type Exercise = {
    */
   load_is_per_side: boolean;
   /**
-   * S32. Volume counts a working set 1.0 for each primary muscle and 0.5 for
-   * each secondary one. Primary is a LIST because a dip is direct work for both
-   * chest and triceps, and forcing one winner makes it a lie either way.
+   * S32. What the lift trains directly. Also what the picker displays, since
+   * it is the real classification rather than a second copy of it.
    */
   primary_muscles: string[];
-  secondary_muscles: string[];
 };
 
 /** Only the two that are implemented; the column pins the rest (decision 5). */

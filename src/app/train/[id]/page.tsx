@@ -30,7 +30,13 @@ export default async function WorkoutPage({ params }: PageProps<"/train/[id]">) 
     // a permission error -- which is the honest answer, since as far as this
     // user is concerned the session does not exist.
     supabase.from("workouts").select("*").eq("id", id).maybeSingle(),
-    supabase.from("exercises").select("*").order("name"),
+    // Named columns, not "*": five of the table's columns are read by nothing
+    // on this screen, and one of them (created_by) is a user id the browser has
+    // no reason to hold. See the Exercise type for the list.
+    supabase
+      .from("exercises")
+      .select("id, name, aliases, equipment, bodyweight_fraction, load_is_per_side, primary_muscles")
+      .order("name"),
     supabase
       .from("workout_exercises")
       .select("*, sets:workout_sets(*)")
