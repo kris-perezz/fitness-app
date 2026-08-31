@@ -220,7 +220,7 @@ function SearchStep({
                     <ItemContent className="min-w-0">
                       <ItemTitle className="font-normal">{e.name}</ItemTitle>
                       <ItemDescription className="text-xs">
-                        {e.muscle_group}
+                        {e.primary_muscles.join(" · ")}
                         {e.equipment ? ` · ${e.equipment}` : ""}
                         {/* Why this row is in the list, when the reason is not
                             its own name. Several terms deliberately return two

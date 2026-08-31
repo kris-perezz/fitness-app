@@ -342,7 +342,11 @@ function SlotSection({
       <div className="flex items-center justify-between gap-2 px-5 pb-2 pt-4">
         <div className="min-w-0">
           <h2 className="truncate text-sm font-semibold">{slot.name}</h2>
-          <p className="text-xs text-muted-foreground">{slot.muscle_group}</p>
+          {/* What this lift actually trains, from the log's own classification
+              rather than the older single-value column beside it. Two copies of
+              one fact drift, and had: the deadlift displayed "Back" while
+              counting toward Glutes and Hamstrings. */}
+          <p className="text-xs text-muted-foreground">{slot.primary_muscles.join(" · ")}</p>
         </div>
         <ConfirmAction
           title={`Remove ${slot.name}?`}

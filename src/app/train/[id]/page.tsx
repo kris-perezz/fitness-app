@@ -40,6 +40,7 @@ export default async function WorkoutPage({ params }: PageProps<"/train/[id]">) 
     exercise_id: r.exercise_id as string,
     name: r.name as string,
     muscle_group: r.muscle_group as string,
+    primary_muscles: (r.primary_muscles ?? []) as string[],
     sort_order: r.sort_order as number,
     sets: ((r.sets ?? []) as WorkoutSet[]).sort((a, b) => a.set_index - b.set_index),
   }));
