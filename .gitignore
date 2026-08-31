@@ -42,3 +42,7 @@ next-env.d.ts
 
 # local env
 .env.local
+
+# Personal instructions to the coding agent. AGENTS.md stays tracked --
+# it is the project contract; this file is whatever you want it to be.
+CLAUDE.md
