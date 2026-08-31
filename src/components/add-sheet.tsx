@@ -32,6 +32,7 @@ import { ButtonGroup } from "@/components/ui/button-group";
 import { ToggleGroup, ToggleGroupItem } from "@/components/ui/toggle-group";
 import { Input } from "@/components/ui/input";
 import { Field, FieldGroup, FieldLabel } from "@/components/ui/field";
+import { liftForKeyboard } from "@/lib/sheet";
 import { toast } from "sonner";
 
 /**
@@ -67,17 +68,23 @@ export function AddSheet({
   date: string;
 }) {
   const [step, setStep] = useState<Step>({ kind: "search" });
-  const [openedFor, setOpenedFor] = useState<Meal | null>(meal);
+  const [wasOpen, setWasOpen] = useState(meal !== null);
   const [snap, setSnap] = useState<number | string | null>(SNAP_POINTS[0]);
 
-  // Reset to the search step when a *different* meal opens the sheet. Adjusted
-  // during render rather than in an effect: an effect would paint the previous
-  // meal's step for a frame first, and React re-runs this before committing.
-  // Nothing is unmounted on close, so the exit animation keeps its content.
-  if (meal !== null && meal !== openedFor) {
-    setOpenedFor(meal);
+  // Reset on every OPEN, not merely when a different meal opens the sheet.
+  // Keying on the meal meant adding a second food to the same meal reopened on
+  // the previous food's quantity step -- the sheet had never been told the
+  // difference between "still open" and "opened again".
+  //
+  // Adjusted during render rather than in an effect: an effect would paint the
+  // stale step for a frame first, and React re-runs this before committing.
+  // Reset on open rather than on close so the exit animation keeps its content.
+  if (meal !== null && !wasOpen) {
+    setWasOpen(true);
     setStep({ kind: "search" });
     setSnap(SNAP_POINTS[0]);
+  } else if (meal === null && wasOpen) {
+    setWasOpen(false);
   }
 
   /**
@@ -98,7 +105,7 @@ export function AddSheet({
       activeSnapPoint={snap}
       setActiveSnapPoint={setSnap}
     >
-      <DrawerContent snapped>
+      <DrawerContent snapped onFocusCapture={liftForKeyboard(setSnap)}>
         <DrawerHeader className="px-5 pb-2 pt-0">
           <DrawerTitle className="text-base">Add to {meal}</DrawerTitle>
           <DrawerDescription className="sr-only">

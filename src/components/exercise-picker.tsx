@@ -31,6 +31,7 @@ import {
   EmptyMedia,
   EmptyTitle,
 } from "@/components/ui/empty";
+import { liftForKeyboard } from "@/lib/sheet";
 import { toast } from "sonner";
 
 /** Same snap behaviour as the add sheet, for the same reasons (add-sheet.tsx). */
@@ -79,7 +80,7 @@ export function ExercisePicker({
       activeSnapPoint={snap}
       setActiveSnapPoint={setSnap}
     >
-      <DrawerContent snapped>
+      <DrawerContent snapped onFocusCapture={liftForKeyboard(setSnap)}>
         <DrawerHeader className="px-5 pb-2 pt-0">
           <DrawerTitle className="text-base">Add exercise</DrawerTitle>
           <DrawerDescription className="sr-only">
