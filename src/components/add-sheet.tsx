@@ -15,7 +15,22 @@ import {
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
+import {
+  Empty,
+  EmptyDescription,
+  EmptyHeader,
+  EmptyMedia,
+  EmptyTitle,
+} from "@/components/ui/empty";
 import { toast } from "sonner";
+
+/**
+ * Opens at 60% -- enough for the search field and the first results without
+ * burying the day behind it -- and drags or taps to full height from there.
+ * Defining snap points also turns on vaul's input repositioning, which is what
+ * keeps a focused field above the keyboard.
+ */
+const SNAP_POINTS = [0.6, 1] as const;
 
 type Step =
   | { kind: "search" }
@@ -36,6 +51,7 @@ export function AddSheet({
 }) {
   const [step, setStep] = useState<Step>({ kind: "search" });
   const [openedFor, setOpenedFor] = useState<Meal | null>(meal);
+  const [snap, setSnap] = useState<number | string | null>(SNAP_POINTS[0]);
 
   // Reset to the search step when a *different* meal opens the sheet. Adjusted
   // during render rather than in an effect: an effect would paint the previous
@@ -44,11 +60,28 @@ export function AddSheet({
   if (meal !== null && meal !== openedFor) {
     setOpenedFor(meal);
     setStep({ kind: "search" });
+    setSnap(SNAP_POINTS[0]);
+  }
+
+  /**
+   * Steps that need the whole screen take it, rather than making the user drag
+   * first: the camera wants the height, and the two forms would otherwise open
+   * with their inputs against the fold.
+   */
+  function go(next: Step) {
+    setStep(next);
+    if (next.kind !== "search") setSnap(1);
   }
 
   return (
-    <Drawer open={meal !== null} onOpenChange={onOpenChange}>
-      <DrawerContent className="max-h-[92dvh]">
+    <Drawer
+      open={meal !== null}
+      onOpenChange={onOpenChange}
+      snapPoints={[...SNAP_POINTS]}
+      activeSnapPoint={snap}
+      setActiveSnapPoint={setSnap}
+    >
+      <DrawerContent snapped>
         <DrawerHeader className="px-5 pb-2 pt-0">
           <DrawerTitle className="text-base">Add to {meal}</DrawerTitle>
           <DrawerDescription className="sr-only">
@@ -59,16 +92,16 @@ export function AddSheet({
         {meal && step.kind === "search" && (
           <SearchStep
             foods={foods}
-            onPick={(food) => setStep({ kind: "qty", food })}
-            onScan={() => setStep({ kind: "scan" })}
-            onCustom={() => setStep({ kind: "custom" })}
+            onPick={(food) => go({ kind: "qty", food })}
+            onScan={() => go({ kind: "scan" })}
+            onCustom={() => go({ kind: "custom" })}
           />
         )}
 
         {meal && step.kind === "scan" && (
           <BarcodeScanner
-            onFood={(food) => setStep({ kind: "qty", food })}
-            onBack={() => setStep({ kind: "search" })}
+            onFood={(food) => go({ kind: "qty", food })}
+            onBack={() => go({ kind: "search" })}
           />
         )}
 
@@ -77,7 +110,7 @@ export function AddSheet({
             food={step.food}
             date={date}
             meal={meal}
-            onBack={() => setStep({ kind: "search" })}
+            onBack={() => go({ kind: "search" })}
             onDone={() => onOpenChange(false)}
           />
         )}
@@ -86,7 +119,7 @@ export function AddSheet({
           <CustomStep
             date={date}
             meal={meal}
-            onBack={() => setStep({ kind: "search" })}
+            onBack={() => go({ kind: "search" })}
             onDone={() => onOpenChange(false)}
           />
         )}
@@ -143,15 +176,28 @@ function SearchStep({
 
       <div className="min-h-0 flex-1 overflow-y-auto overscroll-contain">
         {query === "" && (
-          <p className="px-5 py-10 text-center text-sm text-muted-foreground">
-            {foods.length} foods available.
-          </p>
+          <Empty className="py-10">
+            <EmptyHeader>
+              <EmptyMedia variant="icon">
+                <Search />
+              </EmptyMedia>
+              <EmptyTitle>Search your foods</EmptyTitle>
+              <EmptyDescription>
+                {foods.length} saved, or scan a barcode to pull one in.
+              </EmptyDescription>
+            </EmptyHeader>
+          </Empty>
         )}
 
         {query !== "" && results.length === 0 && (
-          <p className="px-5 py-10 text-center text-sm text-muted-foreground">
-            No results for &ldquo;{query}&rdquo;.
-          </p>
+          <Empty className="py-10">
+            <EmptyHeader>
+              <EmptyTitle>No match for &ldquo;{query}&rdquo;</EmptyTitle>
+              <EmptyDescription>
+                Scan its barcode, or create the food by hand below.
+              </EmptyDescription>
+            </EmptyHeader>
+          </Empty>
         )}
 
         {results.length > 0 && (
