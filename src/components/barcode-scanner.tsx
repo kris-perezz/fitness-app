@@ -107,8 +107,30 @@ export function BarcodeScanner({
           BarcodeFormat.UPC_E,
         ];
 
+        // Resolution is the whole ballgame for 1D codes. zxing decodes off a
+        // canvas sized to the camera's negotiated `videoWidth`/`videoHeight`,
+        // and a constraint that asks for no resolution gets whatever the phone
+        // feels like -- typically 640x480. An EAN-13 held at arm's length is
+        // then a few hundred pixels wide, so its narrowest bars land on one or
+        // two pixels and the decoder reads nothing at all, frame after frame.
+        // Asking for 1080p is what makes a retail barcode legible; `ideal`
+        // rather than `exact` so a camera that cannot manage it still opens
+        // instead of throwing OverconstrainedError.
+        //
+        // `focusMode` is not in the standard constraint set (Chrome on Android
+        // honours it; browsers that don't know it discard the key), which is
+        // why the object needs the cast -- without continuous autofocus a
+        // phone happily holds focus at infinity while you hold a packet 15cm
+        // away.
         controls = await reader.decodeFromConstraints(
-          { video: { facingMode: { ideal: "environment" } } },
+          {
+            video: {
+              facingMode: { ideal: "environment" },
+              width: { ideal: 1920 },
+              height: { ideal: 1080 },
+              focusMode: { ideal: "continuous" },
+            } as MediaTrackConstraints,
+          },
           videoRef.current,
           (result) => {
             if (!result || decoded) return;
