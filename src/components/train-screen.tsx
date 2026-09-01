@@ -3,7 +3,7 @@
 import { useOptimistic, useState, useTransition } from "react";
 import { useRouter } from "next/navigation";
 import Link from "next/link";
-import { Check, ChevronLeft, Dumbbell, Pencil, Plus, Trash2, X } from "lucide-react";
+import { Check, ChevronLeft, Dumbbell, Flame, Pencil, Plus, Trash2, X } from "lucide-react";
 import {
   NO_BESTS,
   allowsBodyweight,
@@ -522,7 +522,13 @@ function SlotSection({
               exercise={exercise}
               confirmLabel="Add set"
               onCancel={() => setAdding(false)}
-              onSubmit={(draft, rir) =>
+              onSubmit={(draft, rir) => {
+                // Collapse back to the button before the write, not after it.
+                // The form is keyed on `sets.length`, so leaving it open meant
+                // the optimistic row remounted it as the NEXT set's form -- the
+                // screen jumped straight to "Set 3" instead of coming to rest,
+                // which is the half-filled form the design note above rules out.
+                setAdding(false);
                 startTransition(async () => {
                   const setIndex = sets.length;
                   applyOptimistic({
@@ -560,8 +566,8 @@ function SlotSection({
                     beforeToday,
                   );
                   if (pr) toast.success(prMessage(pr, slot.name));
-                })
-              }
+                });
+              }}
             />
           </div>
         </CollapsibleContent>
@@ -615,6 +621,19 @@ function SetForm({
     apply(v);
   };
 
+  /**
+   * A suggestion is a real value sitting in the field, so the caret lands after
+   * it and the first digit typed APPENDS -- tapping 8 on a suggested 135 logs
+   * 1358. Selecting it on focus makes the first keystroke replace it, which is
+   * what "muted until you touch it" already promises visually.
+   *
+   * Only while it is still the suggestion. Once the value is yours, focusing is
+   * how you go back to amend a typo, and wiping it would be its own bug.
+   */
+  const selectSuggested = (key: string) => (e: React.FocusEvent<HTMLInputElement>) => {
+    if (suggestion && !touched[key]) e.currentTarget.select();
+  };
+
   // S47. A blank load means BODYWEIGHT, which is true of a pull-up and absurd of
   // a bench press -- so it is only accepted where the exercise says it can be.
   // Everywhere else the load has to be typed, rather than silently logging a
@@ -665,6 +684,7 @@ function SetForm({
             inputMode="decimal"
             value={load}
             onChange={(e) => edit("load", setLoad)(e.target.value)}
+            onFocus={selectSuggested("load")}
             className={`h-12 text-base tabular-nums${tone("load", load)}`}
             // "BW" is an answer, so it is only offered where it is a true one.
             placeholder={bodyweight ? "BW" : "—"}
@@ -683,6 +703,7 @@ function SetForm({
             inputMode="numeric"
             value={reps}
             onChange={(e) => edit("reps", setReps)(e.target.value)}
+            onFocus={selectSuggested("reps")}
             className={`h-12 text-base tabular-nums${tone("reps", reps)}`}
             placeholder="—"
           />
@@ -707,14 +728,21 @@ function SetForm({
       </CardContent>
 
       <CardFooter className="gap-2">
-        {/* Warm-ups stay in history but out of volume (S32 / decision 5). */}
+        {/* Warm-ups stay in history but out of volume (S32 / decision 5).
+            The registry Toggle's own on-state is `bg-muted` -- the same colour
+            as its hover -- which at arm's length on a phone is indistinguishable
+            from off, and this control silently decides whether a set counts.
+            So the pressed state is filled rather than tinted, and the icon
+            swaps to a check: colour alone is not a state indicator when the
+            screen is at arm's length, tilted, and sweaty. */}
         <Toggle
           pressed={warmup}
           onPressedChange={setWarmup}
           variant="outline"
-          size="sm"
-          className="text-xs"
+          aria-label="Log this as a warm-up set"
+          className="h-10 gap-1.5 px-3 data-[state=on]:border-primary data-[state=on]:bg-primary data-[state=on]:text-primary-foreground data-[state=on]:hover:bg-primary"
         >
+          {warmup ? <Check /> : <Flame />}
           Warm-up
         </Toggle>
 
