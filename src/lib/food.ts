@@ -87,6 +87,8 @@ export function sourceHint(source: FoodSource): string {
   }
 }
 
+import { searchNamed } from "./search";
+
 export const MEALS = ["Breakfast", "Lunch", "Dinner", "Snacks"] as const;
 export type Meal = (typeof MEALS)[number];
 
@@ -196,25 +198,7 @@ export function basisLabel(food: Food): string {
 
 /** Ranked substring match over name + aliases. Exact prefix wins. */
 export function searchFoods(foods: Food[], query: string): Food[] {
-  const q = query.trim().toLowerCase();
-  if (!q) return [];
-  const scored: { food: Food; score: number }[] = [];
-
-  for (const food of foods) {
-    const haystacks = [food.name.toLowerCase(), ...food.aliases.map((a) => a.toLowerCase())];
-    let best = Infinity;
-    for (const h of haystacks) {
-      if (h === q) best = Math.min(best, 0);
-      else if (h.startsWith(q)) best = Math.min(best, 1);
-      else if (h.includes(q)) best = Math.min(best, 2);
-    }
-    if (best < Infinity) scored.push({ food, score: best });
-  }
-
-  return scored
-    .sort((a, b) => a.score - b.score || a.food.name.localeCompare(b.food.name))
-    .slice(0, 20)
-    .map((s) => s.food);
+  return searchNamed(foods, query);
 }
 
 /**

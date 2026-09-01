@@ -1,4 +1,5 @@
 import { ImageResponse } from "next/og";
+import { DumbbellMark } from "@/lib/dumbbell-icon";
 
 // Apple's home-screen icon. iOS ignores the manifest's icons for Add to Home
 // Screen and reads apple-touch-icon instead, so this is the one that shows up
@@ -7,25 +8,5 @@ export const size = { width: 180, height: 180 };
 export const contentType = "image/png";
 
 export default function AppleIcon() {
-  return new ImageResponse(
-    (
-      <div
-        style={{
-          width: "100%",
-          height: "100%",
-          display: "flex",
-          alignItems: "center",
-          justifyContent: "center",
-          background: "#0a0a0a",
-          color: "#fafafa",
-          fontSize: 84,
-          fontWeight: 700,
-          letterSpacing: -3,
-        }}
-      >
-        JA
-      </div>
-    ),
-    size,
-  );
+  return new ImageResponse(<DumbbellMark size={180} />, size);
 }

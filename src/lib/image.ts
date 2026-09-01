@@ -6,6 +6,8 @@
  * uploading it over mobile data in a gym or a shop is the slowest part of the
  * whole flow.
  *
+ * The same path serves a photo taken now and one picked out of the camera roll.
+ *
  * A nutrition panel is small dense text, so this trades resolution carefully:
  * 1600px on the long edge keeps the digits legible to a vision model while
  * bringing a typical photo under a few hundred kilobytes.
@@ -16,7 +18,11 @@ const QUALITY = 0.82;
 
 /** Rejects only if the file is not a decodable image. */
 export async function downscaleToDataUrl(file: File): Promise<string> {
-  const bitmap = await createImageBitmap(file);
+  // A photo out of the camera roll is usually stored unrotated with an EXIF
+  // orientation tag beside it, and drawing it to a canvas is what drops that
+  // tag -- a sideways panel is measurably harder for the model to read. The
+  // spec's default is "from-image", but stating it keeps older engines honest.
+  const bitmap = await createImageBitmap(file, { imageOrientation: "from-image" });
 
   try {
     const scale = Math.min(1, MAX_EDGE / Math.max(bitmap.width, bitmap.height));

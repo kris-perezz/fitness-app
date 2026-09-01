@@ -17,6 +17,7 @@ import { Button } from "@/components/ui/button";
 import { ButtonGroup } from "@/components/ui/button-group";
 import { Input } from "@/components/ui/input";
 import { Field, FieldLabel } from "@/components/ui/field";
+import { liftForKeyboard } from "@/lib/sheet";
 import { toast } from "sonner";
 
 /** Same snap behaviour as the add sheet, for the same reasons (see add-sheet.tsx). */
@@ -70,7 +71,7 @@ export function IngredientSheet({
       activeSnapPoint={snap}
       setActiveSnapPoint={setSnap}
     >
-      <DrawerContent snapped>
+      <DrawerContent snapped onFocusCapture={liftForKeyboard(setSnap)}>
         <DrawerHeader className="px-5 pb-2 pt-0">
           <DrawerTitle className="text-base">Add ingredient</DrawerTitle>
           <DrawerDescription className="sr-only">
