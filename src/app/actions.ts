@@ -4,6 +4,7 @@ import { revalidatePath } from "next/cache";
 import { redirect } from "next/navigation";
 import { createClient } from "@/lib/supabase/server";
 import { fetchOffProduct, isBarcode } from "@/lib/off";
+import { fetchCnfFood, searchCnf, type CnfSearchResult } from "@/lib/cnf";
 import { extractLabel, type LabelDraft, type LabelResult } from "@/lib/label";
 import { generatedFood, type RecipeDetails, type RecipeLine } from "@/lib/recipe";
 import { sourceRank, type Food, type FoodSource, type Macros, type Meal } from "@/lib/food";
@@ -158,6 +159,82 @@ export async function saveScannedFood(food: Food) {
 
   revalidatePath("/log");
   return { error: null };
+}
+
+// -------------------------------------------------- Canadian Nutrient File
+// S91. The generic half of the catalog. OFF is barcode-indexed and therefore
+// useless for a chicken breast; CNF is Health Canada's own composition data and
+// has no barcodes at all, which is exactly the complementary shape.
+//
+// Two actions rather than one, because they are two different moments. Searching
+// is free and reversible and happens while the user types; materialising writes
+// a catalog row everybody else will see, and only happens once they have chosen.
+
+export async function searchCnfFoods(query: string): Promise<CnfSearchResult> {
+  const supabase = await createClient();
+  const {
+    data: { user },
+  } = await supabase.auth.getUser();
+  // Not a data-protection measure -- CNF is public. It stops an unauthenticated
+  // caller using this endpoint as a free proxy for a 471 KB fetch.
+  if (!user) return { status: "error", message: "Not signed in" };
+
+  return searchCnf(query);
+}
+
+/**
+ * Turn a chosen CNF row into a catalog food and hand it back.
+ *
+ * THE CACHED ROW IS THE CURATED CATALOG. Every deliberate choice made here
+ * accumulates into `foods`, which is what makes the seed migration (S88) a
+ * promotion of things that earned their place rather than a guess made up
+ * front. It also means the second person to eat this food does not pay the
+ * round trip.
+ *
+ * `created_by` is the caller, matching every other write path -- but the id is
+ * the CNF food code, so two people choosing the same food collide on the
+ * primary key rather than forking. That is correct here and not a bug: unlike a
+ * barcode row, there is nothing person-specific to preserve. CNF said what it
+ * said, and a correction is a fork under S7 like any other.
+ */
+export async function addCnfFood(
+  code: number,
+  description: string,
+): Promise<{ food: Food | null; error: string | null }> {
+  const supabase = await createClient();
+  const {
+    data: { user },
+  } = await supabase.auth.getUser();
+  if (!user) return { food: null, error: "Not signed in" };
+
+  const id = `cnf_${code}`;
+
+  // Already in the catalog: return it rather than re-fetching. This is the
+  // second-person case and the re-log case, and it is the whole point of
+  // caching. Its own row wins over anything CNF would say now, because a fork
+  // or a correction may have happened since (S7).
+  const { data: existing } = await supabase.from("foods").select("*").eq("id", id).maybeSingle();
+  if (existing) return { food: existing as Food, error: null };
+
+  const result = await fetchCnfFood(code, description);
+  if (result.status === "error") return { food: null, error: result.message };
+  if (result.status === "miss") {
+    return { food: null, error: "Health Canada has no usable nutrition for that food." };
+  }
+
+  const { error } = await supabase.from("foods").insert({
+    ...result.food,
+    // Written straight to the column, which has existed since 0001. The `Food`
+    // type does not carry micros until S36, so this is deliberately not spread
+    // from `result.food` -- see the note on CnfFoodResult.
+    micros: result.micros,
+    created_by: user.id,
+  });
+  // 23505: somebody else chose the same food first. Same outcome as finding it.
+  if (error && error.code !== "23505") return { food: null, error: error.message };
+
+  revalidatePath("/log");
+  return { food: result.food, error: null };
 }
 
 // ------------------------------------------------------------ label photos

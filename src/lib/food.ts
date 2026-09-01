@@ -4,7 +4,7 @@
  * answers, and not the same question as an entry's `estimate` flag, which is
  * about how much you ate rather than what the food is.
  */
-export type FoodSource = "seed" | "off" | "label" | "manual" | "recipe";
+export type FoodSource = "seed" | "off" | "label" | "manual" | "recipe" | "cnf";
 
 export type Food = {
   id: string;
@@ -43,9 +43,14 @@ export type Food = {
  * a barcode, so it ranks last by default rather than by judgement.
  */
 const SOURCE_RANK: Record<FoodSource, number> = {
-  label: 4,
-  seed: 3,
-  manual: 2,
+  label: 5,
+  seed: 4,
+  manual: 3,
+  // S89. Health Canada's own laboratory data, so above OFF's crowd entries.
+  // Below `manual` and `seed` because both of those mean a person read the
+  // packet in front of them, where CNF is exact about a REFERENCE food that may
+  // not be the one you ate. Reasoning in full in 0022.
+  cnf: 2,
   off: 1,
   recipe: 0,
 };
@@ -66,6 +71,8 @@ export function sourceLabel(source: FoodSource): string {
       return "Manual";
     case "off":
       return "Open Food Facts";
+    case "cnf":
+      return "Health Canada";
     case "recipe":
       return "Recipe";
   }
@@ -82,6 +89,8 @@ export function sourceHint(source: FoodSource): string {
       return "Entered or corrected by you.";
     case "off":
       return "From the Open Food Facts database, unconfirmed. It is often the US version of a product sold here.";
+    case "cnf":
+      return "Laboratory values from the Canadian Nutrient File. They describe a reference food, not the one in your kitchen.";
     case "recipe":
       return "Computed from the recipe's ingredients.";
   }

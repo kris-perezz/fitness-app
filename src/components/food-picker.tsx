@@ -1,9 +1,10 @@
 "use client";
 
 import { useEffect, useMemo, useRef, useState, useTransition } from "react";
-import { Camera, ChevronLeft, ImageUp, Plus, ScanBarcode, Search } from "lucide-react";
+import { Camera, ChevronLeft, ImageUp, Leaf, Plus, ScanBarcode, Search } from "lucide-react";
 import { searchFoods, show, basisLabel, type Food } from "@/lib/food";
-import { readLabel, saveLabelFood } from "@/app/actions";
+import { readLabel, saveLabelFood, searchCnfFoods, addCnfFood } from "@/app/actions";
+import type { CnfHit } from "@/lib/cnf";
 import { downscaleToDataUrl } from "@/lib/image";
 import type { LabelDraft } from "@/lib/label";
 import { BarcodeScanner } from "@/components/barcode-scanner";
@@ -175,7 +176,7 @@ function SearchStep({
             <EmptyHeader>
               <EmptyTitle>No match for &ldquo;{query}&rdquo;</EmptyTitle>
               <EmptyDescription>
-                Scan its barcode, or photograph its label.
+                Look it up in Health Canada below, scan its barcode, or photograph its label.
               </EmptyDescription>
             </EmptyHeader>
           </Empty>
@@ -216,7 +217,112 @@ function SearchStep({
           </ul>
         )}
 
+        {/* Keyed on the query so a new search REMOUNTS this rather than
+            resetting four pieces of state in an effect. Editing the search
+            after a lookup must not leave results for a word no longer on
+            screen. */}
+        {query !== "" && <CnfSection key={query} query={query} onPick={onPick} />}
       </div>
+    </div>
+  );
+}
+
+/**
+ * S91. The Canadian Nutrient File, reached from the same search box.
+ *
+ * BELOW the local results and never mixed into them, because the two lists
+ * answer different questions: yours is "the food I have logged before", this is
+ * "the food Health Canada measured". Interleaving them would put a reference
+ * preparation above the row you built out of a real label.
+ *
+ * ON DEMAND, not per keystroke. The search itself is a filter over a cached
+ * catalog and costs nothing, but firing it on every character would render a
+ * shifting list under the one the user is already reading. A tap says "I did
+ * not find it", which is exactly when this is wanted.
+ */
+function CnfSection({ query, onPick }: { query: string; onPick: (food: Food) => void }) {
+  const [hits, setHits] = useState<CnfHit[] | null>(null);
+  const [error, setError] = useState<string | null>(null);
+  const [picking, setPicking] = useState<number | null>(null);
+  const [pending, startTransition] = useTransition();
+
+  const search = () => {
+    startTransition(async () => {
+      const res = await searchCnfFoods(query);
+      if (res.status === "error") {
+        setError(res.message);
+        setHits([]);
+        return;
+      }
+      setError(null);
+      setHits(res.hits);
+    });
+  };
+
+  const choose = (hit: CnfHit) => {
+    setPicking(hit.code);
+    startTransition(async () => {
+      const res = await addCnfFood(hit.code, hit.description);
+      setPicking(null);
+      if (res.error || !res.food) {
+        toast.error(res.error ?? "Could not add that food.");
+        return;
+      }
+      // Already written to the catalog by the action, so it is not "scanned" in
+      // the sense the caller cares about.
+      onPick(res.food);
+    });
+  };
+
+  if (hits === null) {
+    return (
+      <div className="px-5 py-4">
+        <Button variant="outline" className="h-11 w-full" onClick={search} disabled={pending}>
+          {pending ? <Spinner /> : <Leaf className="size-4" />}
+          Search Health Canada
+        </Button>
+      </div>
+    );
+  }
+
+  return (
+    <div className="border-t border-border">
+      <p className="px-5 pt-4 text-xs text-muted-foreground">
+        Health Canada · per 100 g, laboratory values for a reference food
+      </p>
+
+      {error && <p className="px-5 py-3 text-sm text-muted-foreground">{error}</p>}
+
+      {!error && hits.length === 0 && (
+        <p className="px-5 py-3 text-sm text-muted-foreground">
+          Nothing in the Canadian Nutrient File matches &ldquo;{query}&rdquo;.
+        </p>
+      )}
+
+      <ul className="divide-y divide-border">
+        {hits.map((hit) => (
+          <li key={hit.code}>
+            <Item asChild size="sm" className="rounded-none px-5 py-3 active:bg-accent">
+              <button
+                onClick={() => choose(hit)}
+                disabled={picking !== null}
+                className="text-left disabled:opacity-60"
+              >
+                <ItemContent className="min-w-0">
+                  {/* CNF's FULL description, not a shortened one. Two rows here
+                      routinely differ only in their last clause -- raw against
+                      grilled is about a 30% swing per 100 g -- so trimming it
+                      would turn a real choice into a coin toss (S91). */}
+                  <ItemTitle className="font-normal whitespace-normal">
+                    {hit.description}
+                  </ItemTitle>
+                </ItemContent>
+                {picking === hit.code && <Spinner />}
+              </button>
+            </Item>
+          </li>
+        ))}
+      </ul>
     </div>
   );
 }
