@@ -127,6 +127,37 @@ export function TrainHome({
     }
     return MUSCLE_GROUPS.map((muscle) => ({ muscle, sets: byMuscle.get(muscle) ?? 0 }));
   }, [volume, month]);
+
+  /**
+   * ONE SCALE FOR EVERY MONTH, and this is a bug fix rather than a refinement.
+   *
+   * Left to itself recharts fits the axis to the data it is given, which is one
+   * month -- so a month of 3 sets drew exactly the same bar as a month of 300,
+   * and the only difference was the number printed at the end of it. The
+   * animation made it worse: the bars slide from month to month, which states a
+   * comparison the chart was not making.
+   *
+   * The denominator is the largest single-muscle month in the LOADED window,
+   * rounded up to a ten. Not a target -- there are no volume targets in this
+   * app and inventing one would assert a number nobody set (S32). It is only a
+   * shared ruler, taken from the data itself, so "did I do less chest in July"
+   * is answered by the bars rather than by reading two labels and subtracting.
+   *
+   * It moves when a wider window loads and a bigger month arrives. That is the
+   * honest behaviour: the ruler grew because the log got longer, and every bar
+   * rescales together so their relationship to each other is preserved.
+   */
+  const volumeScale = useMemo(() => {
+    const byMonthMuscle = new Map<string, number>();
+    for (const row of volume) {
+      const key = `${row.date.slice(0, 7)}|${row.muscle}`;
+      byMonthMuscle.set(key, (byMonthMuscle.get(key) ?? 0) + row.sets);
+    }
+    const peak = Math.max(0, ...byMonthMuscle.values());
+    // Rounded up to a ten so the ruler is stable: without it, one extra set in
+    // the biggest month rescales every bar on screen by a hair.
+    return Math.max(10, Math.ceil(peak / 10) * 10);
+  }, [volume]);
   const [, startTransition] = useTransition();
 
   const byDate = useMemo(() => new Map(sessions.map((s) => [s.date, s])), [sessions]);
@@ -231,7 +262,7 @@ export function TrainHome({
           />
         </div>
 
-        <MonthVolume volume={monthVolume} month={month} />
+        <MonthVolume volume={monthVolume} month={month} scale={volumeScale} />
 
         {monthSessions.length === 0 && (
           <Empty className="py-12">
@@ -399,7 +430,16 @@ const volumeConfig = {
  * The comparison that matters is muscles against each other, which the bars
  * already make.
  */
-function MonthVolume({ volume, month }: { volume: MuscleVolume[]; month: string }) {
+function MonthVolume({
+  volume,
+  month,
+  scale,
+}: {
+  volume: MuscleVolume[];
+  month: string;
+  /** The shared denominator across every loaded month. See `volumeScale`. */
+  scale: number;
+}) {
   const total = volume.reduce((t, v) => t + v.sets, 0);
 
   return (
@@ -429,8 +469,13 @@ function MonthVolume({ volume, month }: { volume: MuscleVolume[]; month: string 
           >
             {/* Hidden because every bar is labelled with its own figure. An
                 axis AND a number on each bar would be the same information
-                twice, and the axis is the half that makes you measure. */}
-            <XAxis type="number" dataKey="sets" hide />
+                twice, and the axis is the half that makes you measure.
+
+                The DOMAIN is not hidden in the same sense: it is fixed across
+                months on purpose, so bar length means the same thing in July as
+                it does in August. Without it recharts normalised each month to
+                itself and three sets filled the width. */}
+            <XAxis type="number" dataKey="sets" domain={[0, scale]} hide />
             <YAxis
               dataKey="muscle"
               type="category"
