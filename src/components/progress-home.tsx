@@ -8,18 +8,24 @@ import { CartesianGrid, Line, LineChart, XAxis, YAxis } from "recharts";
 
 import { WINDOW_BUFFER_MONTHS, WINDOW_MONTHS, shiftMonth, shortDate, trim } from "@/lib/training";
 import {
+  CHART_WINDOWS,
+  DEFAULT_CHART_WINDOW,
   MIN_TREND_ENTRIES,
   axisDomain,
   chartSeries,
+  chartWindow,
+  chartWindowFrom,
   deltaLabel,
   headline as headlineOf,
   rateLabel,
   weeklyRate,
   windowLabel,
+  type ChartWindowKey,
   type WeighIn,
 } from "@/lib/weight";
 import { deleteWeighIn, loadWeighInWindow, saveWeighIn } from "@/app/progress-actions";
 import { Button } from "@/components/ui/button";
+import { ToggleGroup, ToggleGroupItem } from "@/components/ui/toggle-group";
 import { Calendar } from "@/components/ui/calendar";
 import { ChartContainer, type ChartConfig } from "@/components/ui/chart";
 import { ConfirmAction } from "@/components/confirm-action";
@@ -57,35 +63,80 @@ export type WeightGoal = { weightLb: number | null; rateLbPerWeek: number | null
 export function ProgressHome({
   today,
   loadedFrom,
+  earliest,
   entries: initialEntries,
   goal,
 }: {
   today: string;
   loadedFrom: string;
+  /** The first day in the whole log, or null on an empty one. Bounds "All". */
+  earliest: string | null;
   entries: WeighIn[];
   goal: WeightGoal;
 }) {
   const [entries, setEntries] = useState(initialEntries);
   const [from, setFrom] = useState(loadedFrom);
   const [month, setMonth] = useState(today.slice(0, 7));
+  const [windowKey, setWindowKey] = useState<ChartWindowKey>(DEFAULT_CHART_WINDOW);
   const [editing, setEditing] = useState<string | null>(null);
   const loading = useRef(false);
 
-  // Extend before the edge, exactly as train-home does. See the comment there
-  // for why it is before rather than at.
+  /**
+   * The chart's window (S62), as a day. Clamped to the first weigh-in, so
+   * picking a year of a three-month log draws three months rather than nine
+   * months of white space that reads as weight you failed to record.
+   */
+  const chartFrom = useMemo(
+    () => chartWindowFrom(windowKey, today, earliest),
+    [windowKey, today, earliest],
+  );
+
+  /**
+   * ONE loader, TWO reasons to reach further back, and this is the part S62
+   * actually costs.
+   *
+   * Before S62 the fetched window only ever had to keep ahead of the calendar,
+   * so it grew a fixed slab at a time. A window toggle can ask for six years in
+   * one tap, and a chart that quietly drew only the loaded six months would be
+   * the exact lie this tab is built to avoid -- an axis labelled "All time"
+   * over a fifth of the log.
+   *
+   * So both needs resolve to a month, the earlier wins, and the request goes
+   * straight to it rather than a slab at a time: one round trip to 2020 instead
+   * of twelve.
+   */
+  /**
+   * DERIVED, not stored: the chart is short exactly when the fetched window
+   * does not reach back as far as the chosen one. A boolean set in the effect
+   * would be a second copy of that fact, free to disagree with it.
+   */
+  const chartUnderCovered = chartFrom.slice(0, 7) < from;
+
   useEffect(() => {
     if (loading.current) return;
-    if (month > shiftMonth(from, WINDOW_BUFFER_MONTHS)) return;
+
+    // Extend before the edge, exactly as train-home does. See the comment there
+    // for why it is before rather than at.
+    const calendarNeed =
+      month > shiftMonth(from, WINDOW_BUFFER_MONTHS) ? null : shiftMonth(from, -WINDOW_MONTHS);
+    const chartNeed = chartUnderCovered ? chartFrom.slice(0, 7) : null;
+    if (!calendarNeed && !chartNeed) return;
+
+    const nextFrom =
+      calendarNeed && chartNeed
+        ? calendarNeed < chartNeed
+          ? calendarNeed
+          : chartNeed
+        : (calendarNeed ?? chartNeed)!;
 
     loading.current = true;
-    const nextFrom = shiftMonth(from, -WINDOW_MONTHS);
     void loadWeighInWindow(nextFrom, shiftMonth(from, -1)).then((res) => {
       loading.current = false;
       if (res.error) return; // Silent: there is just less history on screen.
       setEntries((prev) => [...prev, ...res.entries]);
       setFrom(nextFrom);
     });
-  }, [month, from]);
+  }, [month, from, chartFrom, chartUnderCovered]);
 
   /**
    * The headline is computed over the WHOLE window, not the month on screen.
@@ -132,7 +183,13 @@ export function ProgressHome({
 
         <Headline head={head} rate={rate} goal={goal} />
 
-        <WeightChart entries={entries} today={today} />
+        <WeightChart
+          entries={entries}
+          from={chartFrom}
+          windowKey={windowKey}
+          onWindowChange={setWindowKey}
+          extending={chartUnderCovered}
+        />
 
         <div className="flex justify-center border-b border-border px-2 py-3">
           <Calendar
@@ -249,7 +306,13 @@ function Headline({
     const need = MIN_TREND_ENTRIES - head.entryCount;
     return (
       <section className="border-b border-border px-5 py-4">
-        <p className="text-3xl font-semibold tabular-nums">{trim(head.latest.weightLb)} lb</p>
+        {/* Labelled for the same reason the trend is, and labelled DIFFERENTLY:
+            below the floor this is the scale, not a trend, and the two states
+            must not look like the same number changing its mind. */}
+        <p className="text-xs text-muted-foreground">Last reading</p>
+        <p className="text-3xl font-semibold tabular-nums">
+          {head.latest.weightLb.toFixed(1)} lb
+        </p>
         <p className="mt-1 text-xs text-muted-foreground">
           {shortDate(head.latest.date)} · {need} more {need === 1 ? "weigh-in" : "weigh-ins"} and
           this becomes a trend
@@ -260,20 +323,28 @@ function Headline({
 
   return (
     <section className="border-b border-border px-5 py-4">
-      <div className="flex items-baseline gap-2">
-        <p className="text-3xl font-semibold tabular-nums">{trim(head.trendLb)} lb</p>
-        <p className="text-sm text-muted-foreground tabular-nums">
-          {trim(head.latest.weightLb)} on {shortDate(head.latest.date)}
+      {/* The big number is the trend, so it SAYS "trend". Unlabelled, a 163.0
+          sitting beside a 161.8 reads as two scale readings and invites the one
+          question this tab exists to answer -- which of these am I? The word
+          used to be on the third line, attached to the rate, where it labelled
+          the wrong number. */}
+      <p className="text-xs text-muted-foreground">Trend weight</p>
+      {/* Both weights to one decimal. `trim` drops a trailing .0, which printed
+          the trend as "163" next to a reading of "161.8" and made two
+          measurements of one quantity look like two kinds of number. */}
+      <p className="text-3xl font-semibold tabular-nums">{head.trendLb.toFixed(1)} lb</p>
+      {rate ? (
+        <p className="mt-1 text-sm text-muted-foreground">
+          <span className="tabular-nums">{rateLabel(rate)}</span> {windowLabel(rate.days)}
         </p>
-      </div>
+      ) : null}
+      {/* The reading stays on screen and stays subordinate. Showing the trend
+          alone would be a number the user cannot find on their own scale. */}
       <p className="mt-1 text-xs text-muted-foreground">
-        Trend
-        {rate ? (
-          <>
-            {" · "}
-            <span className="tabular-nums">{rateLabel(rate)}</span> {windowLabel(rate.days)}
-          </>
-        ) : null}
+        Last reading{" "}
+        <span className="tabular-nums">{head.latest.weightLb.toFixed(1)} lb</span>
+        {" · "}
+        {shortDate(head.latest.date)}
       </p>
 
       {/* S60. The goal SITS BESIDE the rate; it does not grade it. No "on
@@ -438,7 +509,7 @@ function WeighInSheet({
 
 /**
  * S61. The trajectory in one glance: the trend as a line, the readings as light
- * dots behind it.
+ * dots behind it. S62 puts the window on a toggle above it.
  *
  * The dots are what make the trend believable. A trend line alone is a claim
  * the reader cannot check against anything, and a chart of the raw series alone
@@ -448,20 +519,29 @@ function WeighInSheet({
  * to draw one circle and that call stands; a time series with two series, a
  * fitted axis and real gaps in it is the case the library exists for.
  *
- * The window is the last three months, fixed. S62 makes it a toggle and is not
- * built -- its own build note says it only matters once the chart is crowded --
- * so this uses the default S62 itself names, rather than inventing a different
- * one that would have to be unpicked later.
+ * The toggle is deliberately unlike the calendar's arrows below it. Two time
+ * controls on one screen is the hazard S62 names: labelled pills drive the
+ * chart, chevrons drive the calendar, and nobody should read them as one
+ * control.
  */
 const weightConfig = {
   trendLb: { label: "Trend", color: "var(--primary)" },
   weightLb: { label: "Weighed", color: "var(--muted-foreground)" },
 } satisfies ChartConfig;
 
-const CHART_MONTHS = 3;
-
-function WeightChart({ entries, today }: { entries: WeighIn[]; today: string }) {
-  const from = `${shiftMonth(today.slice(0, 7), -(CHART_MONTHS - 1))}-01`;
+function WeightChart({
+  entries,
+  from,
+  windowKey,
+  onWindowChange,
+  extending,
+}: {
+  entries: WeighIn[];
+  from: string;
+  windowKey: ChartWindowKey;
+  onWindowChange: (key: ChartWindowKey) => void;
+  extending: boolean;
+}) {
   // Smoothed over the WHOLE log and only then clipped, so the line entering
   // from the left carries its history rather than restarting at the window
   // edge with a fortnight of catching up to do.
@@ -475,7 +555,31 @@ function WeightChart({ entries, today }: { entries: WeighIn[]; today: string }) 
 
   return (
     <section className="border-b border-border px-5 py-4">
-      <h2 className="text-sm font-medium">Last {CHART_MONTHS} months</h2>
+      <div className="flex items-center justify-between gap-3">
+        <h2 className="text-sm font-medium">{chartWindow(windowKey).title}</h2>
+        <ToggleGroup
+          type="single"
+          size="sm"
+          variant="outline"
+          value={windowKey}
+          // A single ToggleGroup deselects when its active item is pressed
+          // again, which would leave the chart with no window at all; ignore
+          // the empty value, exactly as the by-amount toggle does.
+          onValueChange={(next) => next && onWindowChange(next as ChartWindowKey)}
+          aria-label="Chart window"
+        >
+          {CHART_WINDOWS.map((w) => (
+            <ToggleGroupItem key={w.key} value={w.key} className="px-2 text-xs">
+              {w.label}
+            </ToggleGroupItem>
+          ))}
+        </ToggleGroup>
+      </div>
+
+      {/* While a wider window is still being fetched the chart holds what it
+          has, dimmed. Drawing a full-width axis over half the history without
+          saying so would present "not loaded yet" as "you did not weigh". */}
+      <div className={extending ? "opacity-50 transition-opacity" : "transition-opacity"}>
 
       <ChartContainer config={weightConfig} className="mt-3 h-[180px] w-full">
         <LineChart accessibilityLayer data={points} margin={{ left: 0, right: 8, top: 4 }}>
@@ -538,6 +642,7 @@ function WeightChart({ entries, today }: { entries: WeighIn[]; today: string }) 
           />
         </LineChart>
       </ChartContainer>
+      </div>
     </section>
   );
 }

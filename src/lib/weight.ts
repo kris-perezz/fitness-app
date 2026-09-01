@@ -267,7 +267,7 @@ export function weeklyRate(
  */
 export function rateLabel(rate: Rate): string {
   const sign = rate.lbPerWeek > 0 ? "+" : rate.lbPerWeek < 0 ? "−" : "";
-  return `${sign}${Math.abs(rate.lbPerWeek).toFixed(1)} lb / week`;
+  return `${sign}${Math.abs(rate.lbPerWeek).toFixed(1)} lb/week`;
 }
 
 /** "over the last 4 weeks" -- a rate without its window is not a fact (S59). */
@@ -310,4 +310,76 @@ export function shiftDays(date: string, days: number): string {
   const d = new Date(`${date}T12:00:00`);
   d.setDate(d.getDate() + days);
   return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}-${String(d.getDate()).padStart(2, "0")}`;
+}
+
+// ------------------------------------------------------------------ S62
+/**
+ * The chart's window (S62).
+ *
+ * A table rather than five branches: the label, the span and the "how far back
+ * must the data reach" question are one fact each, and a bucket added later is
+ * a row here rather than an edit in three places.
+ *
+ * `months: null` is All, which is deliberately NOT a very large number of
+ * months. All means "as far as the log goes", and the log's start is a fact
+ * only the server knows -- so the caller supplies it and the two cases stay
+ * visibly different.
+ *
+ * The window belongs to the CHART and not to the tab: the calendar and the list
+ * stay on their own month (S57). That is the story's own warning -- two time
+ * selections on one screen -- and it is why this state lives beside the chart
+ * rather than replacing `month`.
+ */
+export type ChartWindowKey = "1M" | "3M" | "6M" | "1Y" | "ALL";
+
+export const CHART_WINDOWS: readonly {
+  key: ChartWindowKey;
+  label: string;
+  title: string;
+  months: number | null;
+}[] = [
+  { key: "1M", label: "1M", title: "Last month", months: 1 },
+  { key: "3M", label: "3M", title: "Last 3 months", months: 3 },
+  { key: "6M", label: "6M", title: "Last 6 months", months: 6 },
+  { key: "1Y", label: "1Y", title: "Last year", months: 12 },
+  { key: "ALL", label: "All", title: "All time", months: null },
+];
+
+/**
+ * 3M by default: long enough for a trend to have a shape, short enough that
+ * this month is not a pixel (S62).
+ */
+export const DEFAULT_CHART_WINDOW: ChartWindowKey = "3M";
+
+export function chartWindow(key: ChartWindowKey) {
+  return CHART_WINDOWS.find((w) => w.key === key) ?? CHART_WINDOWS[1];
+}
+
+/**
+ * The first DAY a window covers, given today and the first day in the log.
+ *
+ * Month arithmetic done here rather than by importing `shiftMonth` from
+ * `lib/training`: this module has no imports, which is what lets
+ * `weight.test.mts` run under node's type stripping without a path-alias
+ * resolver. That property is worth more than the six duplicated lines.
+ *
+ * A window never starts before the log does. Asking for a year of a
+ * three-month log must draw three months, not nine months of white space that
+ * reads as weight you failed to record.
+ */
+export function chartWindowFrom(
+  key: ChartWindowKey,
+  today: string,
+  earliest: string | null,
+): string {
+  const spec = chartWindow(key);
+  if (spec.months === null) return earliest ?? today;
+
+  const d = new Date(`${today}T12:00:00`);
+  // months - 1, and then the 1st: a 3M window is this month plus the two
+  // before it, so the axis starts on a month boundary rather than mid-month.
+  d.setDate(1);
+  d.setMonth(d.getMonth() - (spec.months - 1));
+  const start = `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}-01`;
+  return earliest && earliest > start ? earliest : start;
 }

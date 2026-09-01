@@ -22,6 +22,8 @@ import {
   daysBetween,
   deltaLabel,
   headline,
+  chartWindow,
+  chartWindowFrom,
   rateLabel,
   shiftDays,
   trendSeries,
@@ -149,9 +151,9 @@ test("weighing weekly still yields a rate over the same window", () => {
 });
 
 test("rate labels state the number and judge nothing", () => {
-  assert.equal(rateLabel({ lbPerWeek: -0.83, days: 28 }), "−0.8 lb / week");
-  assert.equal(rateLabel({ lbPerWeek: 0.25, days: 28 }), "+0.3 lb / week");
-  assert.equal(rateLabel({ lbPerWeek: 0, days: 28 }), "0.0 lb / week");
+  assert.equal(rateLabel({ lbPerWeek: -0.83, days: 28 }), "−0.8 lb/week");
+  assert.equal(rateLabel({ lbPerWeek: 0.25, days: 28 }), "+0.3 lb/week");
+  assert.equal(rateLabel({ lbPerWeek: 0, days: 28 }), "0.0 lb/week");
   assert.equal(windowLabel(28), "over the last 4 weeks");
   assert.equal(windowLabel(5), "over 5 days");
 });
@@ -230,4 +232,33 @@ test("the rate divides by the span it actually covered, not by the window it was
   assert.ok(rate);
   assert.ok(rate.days <= 21, `span was reported as ${rate.days} days`);
   assert.equal(windowLabel(rate.days), "over the last 3 weeks");
+});
+
+test("S62: a window starts on a month boundary, counting this month as one", () => {
+  // 3M is this month plus the two before it, not 90 days back.
+  assert.equal(chartWindowFrom("3M", "2026-09-01", null), "2026-07-01");
+  assert.equal(chartWindowFrom("1M", "2026-09-15", null), "2026-09-01");
+  assert.equal(chartWindowFrom("6M", "2026-09-01", null), "2026-04-01");
+  assert.equal(chartWindowFrom("1Y", "2026-09-01", null), "2025-10-01");
+});
+
+test("S62: a window never starts before the log does", () => {
+  // Nine months of white space in front of a three-month log reads as weight
+  // you failed to record, which is a different claim from having no log.
+  assert.equal(chartWindowFrom("1Y", "2026-09-01", "2026-07-14"), "2026-07-14");
+  // ...but it does not TRUNCATE a window the log outruns.
+  assert.equal(chartWindowFrom("1Y", "2026-09-01", "2020-03-11"), "2025-10-01");
+});
+
+test("S62: All is the log's own start, never a large number of months", () => {
+  assert.equal(chartWindowFrom("ALL", "2026-09-01", "2020-03-11"), "2020-03-11");
+  // An empty log has no history to show, so All is today rather than 1970.
+  assert.equal(chartWindowFrom("ALL", "2026-09-01", null), "2026-09-01");
+});
+
+test("S62: every window has a title, and an unknown key falls back to the default", () => {
+  assert.equal(chartWindow("1Y").title, "Last year");
+  assert.equal(chartWindow("ALL").title, "All time");
+  // @ts-expect-error -- the guard exists for data arriving from outside TS.
+  assert.equal(chartWindow("nonsense").key, "3M");
 });

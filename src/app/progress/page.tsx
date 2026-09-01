@@ -34,7 +34,7 @@ export default async function ProgressPage() {
 
   // Together rather than in sequence: the goal row is tiny and independent of
   // the weigh-ins, so chaining them would spend a round trip to learn nothing.
-  const [{ data }, { data: settings }] = await Promise.all([
+  const [{ data }, { data: settings }, { data: first }] = await Promise.all([
     supabase
       .from("weigh_ins")
       .select("log_date, weight_lb, note")
@@ -44,12 +44,22 @@ export default async function ProgressPage() {
       .from("nutrition_settings")
       .select("goal_weight_lb, goal_rate_lb_per_week")
       .maybeSingle(),
+    // The first day in the log, which is what bounds S62's All. One row, and
+    // the (user_id, log_date) index answers it without a scan. Fetched here
+    // rather than inferred from `data`, which only ever holds the window.
+    supabase
+      .from("weigh_ins")
+      .select("log_date")
+      .order("log_date", { ascending: true })
+      .limit(1)
+      .maybeSingle(),
   ]);
 
   return (
     <ProgressHome
       today={today}
       loadedFrom={from.slice(0, 7)}
+      earliest={first?.log_date ?? null}
       entries={(data ?? []).map(toWeighIn)}
       // Numeric arrives from PostgREST as a string. `?? null` and not `??
       // undefined`: no goal is a state the screen renders deliberately (S60).
