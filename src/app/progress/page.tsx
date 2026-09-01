@@ -1,14 +1,48 @@
-import { TrendingUp } from "lucide-react";
-import { SectionPlaceholder } from "@/components/section-placeholder";
+import { createClient } from "@/lib/supabase/server";
+import { wakingDate } from "@/lib/food";
+import { WINDOW_MONTHS, shiftMonth } from "@/lib/training";
+import { toWeighIn } from "@/lib/weight";
+import { ProgressHome } from "@/components/progress-home";
+
+export const dynamic = "force-dynamic";
 
 export const metadata = { title: "Progress" };
 
-export default function ProgressPage() {
+/**
+ * S57. The progress tab's resting state: a month of weigh-ins, with the trend
+ * over them as the headline.
+ *
+ * A WINDOW, FETCHED ONCE, EXTENDED BEFORE ITS EDGE -- the same contract as the
+ * train tab, and copied from it deliberately. S57 as written asks for `?month=`
+ * on the server "the same navigation contract as /train?month=", but that
+ * contract no longer exists: the train tab moved the month into client state
+ * precisely because a round trip per calendar arrow is never seamless. Following
+ * the story's letter would build the second month pager its own last bullet
+ * warns against, so the intent wins and the story wants updating.
+ *
+ * One difference from train, forced by the maths rather than chosen: the trend
+ * needs history from BEFORE the month on screen. A ten-day half life seeded on
+ * the first of the month would read as a fresh start every month. So the
+ * headline is computed over the whole loaded window and only the list and the
+ * calendar are filtered to the month.
+ */
+export default async function ProgressPage() {
+  const today = wakingDate();
+  const supabase = await createClient();
+
+  const from = `${shiftMonth(today.slice(0, 7), -(WINDOW_MONTHS - 1))}-01`;
+
+  const { data } = await supabase
+    .from("weigh_ins")
+    .select("log_date, weight_lb, note")
+    .gte("log_date", from)
+    .order("log_date", { ascending: false });
+
   return (
-    <SectionPlaceholder
-      icon={TrendingUp}
-      title="Progress isn't built yet"
-      description="Weight and measurements over time, once there is enough logged history to be worth charting."
+    <ProgressHome
+      today={today}
+      loadedFrom={from.slice(0, 7)}
+      entries={(data ?? []).map(toWeighIn)}
     />
   );
 }
