@@ -36,19 +36,25 @@ export function toWeighIn(row: {
 }
 
 /**
- * Progress open decision 1, settled: an exponentially-weighted moving average
- * with a ten-day half life, not a seven-day simple average.
+ * Progress open decision 1, settled: an exponentially-weighted moving average,
+ * not a seven-day simple average.
  *
  * A simple average is easier to explain, and that was the argument for it. What
  * decided it the other way is the lag: a 7-day mean sits half a week behind, so
  * the first week of a diet change is invisible in the number you are checking
- * it with. Ten days is the half life MacroFactor and Happy Scale settle around
- * -- responsive enough to show a real change inside a fortnight, slow enough
- * that one salty dinner does not move the headline.
+ * it with.
+ *
+ * SEVEN DAYS, revised from ten. Ten was chosen against a claim that MacroFactor
+ * and Happy Scale settle there, which is not verified and should not have been
+ * written down as though it were. The number that IS checkable: The Hacker's
+ * Diet, which is where trend weight comes from, smooths at alpha 0.1 per day --
+ * a half life of about 6.6 days. Seven is that lineage, rounded to a week a
+ * reader can hold in their head, and it turns a real change a few days sooner
+ * than ten did at the cost of a slightly livelier line.
  *
  * Cheap to change: one constant, and nothing is stored in this shape.
  */
-export const HALF_LIFE_DAYS = 10;
+export const HALF_LIFE_DAYS = 7;
 
 /** Under this many readings there is nothing to smooth (S58). */
 export const MIN_TREND_ENTRIES = 5;

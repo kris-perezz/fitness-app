@@ -98,11 +98,24 @@ test("back-dated entries are sorted rather than trusted in arrival order", () =>
 test("one reading twice as heavy does not survive as the headline", () => {
   // A fat-fingered 18 for 180 (S56's example). The trend must not follow it off
   // a cliff on one reading -- that is the whole reason the tab shows a trend.
+  //
+  // The threshold moved with HALF_LIFE_DAYS, and that is the tradeoff written
+  // down rather than hidden: a single 18 lb typo against a steady 180 pulls the
+  // trend to 168.7 at a ten-day half life and to 164.7 at seven. Responsiveness
+  // and typo resistance are the same dial. Seven still leaves the headline
+  // reading 165 rather than 18, which is the property being defended; what it
+  // costs is four more pounds of wrongness until the next reading corrects it.
   const entries = [...series("2026-08-01", 10, 180, 0)];
   entries.push({ date: shiftDays("2026-08-01", 10), weightLb: 18, note: null });
   const points = trendSeries(entries);
   const last = points[points.length - 1];
-  assert.ok(last.trendLb > 165, `one bad reading moved the trend to ${last.trendLb}`);
+  assert.ok(last.trendLb > 160, `one bad reading moved the trend to ${last.trendLb}`);
+
+  // And the guarantee that does NOT depend on the constant: the next honest
+  // reading pulls it back, so a typo is a dent and never a new baseline.
+  entries.push({ date: shiftDays("2026-08-01", 11), weightLb: 180, note: null });
+  const recovered = trendSeries(entries);
+  assert.ok(recovered[recovered.length - 1].trendLb > last.trendLb);
 });
 
 test("below the floor the headline reports no trend, not a smoothed guess", () => {
