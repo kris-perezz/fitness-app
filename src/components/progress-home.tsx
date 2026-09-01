@@ -4,9 +4,13 @@ import { useEffect, useMemo, useRef, useState, useTransition } from "react";
 import { Scale, Trash2 } from "lucide-react";
 import { toast } from "sonner";
 
+import { CartesianGrid, Line, LineChart, XAxis, YAxis } from "recharts";
+
 import { WINDOW_BUFFER_MONTHS, WINDOW_MONTHS, shiftMonth, shortDate, trim } from "@/lib/training";
 import {
   MIN_TREND_ENTRIES,
+  axisDomain,
+  chartSeries,
   deltaLabel,
   headline as headlineOf,
   rateLabel,
@@ -17,6 +21,7 @@ import {
 import { deleteWeighIn, loadWeighInWindow, saveWeighIn } from "@/app/progress-actions";
 import { Button } from "@/components/ui/button";
 import { Calendar } from "@/components/ui/calendar";
+import { ChartContainer, type ChartConfig } from "@/components/ui/chart";
 import { ConfirmAction } from "@/components/confirm-action";
 import {
   Drawer,
@@ -126,6 +131,8 @@ export function ProgressHome({
         </div>
 
         <Headline head={head} rate={rate} goal={goal} />
+
+        <WeightChart entries={entries} today={today} />
 
         <div className="flex justify-center border-b border-border px-2 py-3">
           <Calendar
@@ -426,6 +433,112 @@ function WeighInSheet({
         </div>
       </DrawerContent>
     </Drawer>
+  );
+}
+
+/**
+ * S61. The trajectory in one glance: the trend as a line, the readings as light
+ * dots behind it.
+ *
+ * The dots are what make the trend believable. A trend line alone is a claim
+ * the reader cannot check against anything, and a chart of the raw series alone
+ * is unreadable -- daily bodyweight is several pounds of noise around the fact.
+ *
+ * This is where recharts finally earns its place. `calorie-ring.tsx` refused it
+ * to draw one circle and that call stands; a time series with two series, a
+ * fitted axis and real gaps in it is the case the library exists for.
+ *
+ * The window is the last three months, fixed. S62 makes it a toggle and is not
+ * built -- its own build note says it only matters once the chart is crowded --
+ * so this uses the default S62 itself names, rather than inventing a different
+ * one that would have to be unpicked later.
+ */
+const weightConfig = {
+  trendLb: { label: "Trend", color: "var(--primary)" },
+  weightLb: { label: "Weighed", color: "var(--muted-foreground)" },
+} satisfies ChartConfig;
+
+const CHART_MONTHS = 3;
+
+function WeightChart({ entries, today }: { entries: WeighIn[]; today: string }) {
+  const from = `${shiftMonth(today.slice(0, 7), -(CHART_MONTHS - 1))}-01`;
+  // Smoothed over the WHOLE log and only then clipped, so the line entering
+  // from the left carries its history rather than restarting at the window
+  // edge with a fortnight of catching up to do.
+  const points = useMemo(() => chartSeries(entries, from), [entries, from]);
+  const domain = useMemo(() => axisDomain(points), [points]);
+
+  // Thin data is a sentence, not a chart (S79). Below the trend floor there is
+  // nothing to draw that would not be a two-point line dressed up as a shape,
+  // and the headline above already says what is missing.
+  if (entries.length < MIN_TREND_ENTRIES) return null;
+
+  return (
+    <section className="border-b border-border px-5 py-4">
+      <h2 className="text-sm font-medium">Last {CHART_MONTHS} months</h2>
+
+      <ChartContainer config={weightConfig} className="mt-3 h-[180px] w-full">
+        <LineChart accessibilityLayer data={points} margin={{ left: 0, right: 8, top: 4 }}>
+          {/* Horizontal only. Vertical rules would divide a continuous span of
+              days into boxes that mean nothing -- there is no week boundary in
+              this data, and S58 is built on there not being one. */}
+          <CartesianGrid vertical={false} />
+          <XAxis
+            dataKey="date"
+            tickLine={false}
+            axisLine={false}
+            tickMargin={8}
+            minTickGap={48}
+            tick={{ fontSize: 11 }}
+            tickFormatter={(date: string) =>
+              new Date(`${date}T12:00:00`).toLocaleDateString(undefined, {
+                day: "numeric",
+                month: "short",
+              })
+            }
+          />
+          <YAxis
+            // Fitted, never zero-based: a 0-200 axis flattens a real cut into a
+            // horizontal line (S79). See axisDomain.
+            domain={domain}
+            tickLine={false}
+            axisLine={false}
+            tickCount={4}
+            width={34}
+            tick={{ fontSize: 11 }}
+          />
+
+          {/* No ChartTooltip. There is no hover on a phone, and S79 rules out a
+              touch tooltip nobody discovers -- the exact numbers are in the
+              list underneath, which is the "or nothing" half of that rule. */}
+
+          {/* Readings first so the trend paints over them. Dots with no
+              connecting line: the raw series is a scatter of observations, and
+              joining them would draw the noise the trend exists to remove. */}
+          <Line
+            dataKey="weightLb"
+            type="monotone"
+            stroke="none"
+            connectNulls={false}
+            dot={{ r: 1.8, fill: "var(--color-weightLb)", strokeWidth: 0 }}
+            activeDot={false}
+            isAnimationActive={false}
+          />
+          <Line
+            dataKey="trendLb"
+            type="monotone"
+            stroke="var(--color-trendLb)"
+            strokeWidth={2}
+            // The whole reason the series carries nulls. A line drawn across a
+            // fortnight you did not weigh is a measurement you did not take.
+            connectNulls={false}
+            dot={false}
+            activeDot={false}
+            isAnimationActive={false}
+          />
+        </LineChart>
+      </ChartContainer>
+    </section>
   );
 }
 

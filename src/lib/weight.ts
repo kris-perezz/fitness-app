@@ -117,6 +117,67 @@ export function trendSeries(entries: WeighIn[], halfLife = HALF_LIFE_DAYS): Tren
 }
 
 /**
+ * The same trend, reshaped for a chart: one point per CALENDAR DAY across the
+ * span, with nulls on the days nothing was recorded.
+ *
+ * This looks like the opposite of what `trendSeries` refuses to do, and it is
+ * the opposite in a way that matters. That function will not invent a READING
+ * on a day you did not weigh. This one inserts an explicit ABSENCE, which is a
+ * different claim: paired with `connectNulls={false}` it is what stops recharts
+ * drawing a straight line across a fortnight you never stood on a scale and
+ * presenting it as a measurement (S61, S79).
+ *
+ * Both series break together. The trend has no more claim to continuity than
+ * the readings do -- it is derived from them -- so it "simply resumes" on the
+ * far side of the hole rather than gliding across it.
+ */
+export type ChartPoint = {
+  date: string;
+  weightLb: number | null;
+  trendLb: number | null;
+};
+
+export function chartSeries(entries: WeighIn[], fromDate?: string): ChartPoint[] {
+  const series = trendSeries(entries).filter((p) => (fromDate ? p.date >= fromDate : true));
+  if (series.length === 0) return [];
+
+  const byDate = new Map(series.map((p) => [p.date, p]));
+  const out: ChartPoint[] = [];
+
+  for (
+    let day = series[0].date;
+    day <= series[series.length - 1].date;
+    day = shiftDays(day, 1)
+  ) {
+    const point = byDate.get(day);
+    out.push({
+      date: day,
+      weightLb: point?.weightLb ?? null,
+      trendLb: point?.trendLb ?? null,
+    });
+  }
+
+  return out;
+}
+
+/**
+ * The y-axis bounds for the chart, fitted to the data with a pound of air above
+ * and below.
+ *
+ * NOT zero-based, and S79 is emphatic about why: a 0-200 lb axis flattens a
+ * genuine cut into a horizontal line. Zero-based is right for counts, where zero
+ * is a real value with a meaning; a bodyweight axis that reaches zero is
+ * measuring against a number no reader has ever been.
+ */
+export function axisDomain(points: ChartPoint[], pad = 1): [number, number] {
+  const values = points.flatMap((p) =>
+    [p.weightLb, p.trendLb].filter((v): v is number => v !== null),
+  );
+  if (values.length === 0) return [0, 1];
+  return [Math.floor(Math.min(...values) - pad), Math.ceil(Math.max(...values) + pad)];
+}
+
+/**
  * What the tab leads with: the smoothed number, the reading it came from, and
  * whether there is enough history to call it a trend at all.
  *

@@ -16,6 +16,8 @@ import { test } from "node:test";
 
 import {
   HALF_LIFE_DAYS,
+  axisDomain,
+  chartSeries,
   MIN_TREND_ENTRIES,
   daysBetween,
   deltaLabel,
@@ -167,4 +169,54 @@ test("day arithmetic survives a daylight-saving boundary", () => {
   assert.equal(daysBetween("2026-03-07", "2026-03-09"), 2);
   assert.equal(shiftDays("2026-03-07", 2), "2026-03-09");
   assert.equal(daysBetween("2026-11-01", "2026-10-31"), -1);
+});
+
+test("the chart series fills calendar days and marks the holes as absent", () => {
+  const points = chartSeries([
+    { date: "2026-08-01", weightLb: 200, note: null },
+    { date: "2026-08-04", weightLb: 199, note: null },
+  ]);
+  assert.equal(points.length, 4, "1st through 4th inclusive");
+  assert.deepEqual(
+    points.map((p) => p.weightLb),
+    [200, null, null, 199],
+  );
+  // The trend breaks with the readings. It is derived from them and has no
+  // more claim to continuity, so it must not glide across the hole (S61).
+  assert.deepEqual(
+    points.map((p) => p.trendLb === null),
+    [false, true, true, false],
+  );
+});
+
+test("a fortnight unweighed is a fortnight of gaps, not a straight line", () => {
+  const points = chartSeries([
+    { date: "2026-08-01", weightLb: 200, note: null },
+    { date: "2026-08-15", weightLb: 195, note: null },
+  ]);
+  assert.equal(points.filter((p) => p.weightLb === null).length, 13);
+});
+
+test("the chart series can be clipped to a window without losing the trend's history", () => {
+  // The trend is seeded on the FULL log and only then clipped, so a chart
+  // showing the last month does not restart its smoothing at the window edge.
+  const all = series("2026-06-01", 40, 200, -0.1);
+  const clipped = chartSeries(all, "2026-07-01");
+  const full = chartSeries(all);
+  assert.ok(clipped.length < full.length);
+  const firstClipped = clipped.find((p) => p.trendLb !== null);
+  const sameDay = full.find((p) => p.date === firstClipped?.date);
+  assert.equal(firstClipped?.trendLb, sameDay?.trendLb);
+});
+
+test("the y-axis fits the data and never reaches zero", () => {
+  const points = chartSeries(series("2026-08-01", 10, 180, -0.3));
+  const [low, high] = axisDomain(points);
+  assert.ok(low > 170, `axis floor was ${low}`);
+  assert.ok(high < 190, `axis ceiling was ${high}`);
+  assert.ok(low < high);
+});
+
+test("an empty chart series yields a usable axis rather than Infinity", () => {
+  assert.deepEqual(axisDomain([]), [0, 1]);
 });
