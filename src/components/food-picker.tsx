@@ -1,7 +1,7 @@
 "use client";
 
 import { useEffect, useMemo, useRef, useState, useTransition } from "react";
-import { Camera, ChevronLeft, Plus, ScanBarcode, Search } from "lucide-react";
+import { Camera, ChevronLeft, ImageUp, Plus, ScanBarcode, Search } from "lucide-react";
 import { searchFoods, show, basisLabel, type Food } from "@/lib/food";
 import { readLabel, saveLabelFood } from "@/app/actions";
 import { downscaleToDataUrl } from "@/lib/image";
@@ -247,7 +247,13 @@ function LabelStep({
   const [phase, setPhase] = useState<Phase>({ kind: "idle" });
   const [form, setForm] = useState<Record<string, string>>({});
   const [pending, startTransition] = useTransition();
-  const fileRef = useRef<HTMLInputElement>(null);
+  // Two inputs rather than one: `capture` is a hint the browser cannot be asked
+  // to drop per click, so a single input either always opens the camera or
+  // never does. A label is as often already in the camera roll -- photographed
+  // in the shop, sent by someone else, screenshotted off a product page -- as
+  // it is in front of you.
+  const cameraRef = useRef<HTMLInputElement>(null);
+  const uploadRef = useRef<HTMLInputElement>(null);
 
   // Per-serving where the label was, so the numbers on screen are the numbers
   // printed on the package.
@@ -275,7 +281,9 @@ function LabelStep({
     try {
       image = await downscaleToDataUrl(file);
     } catch {
-      setPhase({ kind: "failed", message: "That photo could not be opened." });
+      // Reached most often by an upload rather than a capture: pickers on
+      // Android hand back PDFs and HEICs that the canvas cannot decode.
+      setPhase({ kind: "failed", message: "That file could not be opened as a photo." });
       return;
     }
 
@@ -347,15 +355,26 @@ function LabelStep({
           <ChevronLeft className="size-4" /> Back
         </Button>
 
+        {/* Cleared on change so picking the same file again fires it again. */}
         <input
-          ref={fileRef}
+          ref={cameraRef}
           type="file"
           accept="image/*"
           capture="environment"
           className="hidden"
           onChange={(e) => {
             const file = e.target.files?.[0];
-            // Cleared so retaking the same file fires change again.
+            e.target.value = "";
+            if (file) void pick(file);
+          }}
+        />
+        <input
+          ref={uploadRef}
+          type="file"
+          accept="image/*"
+          className="hidden"
+          onChange={(e) => {
+            const file = e.target.files?.[0];
             e.target.value = "";
             if (file) void pick(file);
           }}
@@ -369,8 +388,8 @@ function LabelStep({
               </EmptyMedia>
               <EmptyTitle>Photograph the nutrition panel</EmptyTitle>
               <EmptyDescription>
-                Fill the frame with the panel itself. Everything read off it is editable
-                before anything is saved.
+                Take a photo with the panel filling the frame, or upload one you already
+                have. Everything read off it is editable before anything is saved.
               </EmptyDescription>
             </EmptyHeader>
           </Empty>
@@ -451,17 +470,28 @@ function LabelStep({
 
       <div className="shrink-0 border-t border-border px-5 pt-3 pb-safe">
         {draft === null ? (
-          <Button
-            className="h-11 w-full text-base"
-            disabled={phase.kind === "reading"}
-            onClick={() => fileRef.current?.click()}
-          >
-            {phase.kind === "reading"
-              ? "Reading"
-              : phase.kind === "failed"
-                ? "Try another photo"
-                : "Take a photo"}
-          </Button>
+          <ButtonGroup className="w-full">
+            <Button
+              className="h-11 flex-1 text-base"
+              disabled={phase.kind === "reading"}
+              onClick={() => cameraRef.current?.click()}
+            >
+              <Camera className="size-4" />
+              {phase.kind === "reading"
+                ? "Reading"
+                : phase.kind === "failed"
+                  ? "Retake"
+                  : "Take a photo"}
+            </Button>
+            <Button
+              variant="outline"
+              className="h-11 flex-1 text-base"
+              disabled={phase.kind === "reading"}
+              onClick={() => uploadRef.current?.click()}
+            >
+              <ImageUp className="size-4" /> Upload
+            </Button>
+          </ButtonGroup>
         ) : (
           <Button
             className="h-11 w-full text-base"
