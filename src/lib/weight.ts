@@ -358,10 +358,17 @@ export function chartWindow(key: ChartWindowKey) {
 /**
  * The first DAY a window covers, given today and the first day in the log.
  *
+ * ROLLING FROM TODAY, not snapped to a calendar month. 1M means the last month
+ * of weight, so on the 1st it must still show a month; snapping to the month start
+ * would draw a single day on the 1st and a full month on the 31st, which makes
+ * the same button mean something different depending on the date. The calendar
+ * below owns calendar months (S57); this control owns spans.
+ *
  * Month arithmetic done here rather than by importing `shiftMonth` from
  * `lib/training`: this module has no imports, which is what lets
  * `weight.test.mts` run under node's type stripping without a path-alias
- * resolver. That property is worth more than the six duplicated lines.
+ * resolver. That property is worth more than the few duplicated lines -- and
+ * `shiftMonth` works in whole months anyway, which is exactly what this is not.
  *
  * A window never starts before the log does. Asking for a year of a
  * three-month log must draw three months, not nine months of white space that
@@ -376,10 +383,17 @@ export function chartWindowFrom(
   if (spec.months === null) return earliest ?? today;
 
   const d = new Date(`${today}T12:00:00`);
-  // months - 1, and then the 1st: a 3M window is this month plus the two
-  // before it, so the axis starts on a month boundary rather than mid-month.
+  const day = d.getDate();
+  // Set the day to 1 BEFORE moving the month, then clamp. Otherwise the 31st
+  // minus one month is the 31st of a 28-day February, which JS silently rolls
+  // forward into March -- a "last month" window starting after it ended.
   d.setDate(1);
-  d.setMonth(d.getMonth() - (spec.months - 1));
-  const start = `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}-01`;
+  d.setMonth(d.getMonth() - spec.months);
+  const lastOfMonth = new Date(d.getFullYear(), d.getMonth() + 1, 0).getDate();
+  d.setDate(Math.min(day, lastOfMonth));
+
+  const start = `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}-${String(
+    d.getDate(),
+  ).padStart(2, "0")}`;
   return earliest && earliest > start ? earliest : start;
 }

@@ -234,12 +234,22 @@ test("the rate divides by the span it actually covered, not by the window it was
   assert.equal(windowLabel(rate.days), "over the last 3 weeks");
 });
 
-test("S62: a window starts on a month boundary, counting this month as one", () => {
-  // 3M is this month plus the two before it, not 90 days back.
-  assert.equal(chartWindowFrom("3M", "2026-09-01", null), "2026-07-01");
-  assert.equal(chartWindowFrom("1M", "2026-09-15", null), "2026-09-01");
-  assert.equal(chartWindowFrom("6M", "2026-09-01", null), "2026-04-01");
-  assert.equal(chartWindowFrom("1Y", "2026-09-01", null), "2025-10-01");
+test("S62: a window rolls back from today, never snapping to the month start", () => {
+  // The bug this pins: snapped to the 1st, a 1M window opened on the 1st of the
+  // month drew a SINGLE DAY, and the same button meant a full month on the 31st.
+  assert.equal(chartWindowFrom("1M", "2026-09-01", null), "2026-08-01");
+  assert.equal(chartWindowFrom("1M", "2026-09-15", null), "2026-08-15");
+  assert.equal(chartWindowFrom("3M", "2026-09-01", null), "2026-06-01");
+  assert.equal(chartWindowFrom("6M", "2026-09-14", null), "2026-03-14");
+  assert.equal(chartWindowFrom("1Y", "2026-09-01", null), "2025-09-01");
+});
+
+test("S62: a short month cannot roll a window forward past its own end", () => {
+  // The 31st minus one month is the 31st of February, which JS rolls into
+  // March -- a "last month" window that starts after it finishes.
+  assert.equal(chartWindowFrom("1M", "2026-03-31", null), "2026-02-28");
+  assert.equal(chartWindowFrom("1M", "2024-03-31", null), "2024-02-29"); // leap
+  assert.equal(chartWindowFrom("3M", "2026-05-31", null), "2026-02-28");
 });
 
 test("S62: a window never starts before the log does", () => {
@@ -247,7 +257,7 @@ test("S62: a window never starts before the log does", () => {
   // you failed to record, which is a different claim from having no log.
   assert.equal(chartWindowFrom("1Y", "2026-09-01", "2026-07-14"), "2026-07-14");
   // ...but it does not TRUNCATE a window the log outruns.
-  assert.equal(chartWindowFrom("1Y", "2026-09-01", "2020-03-11"), "2025-10-01");
+  assert.equal(chartWindowFrom("1Y", "2026-09-01", "2020-03-11"), "2025-09-01");
 });
 
 test("S62: All is the log's own start, never a large number of months", () => {

@@ -618,13 +618,19 @@ function WeightChart({
 
           {/* Readings first so the trend paints over them. Dots with no
               connecting line: the raw series is a scatter of observations, and
-              joining them would draw the noise the trend exists to remove. */}
+              joining them would draw the noise the trend exists to remove.
+
+              Held apart from the line by THREE differences at once, because on
+              a phone in daylight one is not enough: shape (dots vs a stroke),
+              weight (r 1.6 vs a 2.5px line) and opacity. Colour alone failed --
+              muted-foreground against primary is a brightness step this theme
+              barely renders, so the two series read as one texture. */}
           <Line
             dataKey="weightLb"
             type="monotone"
             stroke="none"
             connectNulls={false}
-            dot={{ r: 1.8, fill: "var(--color-weightLb)", strokeWidth: 0 }}
+            dot={{ r: 1.6, fill: "var(--color-weightLb)", fillOpacity: 0.45, strokeWidth: 0 }}
             activeDot={false}
             isAnimationActive={false}
           />
@@ -632,7 +638,11 @@ function WeightChart({
             dataKey="trendLb"
             type="monotone"
             stroke="var(--color-trendLb)"
-            strokeWidth={2}
+            strokeWidth={2.5}
+            // The trend is the figure and the dots are the ground, so the line
+            // keeps its own edge where it crosses a cloud of them rather than
+            // dissolving into it.
+            strokeLinecap="round"
             // The whole reason the series carries nulls. A line drawn across a
             // fortnight you did not weigh is a measurement you did not take.
             connectNulls={false}
