@@ -220,3 +220,14 @@ test("the y-axis fits the data and never reaches zero", () => {
 test("an empty chart series yields a usable axis rather than Infinity", () => {
   assert.deepEqual(axisDomain([]), [0, 1]);
 });
+
+test("the rate divides by the span it actually covered, not by the window it was asked for", () => {
+  // Readings stop 7 days short of a 4-week window: 3 weeks of data asked about
+  // over 4. Dividing the change by 4 would understate the rate by a quarter, so
+  // the span is measured from the anchor rather than assumed (S59).
+  const entries = series("2026-08-01", 22, 200, -0.5 / 7);
+  const rate = weeklyRate(entries, 4, "2026-08-29");
+  assert.ok(rate);
+  assert.ok(rate.days <= 21, `span was reported as ${rate.days} days`);
+  assert.equal(windowLabel(rate.days), "over the last 3 weeks");
+});

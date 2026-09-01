@@ -236,9 +236,16 @@ export function weeklyRate(
   const end = series[series.length - 1];
   const cutoff = shiftDays(today ?? end.date, -weeks * 7);
 
-  // The last point at or before the cutoff anchors the window. Without it, a
-  // window whose first reading landed a week late would report a 3-week change
-  // as though it took 4, and quietly understate every rate.
+  // The EARLIEST point inside the window anchors it, and `days` is measured
+  // from that point rather than assumed to be `weeks * 7`. A window whose first
+  // reading landed a week late spans three weeks, and dividing its change by
+  // four would understate the rate by a quarter -- so the span is measured, not
+  // named. That is also what makes `windowLabel` honest: it reports the days
+  // actually covered, so "over the last 4 weeks" is never a rounding of three.
+  //
+  // Fewer than two points inside the window falls back to the last two readings
+  // anywhere, which the 7-day floor below then usually rejects. Reporting
+  // nothing beats reporting a rate off two readings a day apart.
   const inWindow = series.filter((p) => p.date >= cutoff);
   const anchor = inWindow.length >= 2 ? inWindow[0] : series[series.length - 2];
   if (!anchor || anchor.date === end.date) return null;
