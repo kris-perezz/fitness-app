@@ -46,6 +46,13 @@ export type Goals = {
   protein_goal_g: number;
   carb_goal_g: number;
   fat_goal_g: number;
+  /**
+   * S60. Nullable, and the null means something specific: no goal on file. A
+   * goal RATE of 0 is "maintain", which is a decision, not an absence -- so
+   * these two must never be collapsed into a falsy check.
+   */
+  goal_weight_lb: number | null;
+  goal_rate_lb_per_week: number | null;
 };
 
 export async function saveGoals(goals: Goals) {

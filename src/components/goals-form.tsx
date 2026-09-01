@@ -23,7 +23,13 @@ import {
 import { ThemeToggle } from "@/components/theme-toggle";
 import { toast } from "sonner";
 
-type Goals = ({ calorie_goal: number } & MacroGoals) | null;
+type Goals =
+  | ({
+      calorie_goal: number;
+      goal_weight_lb: number | null;
+      goal_rate_lb_per_week: number | null;
+    } & MacroGoals)
+  | null;
 
 type FieldName = "calorie_goal" | MacroKey;
 
@@ -53,6 +59,12 @@ export function GoalsForm({ goals }: { goals: Goals }) {
       protein_goal_g: String(macros.protein_goal_g),
       carb_goal_g: String(macros.carb_goal_g),
       fat_goal_g: String(macros.fat_goal_g),
+      // Empty string is the absent goal, and it round-trips as null. `?? ""`
+      // rather than `|| ""` so a goal rate of 0 -- maintain, a real answer --
+      // survives instead of reading as no goal at all (S60).
+      goal_weight_lb: goals?.goal_weight_lb != null ? String(goals.goal_weight_lb) : "",
+      goal_rate_lb_per_week:
+        goals?.goal_rate_lb_per_week != null ? String(goals.goal_rate_lb_per_week) : "",
     };
   });
   const [pending, startTransition] = useTransition();
@@ -62,6 +74,17 @@ export function GoalsForm({ goals }: { goals: Goals }) {
     protein_goal_g: Number(form.protein_goal_g) || 0,
     carb_goal_g: Number(form.carb_goal_g) || 0,
     fat_goal_g: Number(form.fat_goal_g) || 0,
+  });
+
+  /**
+   * S60. Blank means no goal; anything else is parsed. Separate from `numbers`
+   * because the weight goals take no part in the calorie reconciliation -- they
+   * are a target for the body, not a share of the day's energy, and running
+   * them through `balance` would be a category error.
+   */
+  const weightGoals = () => ({
+    goal_weight_lb: parseGoal(form.goal_weight_lb),
+    goal_rate_lb_per_week: parseGoal(form.goal_rate_lb_per_week),
   });
 
   const current = numbers();
@@ -79,12 +102,13 @@ export function GoalsForm({ goals }: { goals: Goals }) {
         ? balance(values.calorie_goal, values)
         : balanceAround(values.calorie_goal, values, edited);
 
-    setForm({
+    setForm((prev) => ({
+      ...prev,
       calorie_goal: String(Math.max(0, Math.round(values.calorie_goal))),
       protein_goal_g: String(fixed.protein_goal_g),
       carb_goal_g: String(fixed.carb_goal_g),
       fat_goal_g: String(fixed.fat_goal_g),
-    });
+    }));
     return { calorie_goal: Math.max(0, Math.round(values.calorie_goal)), ...fixed };
   }
 
@@ -94,7 +118,7 @@ export function GoalsForm({ goals }: { goals: Goals }) {
     const values = isBalanced(current.calorie_goal, current) ? current : reconcile("calorie_goal");
 
     startTransition(async () => {
-      const res = await saveGoals(values);
+      const res = await saveGoals({ ...values, ...weightGoals() });
       if (res.error) {
         toast.error(res.error);
         return;
@@ -159,6 +183,56 @@ export function GoalsForm({ goals }: { goals: Goals }) {
           </FieldContent>
         </FieldGroup>
 
+        {/* S60. On the goals tab with the rest of the prescription, and read on
+            the progress tab: one screen holds what you decided, the other holds
+            what happened. Both blank is a legitimate state -- with no goal on
+            file the progress tab simply states the rate and nothing sits beside
+            it. Nothing else degrades. */}
+        <FieldGroup className="gap-2">
+          <div className="grid grid-cols-2 gap-3">
+            <Field>
+              <FieldLabel
+                htmlFor="goal_weight_lb"
+                className="text-xs font-normal text-muted-foreground"
+              >
+                Goal weight (lb)
+              </FieldLabel>
+              <Input
+                id="goal_weight_lb"
+                type="number"
+                inputMode="decimal"
+                value={form.goal_weight_lb}
+                onChange={(e) => setForm({ ...form, goal_weight_lb: e.target.value })}
+                placeholder="None"
+                className="h-12 text-base tabular-nums"
+              />
+            </Field>
+            <Field>
+              <FieldLabel
+                htmlFor="goal_rate_lb_per_week"
+                className="text-xs font-normal text-muted-foreground"
+              >
+                Goal rate (lb/week)
+              </FieldLabel>
+              <Input
+                id="goal_rate_lb_per_week"
+                type="number"
+                inputMode="decimal"
+                value={form.goal_rate_lb_per_week}
+                onChange={(e) => setForm({ ...form, goal_rate_lb_per_week: e.target.value })}
+                placeholder="None"
+                className="h-12 text-base tabular-nums"
+              />
+            </Field>
+          </div>
+          <FieldContent>
+            <FieldDescription className="text-xs">
+              Negative to lose, positive to gain, 0 to maintain. Leave either
+              blank for no goal.
+            </FieldDescription>
+          </FieldContent>
+        </FieldGroup>
+
         <Button className="h-11 w-full text-base" onClick={save} disabled={pending}>
           {pending ? "Saving" : "Save"}
         </Button>
@@ -173,4 +247,16 @@ export function GoalsForm({ goals }: { goals: Goals }) {
       </div>
     </main>
   );
+}
+
+/**
+ * A goal field's string to the number it means. Blank is null -- no goal on
+ * file -- and "0" is zero, which for a rate means maintain. `Number("")` is 0,
+ * so the empty check has to come first or every cleared field would silently
+ * become a commitment to hold weight (S60).
+ */
+function parseGoal(value: string): number | null {
+  if (value.trim() === "") return null;
+  const n = Number(value);
+  return Number.isFinite(n) ? n : null;
 }

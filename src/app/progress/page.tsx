@@ -32,17 +32,32 @@ export default async function ProgressPage() {
 
   const from = `${shiftMonth(today.slice(0, 7), -(WINDOW_MONTHS - 1))}-01`;
 
-  const { data } = await supabase
-    .from("weigh_ins")
-    .select("log_date, weight_lb, note")
-    .gte("log_date", from)
-    .order("log_date", { ascending: false });
+  // Together rather than in sequence: the goal row is tiny and independent of
+  // the weigh-ins, so chaining them would spend a round trip to learn nothing.
+  const [{ data }, { data: settings }] = await Promise.all([
+    supabase
+      .from("weigh_ins")
+      .select("log_date, weight_lb, note")
+      .gte("log_date", from)
+      .order("log_date", { ascending: false }),
+    supabase
+      .from("nutrition_settings")
+      .select("goal_weight_lb, goal_rate_lb_per_week")
+      .maybeSingle(),
+  ]);
 
   return (
     <ProgressHome
       today={today}
       loadedFrom={from.slice(0, 7)}
       entries={(data ?? []).map(toWeighIn)}
+      // Numeric arrives from PostgREST as a string. `?? null` and not `??
+      // undefined`: no goal is a state the screen renders deliberately (S60).
+      goal={{
+        weightLb: settings?.goal_weight_lb != null ? Number(settings.goal_weight_lb) : null,
+        rateLbPerWeek:
+          settings?.goal_rate_lb_per_week != null ? Number(settings.goal_rate_lb_per_week) : null,
+      }}
     />
   );
 }

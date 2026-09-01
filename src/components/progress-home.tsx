@@ -46,14 +46,19 @@ import { Item, ItemActions, ItemContent, ItemTitle } from "@/components/ui/item"
  * Tuesday's weight from a photo of the scale (S55). Back-dating is a first-class
  * path, not a recovery one.
  */
+/** S60. Either half may be absent; a rate of 0 is "maintain", not "no goal". */
+export type WeightGoal = { weightLb: number | null; rateLbPerWeek: number | null };
+
 export function ProgressHome({
   today,
   loadedFrom,
   entries: initialEntries,
+  goal,
 }: {
   today: string;
   loadedFrom: string;
   entries: WeighIn[];
+  goal: WeightGoal;
 }) {
   const [entries, setEntries] = useState(initialEntries);
   const [from, setFrom] = useState(loadedFrom);
@@ -120,7 +125,7 @@ export function ProgressHome({
           </Button>
         </div>
 
-        <Headline head={head} rate={rate} />
+        <Headline head={head} rate={rate} goal={goal} />
 
         <div className="flex justify-center border-b border-border px-2 py-3">
           <Calendar
@@ -223,9 +228,11 @@ export function ProgressHome({
 function Headline({
   head,
   rate,
+  goal,
 }: {
   head: ReturnType<typeof headlineOf>;
   rate: ReturnType<typeof weeklyRate>;
+  goal: WeightGoal;
 }) {
   if (!head) return null;
 
@@ -261,6 +268,34 @@ function Headline({
           </>
         ) : null}
       </p>
+
+      {/* S60. The goal SITS BESIDE the rate; it does not grade it. No "on
+          track", no "behind", and deliberately no projected date -- compounding
+          a noisy rate over months and putting a day on it costs more adherence
+          than never offering one. The two numbers next to each other are enough
+          for the reader to draw their own conclusion.
+
+          `!= null` throughout: a goal rate of 0 is maintain, and a falsy check
+          would hide the one goal most worth showing. */}
+      {(goal.rateLbPerWeek != null || goal.weightLb != null) && (
+        <p className="mt-1 text-xs text-muted-foreground">
+          Goal
+          {goal.rateLbPerWeek != null && (
+            <>
+              {" · "}
+              <span className="tabular-nums">
+                {rateLabel({ lbPerWeek: goal.rateLbPerWeek, days: 0 })}
+              </span>
+            </>
+          )}
+          {goal.weightLb != null && (
+            <>
+              {" · "}
+              <span className="tabular-nums">{trim(goal.weightLb)} lb</span>
+            </>
+          )}
+        </p>
+      )}
     </section>
   );
 }
