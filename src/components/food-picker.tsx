@@ -4,7 +4,7 @@ import { useEffect, useMemo, useRef, useState, useTransition } from "react";
 import { Camera, ChevronLeft, ImageUp, Leaf, Plus, ScanBarcode, Search } from "lucide-react";
 import { searchFoods, show, basisLabel, type Food } from "@/lib/food";
 import { readLabel, saveLabelFood, searchCnfFoods, addCnfFood } from "@/app/actions";
-import type { CnfHit } from "@/lib/cnf";
+import { CNF_ATTRIBUTION, CNF_LICENCE_URL, type CnfHit } from "@/lib/cnf";
 import { downscaleToDataUrl } from "@/lib/image";
 import type { LabelDraft } from "@/lib/label";
 import { BarcodeScanner } from "@/components/barcode-scanner";
@@ -289,6 +289,22 @@ function CnfSection({ query, onPick }: { query: string; onPick: (food: Food) => 
     <div className="border-t border-border">
       <p className="px-5 pt-4 text-xs text-muted-foreground">
         Health Canada · per 100 g, laboratory values for a reference food
+      </p>
+      {/* REQUIRED, not a footnote. The Open Government Licence - Canada grants
+          these rights on condition the source is acknowledged and the licence
+          linked where feasible, and the grant ends automatically if it is not.
+          It sits with the results rather than in an About screen because this
+          is the screen where the information is actually used. */}
+      <p className="px-5 pt-1 text-[11px] text-muted-foreground">
+        {CNF_ATTRIBUTION}{" "}
+        <a
+          href={CNF_LICENCE_URL}
+          target="_blank"
+          rel="noreferrer"
+          className="underline underline-offset-2"
+        >
+          Licence
+        </a>
       </p>
 
       {error && <p className="px-5 py-3 text-sm text-muted-foreground">{error}</p>}

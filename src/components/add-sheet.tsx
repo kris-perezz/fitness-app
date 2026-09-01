@@ -297,7 +297,11 @@ function QtyStep({
         {/* The scanned path is the one that lands here with numbers nobody has
             checked, so the hierarchy gets a full sentence rather than a badge
             at the moment it matters -- just before the entry is written. */}
-        {food.source === "off" && (
+        {/* `cnf` joins `off` here, and for a second reason on top of the first:
+            the Open Government Licence requires the acknowledgement to travel
+            with the information, and this is the last screen before a CNF
+            number becomes an entry. */}
+        {(food.source === "off" || food.source === "cnf") && (
           <p className="mt-1 text-xs text-muted-foreground">{sourceHint(food.source)}</p>
         )}
         <p className="mt-1 text-xs text-muted-foreground">

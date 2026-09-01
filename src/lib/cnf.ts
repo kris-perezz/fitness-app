@@ -13,7 +13,29 @@ import type { Food } from "@/lib/food";
  * indexed, so it is built for packets; a chicken breast has no barcode to scan
  * and appears in OFF barely or wrongly. CNF is the opposite shape: no barcodes
  * at all, and lab values for the plain foods nobody scans.
+ *
+ * ---------------------------------------------------------------- LICENCE
+ * CNF is published by Health Canada on open.canada.ca under the OPEN GOVERNMENT
+ * LICENCE - CANADA. Free to use and to redistribute, including in a shared
+ * multi-user catalog, on three conditions:
+ *
+ *   1. Acknowledge the source. Where the provider specifies no wording of its
+ *      own, the licence's default text is required verbatim -- that is
+ *      CNF_ATTRIBUTION below, and it is not editorial copy to be reworded.
+ *   2. Link to the licence where feasible.
+ *   3. Do not suggest official status, or that Health Canada endorses this app.
+ *      Hence "Laboratory values from the Canadian Nutrient File", never
+ *      "approved by" or "official".
+ *
+ * The rights granted END AUTOMATICALLY if the attribution is dropped, so the
+ * string below is load-bearing: any screen that renders CNF numbers renders it.
+ * Verified 2026-09-01 against open.canada.ca/en/open-government-licence-canada.
  */
+
+export const CNF_ATTRIBUTION =
+  "Contains information licensed under the Open Government Licence – Canada.";
+
+export const CNF_LICENCE_URL = "https://open.canada.ca/en/open-government-licence-canada";
 
 const API = "https://food-nutrition.canada.ca/api/canadian-nutrient-file";
 const TIMEOUT_MS = 8000;

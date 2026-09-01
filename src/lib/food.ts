@@ -90,7 +90,9 @@ export function sourceHint(source: FoodSource): string {
     case "off":
       return "From the Open Food Facts database, unconfirmed. It is often the US version of a product sold here.";
     case "cnf":
-      return "Laboratory values from the Canadian Nutrient File. They describe a reference food, not the one in your kitchen.";
+      // The second sentence is a LICENCE OBLIGATION, not editorial. See
+      // CNF_ATTRIBUTION in lib/cnf.ts.
+      return "Laboratory values from the Canadian Nutrient File. They describe a reference food, not the one in your kitchen. Contains information licensed under the Open Government Licence – Canada.";
     case "recipe":
       return "Computed from the recipe's ingredients.";
   }
