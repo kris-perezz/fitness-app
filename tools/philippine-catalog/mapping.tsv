@@ -1,0 +1,373 @@
+# Reviewed ingredient name -> CNF food id. Tab separated: name, food_id, note.
+# This file is the source of truth and outranks anything map.py proposes. A blank food_id
+# means "deliberately unmapped" -- the ingredient is dropped from the dish with a reason.
+# Generic beats specific here: a seeded dish is a typical version, not anyone's actual pot.
+#
+# name	food_id	note
+water	2933	Water, municipal. Zero nutrients, real mass -- keeps proportions honest.
+salt	214	Salt, table
+salt and pepper	214	Seasoning "to taste"; mass is negligible either way
+salt and ground black pepper	214	as above
+ground black pepper	198	Spices, pepper, black
+whole peppercorn	198	same spice, whole rather than ground
+pepper	198
+garlic	2394	Garlic, raw
+garlic powder	188	Spices, garlic powder
+onion	2401	Onion, raw
+yellow onion	2401	CNF's "Onion, yellow" is sauteed; the raw generic is the right base
+red onion	2401	no separate CNF raw red onion
+onion powder	194	Spices, onion powder
+green onions	2144	Onion, spring (green) or scallion
+scallions	2144	same as green onions
+spring onion	2144
+ginger	2091	Ginger root, raw
+cooking oil	451	Vegetable oil, canola. Neutral oil stands in for the corpus's unnamed "cooking oil".
+vegetable oil	451
+canola oil	451
+olive oil	422	Vegetable oil, olive
+extra virgin olive oil	422	CNF does not split by pressing grade
+sesame oil	424	Vegetable oil, sesame
+soy sauce	3403	Soy sauce (made with soy and wheat), shoyu, regular -- the Filipino toyo type
+light soy sauce	3403
+dark soy sauce	3403	CNF has no dark variant; darker soy is mostly caramel colour
+toyo	3403
+fish sauce	4731	Sauce, fish, ready-to-serve
+patis	4731
+oyster sauce	4730	Sauce, oyster, ready-to-serve
+white vinegar	14	Vinegar, distilled (white)
+vinegar	14	Filipino cane vinegar is not in CNF; distilled white is the closest by composition
+cane vinegar	14	as above
+coconut milk	2643	Nuts, coconut milk (liquid from grated meat and water)
+gata	2643
+coconut cream	2643	CNF's cream entry is sweetened; unsweetened milk is closer than a dessert product
+butter	92	Butter, unsalted. Salted vs unsalted differs only in sodium.
+unsalted butter	92
+milk	113	Milk, fluid, whole, pasteurized, homogenized, 3.25% M.F.
+fresh milk	113
+evaporated milk	140	Milk, evaporated, whole, canned, undiluted, 7.8% M.F.
+eggs	125	Egg, chicken, whole, fresh or frozen, raw
+egg	125
+egg yolk	125	placeholder; CNF has a yolk-only row, replace before Phase 5
+all-purpose flour	4501	Grains, wheat flour, white, all purpose, bleached
+flour	4501
+cornstarch	4419	Grains, cornstarch
+granulated white sugar	4318	Sweets, sugars, granulated
+sugar	4318
+white sugar	4318
+brown sugar	4317	Sweets, sugar, brown
+dried bay leaves	172	Spices, bay leaf
+bay leaves	172
+bay leaf	172
+paprika	196	Spices, paprika
+vanilla extract	216	Vanilla extract
+baking powder	4003	Leavening agent, baking powder, double acting
+chicken	560	Chicken, broiler, meat and skin, raw -- a cut-up whole chicken, which is what
+boneless chicken breast	841	Chicken, broiler, breast, skinless, boneless, raw
+chicken breast	841
+pork belly	1758	Pork, wholesale cuts, belly, raw
+pork	1813	Unqualified "pork" is shoulder more often than belly, and shoulder is the
+liempo	1758	safer default: belly's 53 g fat per 100 g swamps a dish when it is wrong.
+beef	2676	Beef, brisket, lean, 0mm trim, raw -- stands in for stewing beef
+shrimp	3211	Crustaceans, shrimp, mixed species, raw
+chicken broth	501763	Soup, broth, chicken, ready-to-serve
+chicken stock	501763
+beef broth	927	Soup, broth, beef, ready-to-serve
+knorr chicken cube	5373	Soup, bouillon cubes and granules, low sodium, dry. Only cube CNF carries --
+chicken cube	5373	sodium will read low; noted on the dish row
+carrot	2380	Carrot, raw
+carrots	2380
+potato	2417	Potato, flesh, raw
+potatoes	2417
+tomato	2460	Tomato, red, ripe, raw, year round average
+tomatoes	2460
+tomato sauce	5557	Tomato sauce, unsalted
+red bell pepper	2484	Pepper, sweet, red, raw
+green bell pepper	2413	Pepper, sweet, green, raw
+bell pepper	2484
+thai chili pepper	2322	Pepper, hot chili, red or green, raw
+chili pepper	2322
+siling labuyo	2322
+green peas	2409	Peas, green, raw
+cabbage	2361	Cabbage, raw
+bok choy	2038	Bok choy, pak-choi, raw
+pechay	2038
+parsley	2405	Parsley, fresh
+lemon juice	1589	Lemon juice, raw
+calamansi juice	1589	Calamansi is not in CNF; lemon juice is the closest acid by composition
+cheddar cheese	119	Cheese, cheddar
+parmesan cheese	40	Cheese, parmesan, hard
+#
+# --- second pass: ranked by grams inside the 111 target dishes, not by line count.
+# Meat cuts carry most of a Filipino braise's weight, so they matter more than a long tail
+# of spices. CNF is Canadian and does not carry every Philippine cut; where it does not, the
+# substitute and its reason are written down rather than left to the matcher.
+beef chuck	5946	Beef, chuck, blade roast, boneless, lean, raw
+beef shank	6285	CNF has no beef shank; stewing beef is the closest composite cut
+beef kalitiran	5946	kalitiran is the chuck/blade cut
+beef brisket	2676	Beef, brisket, lean, 0mm trim, raw
+beef short rib	6079	Beef, rib, rib roast with bone, lean, raw
+beef short ribs	6079
+beef ribs	6079
+beef neck bone	6285	stewing beef; the bone contributes little but collagen
+beef neck bones	6285
+beef sirloin	6285	placeholder composite cut; CNF's sirloin rows are trim-specific
+beef tendon	6285	no CNF tendon row; stewing beef understates collagen, overstates fat
+flank steak	6285
+beef eye of round or flank steak	6285
+stewing beef	6285	Beef, composite cuts, stewing beef
+ground beef	2690	Beef, ground, medium, raw
+cow trotters	6285	no CNF trotter row; mostly skin and collagen, so this overstates the meat
+ham hock	6206	Pork, pickled, pork hocks
+pork ribs	1933	Pork, side ribs centre cut (spareribs), lean and fat, raw
+pork shoulder	1813	Pork, shoulder, whole, lean and fat, raw. An earlier note here claimed CNF
+kasim	1813	has no fresh pork shoulder. That was false -- CNF carries ten shoulder rows; the
+pork butt	1971	search that "proved" otherwise was simply the wrong regex, and the claim then
+pork picnic	1820	authorised belly (518 kcal, 9 g protein) to stand for all pork, which is 27% of
+whole pork belly	1758	this catalog's calories. Belly is now belly only.
+pork chops	1777	Pork, loin, whole, lean, raw
+pork loin	1777
+ground pork	6119	Pork, ground, lean, raw
+pork large intestine	1834	Pork, intestine (chitterlings), raw
+pig or cow's small intestine	1834
+chicharon	1814	no CNF pork-rind row. Chicharon is rendered skin -- very high protein and
+# fat, low water -- so roasted shoulder understates both. The worst substitute in this file.
+coagulated chicken blood	578	no CNF blood row; chicken liver is the closest offal by iron and protein
+chicken liver	578	Chicken, broiler, liver, raw
+chicken thigh	853	Chicken, broiler, thigh, meat, raw
+skinless chicken thigh	853
+ground chicken	918	Chicken, ground, lean, raw
+salmon fillet	3049	Fish, salmon, atlantic, wild, raw
+bangus	3028	Fish, milkfish (awa), raw
+milkfish	3028
+tilapia	5966	Fish, tilapia, raw
+squid	3125	Mollusks, squid (calamari), mixed species, raw
+pusit	3125
+cassava	2045	Cassava (manioc), raw
+glutinous rice	4424	Grains, rice, white, glutinous, dry
+malagkit	4424
+rice	4471	Grains, rice, white, long-grain, regular, dry
+leftover rice	4523	Grains, rice, white, long-grain, regular, cooked -- already cooked, so the
+leftover white rice	4523	cooked row is the right one; using the dry row would triple it
+garlic rice	4523
+cooked rice	4523
+miki noodles	4512	Pasta, egg noodles, enriched, dry -- miki is a fresh egg noodle
+egg noodles	4512
+rice noodles	4888	Pasta, rice noodles, dry
+bihon	4888
+sotanghon	3299	Beans, mung, long rice (chinese noodles), dehydrated
+tofu	4911	Tofu, silken, firm
+tokwa	4911
+spinach	2213	Spinach, raw
+kangkong	2213	water spinach is not in CNF; spinach is the closest leafy green
+malunggay	2213	moringa leaves are not in CNF; same substitution, same caveat
+hot pepper leaves	2213	dahon ng sili; same substitution
+eggplant	2088	Eggplant (aubergine, brinjal), raw
+talong	2088
+ampalaya	1997	Balsam-pear (bitter gourd, bitter melon), pods, raw
+bitter melon	1997
+sweet potato	2240	Sweet potato, raw
+kamote	2240
+taro	2247	Taro, raw
+gabi	2247
+banana	1704	Banana, raw
+saging	1704
+green beans	2370	Beans, snap (Italian, green or yellow), raw
+sitaw	2370	long beans are not in CNF; snap beans are the closest by composition
+string beans	2370
+mung beans	3300	Beans, mungo, raw
+munggo	3300
+peanuts	3396	Peanuts, all types, raw
+shelled peanuts	3396
+peanut butter	3396	placeholder; CNF has a peanut butter row, replace before Phase 5
+coconut water	2566	Nuts, coconut water (liquid from coconut)
+young coconut water	2566
+coconut oil	420	Vegetable oil, coconut
+condensed milk	68	Milk, condensed, sweetened, canned
+evaporated milk	140	Milk, evaporated, whole, canned, undiluted, 7.8% M.F.
+squash	2448	Squash, winter, acorn, raw
+kalabasa	2448	kabocha is not in CNF; acorn squash is the closest winter squash
+snow peas	2409	placeholder; CNF has an edible-pod pea row, replace before Phase 5
+tomato paste	5557	tomato sauce stands in; paste is roughly three times as concentrated, so
+7-up	4318	sugar only -- a soda's weight is water and sugar, and only the sugar counts
+rice wash	2933	water with a trace of starch
+ice water	2933
+sea salt	214	Salt, table
+knorr beef cube	968	Soup, broth, beef, cubed, dehydrated -- the low-sodium row understated by 22x
+beef cube	968
+maggi magic sarap	5373	a seasoning granule; the bouillon row is the nearest thing CNF carries
+star anise	198	no CNF star anise row; a spice at spice quantities, so the choice barely moves
+sharp cheddar cheese	119	Cheese, cheddar
+mozzarella cheese	119	placeholder; CNF has a mozzarella row, replace before Phase 5
+#
+# --- third pass: the placeholders promised above, plus the produce tail.
+lemon	1587	Lemon, raw, without peel
+calamansi	1593	Lime, raw -- calamansi is closer to lime than to lemon in sugar and acid
+kalamansi	1593
+lime	1593
+tomato paste	2258	Tomato products, canned, paste, no added salt
+star anise	170	Spices, anise seeds. Not the same plant, but a spice at spice quantities.
+snow peas	2408	Peas, edible-podded (snow peas), raw
+mozzarella cheese	5619	Cheese, mozzarella, low sodium
+peanut butter	6289	Peanut butter, natural
+egg yolk	127	Egg, chicken, yolk, fresh or frozen, raw
+egg yolks	127
+celery	2386	Celery, raw
+mushroom	2399	Mushroom, white, raw
+mushrooms	2399
+green papaya	1628	Papaya, raw -- CNF has only the ripe fruit, so sugar reads high for green papaya
+papaya	1628
+labanos	2443	Radish, raw
+radish	2443
+cucumber	2363	Cucumber, raw
+pipino	2363
+bean sprouts	2008	Beans, mung, mature seeds, sprouted, raw
+togue	2008
+jackfruit	1581	Jackfruit, raw
+langka	1581
+chayote	2054	Chayote, fruit, raw
+sayote	2054
+grated coconut	2558	Nuts, coconut meat, raw
+niyog	2558
+bagoong	hand_bagoong	Hand-entered; CNF has no shrimp paste and anchovy understates its sodium ~50x
+shrimp paste	hand_bagoong	see hand_foods.py
+bagoong alamang	hand_bagoong	see hand_foods.py
+#
+# --- fourth pass: the grams-ranked tail over the full 3,056-recipe corpus.
+oil	451	the corpus's bare "oil" is a neutral cooking oil
+pork hock	6206	Pork, pickled, pork hocks
+pork pata	6206	pata is the hock/trotter
+goat meat	3583	Game meat, goat, raw
+kambing	3583
+glutinous rice flour	6192	Grains, rice, white, glutinous, flour
+rice flour	4429	Grains, rice flour, white
+cake flour	4446	Grains, wheat flour, white, cake flour
+pineapple juice	1657	Pineapple juice, canned, added vitamin C
+mussels	3115	Mollusks, mussel, blue, raw
+tahong	3115
+pork liver	1844	Pork, liver, raw
+chicken feet	5334	Chicken, feet, boiled -- CNF has no raw row
+adidas	5334	street name for grilled chicken feet
+oxtail	6285	CNF has no beef oxtail; stewing beef stands in and understates the collagen
+beef lengua	2668	Beef, tongue, raw
+beef tongue	2668
+beef tripe	2670	Beef, tripe, raw
+ox tripe	2670
+tuwalya	2670
+chicken wings	626	Chicken, broiler, wing, meat and skin, raw
+napa cabbage	501098	Cabbage, napa, raw
+crab	3096	Crustaceans, crab, blue, raw
+alimasag	3096
+alimango	3096
+tuna	3085	Fish, tuna, yellowfin, fresh, raw
+tuna jaw	3085	panga; the jaw is fattier than the loin, so this reads lean
+tanigue	3085	Spanish mackerel is not in CNF; yellowfin tuna is the closest firm-fleshed fish
+calabaza squash	2448	Squash, winter, acorn, raw
+liver spread	1192	Liver sausage, liverwurst, pork
+yardlong beans	2370	Beans, snap, raw -- same substitution as sitaw
+banana blossoms	2361	no CNF banana flower; cabbage is the closest by fibre and water, and it is
+banana blossom	2361	a garnish-weight ingredient in the dishes that use it
+boiling water	2933	Water, municipal
+rice washing	2933
+white rice	4471	Grains, rice, white, long-regular, dry
+extra firm tofu	4911	Tofu, silken, firm
+firm tofu	4911
+pork blood	1178	Sausage, blood sausage, raw -- CNF has no plain blood; blood sausage is the
+dinuguan blood	1178	nearest, and it carries added fat and grain this does not
+pork spare ribs	1933	Pork, side ribs centre cut (spareribs), lean and fat, raw
+back rib	1893	Pork, back ribs, lean and fat, raw
+malunggay leaves	2213	same spinach substitution as malunggay
+raisins	4318	no CNF raisin row; sugar stands in for a sweet dried fruit used by the spoonful
+garlic cloves	2394	Garlic, raw
+clove of garlic	2394
+#
+# --- fifth pass: broths written a dozen ways, and dishes used as ingredients.
+broth	501763	unqualified broth in these recipes is chicken or pork; chicken broth stands in
+homemade broth	501763
+pork broth	501763	CNF has no pork broth; chicken broth is the closest by composition
+vegetable broth	501763	understates nothing much -- broths are mostly water and salt
+beef or pork broth	927	Soup, broth, beef, ready-to-serve
+beef broth or pork broth	927
+pork or beef broth	927
+# A COOKED dish used as an ingredient needs COOKED numbers. Raw belly is 518 kcal and 9.3 g
+# protein per 100 g; once it is fried the water is gone and the same 100 g carries about
+# twice the protein. Pricing "1 lb leftover crispy pata meat" off the raw row halves the
+# protein of every sisig that uses it. This is the dry-vs-cooked rice problem wearing a
+# different hat. NOTE: the DISH rows are unaffected -- a lechon kawali recipe lists raw
+# belly, and summing raw ingredients is correct there because nutrients are conserved.
+lechon kawali	1814	Pork, shoulder, whole, lean and fat, ROASTED -- CNF has no fried-belly row;
+lechon	1762	this understates fat for a deep-fried skin-on cut and gets the protein right
+pata	6206	Pork, pickled, pork hocks
+pig's large intestine	1834	Pork, intestine (chitterlings), raw
+pork ears	1758	no CNF pork-ear row; belly is the nearest fatty cut, and it overstates the fat
+ox tail	6285	same substitution as oxtail
+fish steaks	3085	unqualified fish steaks; yellowfin tuna stands in for a firm-fleshed fish
+cauliflower	2385	Cauliflower, raw
+pancit canton noodles	4512	Pasta, egg noodles, enriched, dry
+bread crumbs	4501	Grains, wheat flour, white, all purpose -- crumbs are dried bread, close enough
+breadcrumbs	4501
+tamarind	1689	Tamarind, raw
+lemon lime soda	4318	sugar only; a soda's weight is water and sugar
+lemon soda	4318
+#
+# --- sixth pass: what was holding the Visayan dishes just under the coverage gate.
+dried taro leaves	2249	Taro leaves, raw -- laing's main ingredient
+taro leaves	2249
+dahon ng gabi	2249
+dried kale leaves	2395	Kale, raw
+chili leaves	2213	dahon ng sili; same spinach substitution
+pig ears	1758	no CNF pork-ear row; belly is the nearest fatty cut and overstates the fat
+pork ears	1758
+pork bones	501763	bones contribute broth, not meat; broth is the honest stand-in
+beef bones	927
+bone-in chicken parts	560	Chicken, broiler, meat and skin, raw
+chicken thigh or leg meat	853	Chicken, broiler, thigh, meat, raw
+skinless chicken thigh fillet	853
+chicken skin with fat	822	Chicken, broiler, skin only, raw
+chicken skin	822
+pork cheeks	1841	Pork, jowl, raw -- the actual sisig cut
+pork jowl	1841
+pork fat	1757	Pork, wholesale cuts, backfat, raw
+pork ham	1777	Pork, loin, whole, lean, raw
+pork adobo	1814	a cooked dish used as an ingredient -- see the note above
+leftover crispy pata meat	1814	crispy pata meat is fried, not raw
+crispy pata	1814
+bagnet	1814	as an INGREDIENT line. Bagnet the dish is computed from its own raw recipe.
+margarine	502774	Margarine, tub, non-hydrogenated, canola
+mayonnaise	422	no CNF mayonnaise row; olive oil is the dominant component by calories and
+lady's choice mayonnaise	422	this understates nothing that matters at the quantities used
+coconut juice	2566	Nuts, coconut water
+ice cubes	2933	Water, municipal
+water for boiling	2933
+lechon sauce	4317	a sweet liver-and-sugar sauce; brown sugar is the closest by calories
+banana blossom in brine	2361	same cabbage substitution as banana blossom
+tuna	3085	Fish, tuna, yellowfin, fresh, raw
+#
+# --- dry vs cooked. NOT the same ingredient: 100 g of dry rice is 360 kcal, cooked is 130.
+# The resolver drops leading words, so "day-old cooked rice" finds "cooked rice" here before
+# it can fall through to the dry default. Bare "rice" in an ingredient list means dry, because
+# that is what a recipe asks you to buy and measure.
+cooked rice	4523	Grains, rice, white, long-grain, regular, cooked
+uncooked rice	4471	Grains, rice, white, long-grain, regular, dry
+raw rice	4471
+steamed rice	4523
+cooked white rice	4523
+cooked jasmine rice	4523
+cooked noodles	4458	Pasta, egg noodles, enriched, cooked
+cooked pancit canton	4458
+cooked bihon	4874	Pasta, rice noodles, cooked
+cooked sotanghon	4874
+cooked pasta	4458
+cooked macaroni	4458
+raw pork	1813	same as unqualified pork -- shoulder, not belly
+raw chicken	560
+raw beef	6285
+#
+# --- adobo's tail: the corpus adobos everything, so its unmapped list is other proteins.
+round scad	3085	galunggong; no CNF row, yellowfin tuna stands in for a small oily fish
+galunggong	3085
+oysters	3115	Mollusks, mussel, blue, raw -- CNF has oysters but mussel matches the
+fish adobo	3085	preparation better in these recipes
+pork belly with ribs or spare ribs	1933	Pork, side ribs centre cut (spareribs), lean and fat, raw
+beef tenderloin	6285	stewing beef stands in; tenderloin is leaner, so this reads slightly fatty
+chicken thighs and drumstick	853	Chicken, broiler, thigh, meat, raw
+meatballs	6119	Pork, ground, lean, raw
