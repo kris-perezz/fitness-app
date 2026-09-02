@@ -79,9 +79,20 @@ export function dailySeries(days: IntakeDay[], from: string, to: string): TrendP
 }
 
 /**
- * How much of the window was guessed (S86).
+ * How much of the window was typed rather than picked (S86).
  *
- * Stated flat and never graded. An estimate is a legitimate entry (S35), and
+ * WHAT `estimate` ACTUALLY MEANS (S98). Not "a portion you eyeballed" -- the
+ * screen said that for months and it was never true. The flag is written in
+ * exactly two places, both hard-coded: `false` for any catalog food at any
+ * quantity, `true` for any typed one-off. Nothing lets anyone set it. So it
+ * means "no catalog row behind this", and a scale-weighed 240 g tenderloin
+ * typed by hand counts while an eyeballed scoop of catalog rice does not.
+ *
+ * The copy now says that. If the screen ever needs to mean the other thing,
+ * that is a `estimate` toggle on the quantity step and a different story --
+ * not a reworded sentence over the same number.
+ *
+ * Stated flat and never graded. A typed entry is a legitimate entry (S35), and
  * this number is context for how hard to lean on the rest of the screen rather
  * than a score to improve.
  */

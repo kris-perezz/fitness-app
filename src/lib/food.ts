@@ -3,8 +3,14 @@ import { scaleMicros, type Micros } from "./micros.ts";
 /**
  * Where a food's numbers came from (S6). Not the same question as `verified`,
  * which is one bit ("transcribed from a label") for a question with four
- * answers, and not the same question as an entry's `estimate` flag, which is
- * about how much you ate rather than what the food is.
+ * answers, and not the same question as an entry's `estimate` flag.
+ *
+ * S98 corrected what that last one means. It was documented here, in S6 and in
+ * S39 as being about QUANTITY -- how much you ate rather than what the food is
+ * -- and no code ever implemented that. It is set in two hard-coded places and
+ * means "this entry has no catalog row behind it". So the two are still
+ * different questions, and this one is still the only answer to "how good are
+ * these numbers"; the difference is just not the one that was written down.
  */
 export type FoodSource = "seed" | "off" | "label" | "manual" | "recipe" | "cnf";
 
