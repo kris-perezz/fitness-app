@@ -2,6 +2,7 @@ import test from "node:test";
 import assert from "node:assert/strict";
 
 import { cnfFoodId, cnfName, rankCnf } from "./cnf.ts";
+import { groupForId } from "./food-groups.ts";
 
 /**
  * Real rows, copied verbatim from the CNF catalog on 2026-09-01. The point of
@@ -36,13 +37,45 @@ test("the plain food outranks the prepared dish", () => {
   assert.ok(rank(841) < rank(4931), "a frozen stuffed product outranked the plain food");
 });
 
-test("raw and cooked stay separate rows", () => {
-  // Collapsing them would hide a ~30% swing per 100 g behind a name that looks
-  // like one food. A question the user had to answer beats an error they could
-  // not see.
+test("a curated group appears once, and its forms are still separate rows", () => {
+  // SUPERSEDES the original of this test, which asserted raw and cooked never
+  // fold into one row. The reasoning behind it stands -- a 30% swing hidden
+  // behind one name is an error the user cannot see -- but S92 answers it
+  // better: the rows stay separate and the choice moves into the drawer, where
+  // it can be labelled "Raw / Cooked" instead of being two strings differing in
+  // their sixth clause.
   const hits = rankCnf(CHICKEN, "chicken breast");
-  assert.ok(hits.some((h) => h.code === 841));
-  assert.ok(hits.some((h) => h.code === 7322));
+  const breast = hits.filter((h) => h.code === 841 || h.code === 7322);
+  assert.equal(breast.length, 1, "the group should be offered once");
+
+  // Both rows are still real and still reachable -- the group lists them.
+  const group = groupForId(cnfFoodId(841));
+  assert.equal(group?.variants.length, 4);
+  assert.ok(group?.variants.some((v) => v.id === cnfFoodId(7322)));
+});
+
+test("a curated group leads, even for a query that names no form", () => {
+  // The bug this pins: ranked on CNF's descriptions alone, "chicken" returned
+  // 25 rows of feet, giblets and gizzards and not one chicken breast, because
+  // every breast row fell outside the limit. The group has to answer to its
+  // own name or it is invisible to anybody who does not already know CNF's
+  // wording.
+  const hits = rankCnf(CHICKEN, "chicken");
+  assert.equal(hits[0].code, 841, "the curated group should lead");
+});
+
+test("a group matched by name opens on the form the file lists first", () => {
+  // Raw and skinless, not whichever sibling happens to score highest on its
+  // own wording. Naming a form explicitly still reaches that form.
+  assert.equal(rankCnf(CHICKEN, "chicken breast")[0].code, 841);
+  assert.equal(rankCnf(CHICKEN, "chicken breast grilled")[0].code, 7322);
+});
+
+test("folding happens before the limit, so merged rows do not spend slots", () => {
+  // Four rows becoming one must free three slots rather than shorten the list.
+  const hits = rankCnf(CHICKEN, "chicken breast", 3);
+  assert.equal(hits.length, 3);
+  assert.equal(new Set(hits.map((h) => h.code)).size, 3);
 });
 
 test("every word typed has to appear", () => {

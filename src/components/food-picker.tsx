@@ -288,10 +288,10 @@ function CnfSection({
         return;
       }
       setError(null);
-      // Folded the same way the local list is: 24 chicken-breast rows are one
-      // food, and the choice between its forms belongs in the drawer rather
-      // than in a list of strings differing in their fifth comma (S92).
-      setHits(collapseGroups(res.hits, (h) => cnfFoodId(h.code)));
+      // Already folded: rankCnf collapses a curated group BEFORE its own limit,
+      // so folding here as well would be a second opinion on a decision that
+      // has to be made where the limit is applied (S92).
+      setHits(res.hits);
     });
   };
 
