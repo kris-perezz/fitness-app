@@ -481,10 +481,14 @@ function OffSection({
               >
                 <ItemContent className="min-w-0">
                   <ItemTitle className="font-normal whitespace-normal">{hit.name}</ItemTitle>
-                  {/* The barcode is the one thing that distinguishes two rows
-                      OFF has under the same name -- a product relisted per
-                      country, most often. */}
-                  <ItemDescription className="tabular-nums">{hit.barcode}</ItemDescription>
+                  {/* The same line the local results carry, for the same
+                      reason: a search for "oreo" returns eleven products whose
+                      names are near-identical, and the calorie figure is what
+                      tells the biscuit from the yoghurt. The barcode used to be
+                      here and told nobody anything. */}
+                  <ItemDescription className="tabular-nums">
+                    {show(hit.kcal)} cal per 100 g
+                  </ItemDescription>
                 </ItemContent>
                 {picking === hit.barcode && <Spinner />}
               </button>

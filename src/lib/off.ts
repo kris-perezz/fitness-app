@@ -231,12 +231,32 @@ export async function fetchOffProduct(barcode: string): Promise<OffResult> {
   return food ? { status: "found", food } : { status: "miss" };
 }
 
-/** One row in the name-search list. Deliberately not a Food: see `searchOff`. */
-export type OffHit = { barcode: string; name: string };
+/**
+ * One row in the name-search list. Deliberately not a Food: see `searchOff`.
+ *
+ * `kcal` is per 100 g and comes free with the search response. It is here
+ * because a list of eleven products all called some variation of "Oreo" is not
+ * a choice anyone can make from names alone -- the calorie figure is what
+ * separates the biscuit from the yoghurt from the US formulation.
+ */
+export type OffHit = { barcode: string; name: string; kcal: number };
 
 export type OffSearchResult =
   | { status: "ok"; hits: OffHit[] }
   | { status: "error"; message: string };
+
+/**
+ * The same product is listed under both its UPC-12 and its EAN-13, which differ
+ * by a leading zero -- 622201428501 and 0622201428501 are one packet of Oreos,
+ * both resolving to the same 483 kcal record. Comparing the padded forms is what
+ * stops the list showing it twice.
+ *
+ * Only for DEDUPING. The barcode itself is passed on untouched, because it is
+ * the key the product endpoint and the catalog are keyed on.
+ */
+function barcodeKey(barcode: string): string {
+  return barcode.replace(/^0+/, "");
+}
 
 /**
  * Search-a-licious returns `brands` as an ARRAY, where the v2 product endpoint
@@ -327,16 +347,32 @@ export async function searchOff(query: string): Promise<OffSearchResult> {
 
   const rows = Array.isArray(body?.hits) ? (body.hits as OffSearchHit[]) : [];
   const hits: OffHit[] = [];
+  // Two different collisions, so two keys. `seen` is the same packet listed
+  // under both its barcode forms; `shown` is the same packet entered by several
+  // contributors under separate barcodes -- a search for "oreo" returns six rows
+  // all called "Oreo" at 483 cal, and no one can pick between those.
   const seen = new Set<string>();
+  const shown = new Set<string>();
 
   for (const row of rows) {
     const barcode = text(row.code);
-    if (!isBarcode(barcode) || seen.has(barcode)) continue;
-    if (num(row.nutriments?.["energy-kcal_100g"]) === null) continue;
+    if (!isBarcode(barcode)) continue;
+    const key = barcodeKey(barcode);
+    if (seen.has(key)) continue;
+    const kcal = num(row.nutriments?.["energy-kcal_100g"]);
+    if (kcal === null) continue;
     const name = hitName(row);
     if (!name) continue;
-    seen.add(barcode);
-    hits.push({ barcode, name });
+    // Same name AND the same calories means the same thing to log, whichever
+    // row you tap. Names alone would be too aggressive: OFF genuinely carries a
+    // US and a Canadian formulation of one product under one name, and those
+    // differ in the calories, which is exactly what this keeps apart.
+    const label = `${name.toLowerCase()}|${Math.round(kcal)}`;
+    if (shown.has(label)) continue;
+
+    seen.add(key);
+    shown.add(label);
+    hits.push({ barcode, name, kcal });
   }
 
   return { status: "ok", hits };
