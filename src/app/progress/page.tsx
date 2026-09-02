@@ -45,7 +45,7 @@ export default async function ProgressPage() {
       .order("log_date", { ascending: false }),
     supabase
       .from("nutrition_settings")
-      .select("goal_weight_lb, goal_rate_lb_per_week")
+      .select("goal_weight_lb, goal_rate_lb_per_week, display_weight_unit")
       .maybeSingle(),
     // The first day in the log, which is what bounds S62's All. One row, and
     // the (user_id, log_date) index answers it without a scan. Fetched here
@@ -76,6 +76,9 @@ export default async function ProgressPage() {
       earliest={first?.log_date ?? null}
       entries={weighIns}
       weeks={weeklyEnergy((intake ?? []) as IntakeDay[], weighIns)}
+      // S69. Defaults to lb when the column is missing, which is what the app
+      // stores anyway -- so a preview running ahead of 0024 reads correctly.
+      unit={settings?.display_weight_unit === "kg" ? "kg" : "lb"}
       adherence={adherence(
         (intake ?? []) as IntakeDay[],
         ((sessions ?? []) as { log_date: string }[]).map((w) => w.log_date),

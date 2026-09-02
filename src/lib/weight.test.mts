@@ -20,6 +20,9 @@ import {
   chartSeries,
   MIN_TREND_ENTRIES,
   daysBetween,
+  fromDisplay,
+  rateToDisplay,
+  toDisplay,
   deltaLabel,
   headline,
   chartWindow,
@@ -284,4 +287,26 @@ test("S62: every window has a title, and an unknown key falls back to the defaul
   assert.equal(chartWindow("ALL").title, "All time");
   // @ts-expect-error -- the guard exists for data arriving from outside TS.
   assert.equal(chartWindow("nonsense").key, "3M");
+});
+
+test("S69: pounds are what is stored, whatever is on screen", () => {
+  // A round trip must land back on the number that was typed. The failure this
+  // guards is rounding on the way IN: 82 kg stored as 180.8 lb reads back as
+  // 81.99 kg, a value nobody entered, changing under the user on reopen.
+  const typed = 82;
+  const stored = fromDisplay(typed, "kg");
+  assert.equal(Number(toDisplay(stored, "kg").toFixed(1)), typed);
+  assert.ok(stored > 180.7 && stored < 180.9, `82 kg is about 180.8 lb, got ${stored}`);
+});
+
+test("S69: pounds pass through untouched", () => {
+  assert.equal(toDisplay(163.4, "lb"), 163.4);
+  assert.equal(fromDisplay(163.4, "lb"), 163.4);
+});
+
+test("S69: a rate converts as a difference, not as a weight", () => {
+  // -2 lb/week is about -0.91 kg/week. The same factor, but it must not pick up
+  // an offset the way a temperature conversion would.
+  assert.equal(Number(rateToDisplay(-2, "kg").toFixed(2)), -0.91);
+  assert.equal(rateToDisplay(-2, "lb"), -2);
 });

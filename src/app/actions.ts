@@ -54,6 +54,12 @@ export type Goals = {
    */
   goal_weight_lb: number | null;
   goal_rate_lb_per_week: number | null;
+  /**
+   * S69. What weights are SHOWN in. Storage stays pounds everywhere, so this
+   * never changes a stored number -- deliberately not called `weight_unit`,
+   * which already means something else on `foods` (S40).
+   */
+  display_weight_unit: "lb" | "kg";
 };
 
 export async function saveGoals(goals: Goals) {
@@ -70,6 +76,8 @@ export async function saveGoals(goals: Goals) {
 
   revalidatePath("/log");
   revalidatePath("/goals");
+  // S69. The progress tab reads the unit and every weight on it changes.
+  revalidatePath("/progress");
   return { error: null };
 }
 

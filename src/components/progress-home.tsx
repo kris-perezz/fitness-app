@@ -20,6 +20,9 @@ import {
   rateLabel,
   weeklyRate,
   windowLabel,
+  toDisplay,
+  fromDisplay,
+  type DisplayUnit,
   type ChartWindowKey,
   type WeighIn,
 } from "@/lib/weight";
@@ -70,6 +73,7 @@ export function ProgressHome({
   goal,
   weeks,
   adherence,
+  unit,
 }: {
   today: string;
   loadedFrom: string;
@@ -81,6 +85,13 @@ export function ProgressHome({
   weeks: EnergyWeek[];
   /** S65. Effort, so a flat trend is not read as a metabolism story. */
   adherence: Adherence;
+  /**
+   * S69. The unit on SCREEN. Storage is always pounds, so this is applied at
+   * every edge -- the field, the list, the headline, the rate and the axis. All
+   * of them or none: a screen that mixes units is worse than one in the unit
+   * you did not want.
+   */
+  unit: DisplayUnit;
 }) {
   const [entries, setEntries] = useState(initialEntries);
   const [from, setFrom] = useState(loadedFrom);
@@ -211,10 +222,11 @@ export function ProgressHome({
           </Empty>
         ) : (
           <>
-        <Headline head={head} rate={rate} goal={goal} />
+        <Headline head={head} rate={rate} goal={goal} unit={unit} />
 
         <WeightChart
           entries={entries}
+          unit={unit}
           from={chartFrom}
           windowKey={windowKey}
           onWindowChange={setWindowKey}
@@ -223,7 +235,7 @@ export function ProgressHome({
 
         <ShowedUp adherence={adherence} />
 
-        <EnergyBalance weeks={weeks} />
+        <EnergyBalance weeks={weeks} unit={unit} />
 
         <div className="flex justify-center border-b border-border px-2 py-3">
           <Calendar
@@ -270,13 +282,23 @@ export function ProgressHome({
                       className="text-left"
                       aria-label={`Edit ${shortDate(e.date)}`}
                     >
-                      <span className="text-sm">{trim(e.weightLb)} lb</span>{" "}
+                      <span className="text-sm">
+                        {trim(toDisplay(e.weightLb, unit))} {unit}
+                      </span>{" "}
                       {/* The delta is why the list is worth reading rather than
                           the chart: the chart shows the shape, these are the
                           numbers that made it. Muted, never coloured -- a gain
                           is not a failure and red would say it was (S78). */}
                       <span className="ml-1 text-xs text-muted-foreground">
-                        {deltaLabel(e.weightLb, previousOf.get(e.date) ?? null) ?? "—"}
+                        {/* Converted BEFORE the subtraction, not after: a
+                            difference of pounds relabelled kg would be wrong by
+                            the conversion factor. */}
+                        {deltaLabel(
+                          toDisplay(e.weightLb, unit),
+                          previousOf.get(e.date) != null
+                            ? toDisplay(previousOf.get(e.date)!, unit)
+                            : null,
+                        ) ?? "—"}
                       </span>
                     </button>
                   </ItemActions>
@@ -293,6 +315,7 @@ export function ProgressHome({
         date={editing}
         onOpenChange={(open) => !open && setEditing(null)}
         existing={editing ? (byDate.get(editing) ?? null) : null}
+        unit={unit}
         // Pre-filled with the most recent weight, because the answer is almost
         // always within a pound of it and confirming beats typing. NOT from
         // today's entry when one exists -- that path is an edit and says so.
@@ -329,10 +352,12 @@ function Headline({
   head,
   rate,
   goal,
+  unit,
 }: {
   head: ReturnType<typeof headlineOf>;
   rate: ReturnType<typeof weeklyRate>;
   goal: WeightGoal;
+  unit: DisplayUnit;
 }) {
   if (!head) return null;
 
@@ -347,7 +372,7 @@ function Headline({
             must not look like the same number changing its mind. */}
         <p className="text-xs text-muted-foreground">Last reading</p>
         <p className="text-3xl font-semibold tabular-nums">
-          {head.latest.weightLb.toFixed(1)} lb
+          {toDisplay(head.latest.weightLb, unit).toFixed(1)} {unit}
         </p>
         <p className="mt-1 text-xs text-muted-foreground">
           {shortDate(head.latest.date)} · {need} more {need === 1 ? "weigh-in" : "weigh-ins"} and
@@ -368,10 +393,12 @@ function Headline({
       {/* Both weights to one decimal. `trim` drops a trailing .0, which printed
           the trend as "163" next to a reading of "161.8" and made two
           measurements of one quantity look like two kinds of number. */}
-      <p className="text-3xl font-semibold tabular-nums">{head.trendLb.toFixed(1)} lb</p>
+      <p className="text-3xl font-semibold tabular-nums">
+        {toDisplay(head.trendLb, unit).toFixed(1)} {unit}
+      </p>
       {rate ? (
         <p className="mt-1 text-sm text-muted-foreground">
-          <span className="tabular-nums">{rateLabel(rate)}</span> {windowLabel(rate.days)}
+          <span className="tabular-nums">{rateLabel(rate, unit)}</span> {windowLabel(rate.days)}
         </p>
       ) : null}
       {/* The reading stays on screen and stays subordinate. Showing the trend
@@ -398,14 +425,14 @@ function Headline({
             <>
               {" · "}
               <span className="tabular-nums">
-                {rateLabel({ lbPerWeek: goal.rateLbPerWeek, days: 0 })}
+                {rateLabel({ lbPerWeek: goal.rateLbPerWeek, days: 0 }, unit)}
               </span>
             </>
           )}
           {goal.weightLb != null && (
             <>
               {" · "}
-              <span className="tabular-nums">{trim(goal.weightLb)} lb</span>
+              <span className="tabular-nums">{trim(toDisplay(goal.weightLb, unit))} {unit}</span>
             </>
           )}
         </p>
@@ -430,6 +457,7 @@ function WeighInSheet({
   onOpenChange,
   onSaved,
   onDeleted,
+  unit,
 }: {
   date: string | null;
   existing: WeighIn | null;
@@ -438,6 +466,7 @@ function WeighInSheet({
   onOpenChange: (open: boolean) => void;
   onSaved: (entry: WeighIn) => void;
   onDeleted: (date: string) => void;
+  unit: DisplayUnit;
 }) {
   const [value, setValue] = useState("");
   const [openedFor, setOpenedFor] = useState<string | null>(date);
@@ -450,25 +479,36 @@ function WeighInSheet({
   // at last is a wrong number one tap from being saved.
   if (date !== null && date !== openedFor) {
     setOpenedFor(date);
-    setValue(existing ? String(existing.weightLb) : suggestion !== null ? String(suggestion) : "");
+    // Shown in the display unit, and rounded only here -- the stored pound
+    // value keeps its precision so a kg round trip lands on what was typed.
+    setValue(
+      existing
+        ? String(round1(toDisplay(existing.weightLb, unit)))
+        : suggestion !== null
+          ? String(round1(toDisplay(suggestion, unit)))
+          : "",
+    );
   } else if (date === null && openedFor !== null) {
     setOpenedFor(null);
   }
 
   function save() {
     if (date === null) return;
-    const lb = Number(value);
-    if (!Number.isFinite(lb) || lb <= 0) {
+    const typed = Number(value);
+    if (!Number.isFinite(typed) || typed <= 0) {
       toast.error("Enter a weight");
       return;
     }
+    // Straight back to pounds, UNROUNDED. Storage is always lb (S69); rounding
+    // here would make 82 kg read back as 81.99 the next time the sheet opened.
+    const lb = fromDisplay(typed, unit);
     startTransition(async () => {
       const res = await saveWeighIn(date, lb, existing?.note ?? null);
       if (res.error) {
         toast.error(res.error);
         return;
       }
-      onSaved({ date, weightLb: Math.round(lb * 10) / 10, note: existing?.note ?? null });
+      onSaved({ date, weightLb: lb, note: existing?.note ?? null });
       onOpenChange(false);
     });
   }
@@ -513,10 +553,10 @@ function WeighInSheet({
               // rather than appending to it, the same fix the load field got.
               onFocus={(e) => e.currentTarget.select()}
               placeholder="0.0"
-              aria-label="Weight in pounds"
+              aria-label={`Weight in ${unit === "kg" ? "kilograms" : "pounds"}`}
             />
             <InputGroupAddon align="inline-end">
-              <InputGroupText>lb</InputGroupText>
+              <InputGroupText>{unit}</InputGroupText>
             </InputGroupAddon>
           </InputGroup>
         </div>
@@ -592,13 +632,19 @@ function ShowedUp({ adherence }: { adherence: Adherence }) {
   );
 }
 
-/** A signed change in pounds. `deltaLabel` takes two readings; this takes the difference. */
-function signedLb(change: number): string {
-  if (Math.abs(change) < 0.05) return "0.0 lb";
-  return `${change > 0 ? "+" : "−"}${Math.abs(change).toFixed(1)} lb`;
+/** One decimal, for a value already converted to the display unit. */
+function round1(n: number): number {
+  return Math.round(n * 10) / 10;
 }
 
-function EnergyBalance({ weeks }: { weeks: EnergyWeek[] }) {
+/** A signed change in pounds. `deltaLabel` takes two readings; this takes the difference. */
+function signedWeight(change: number, unit: DisplayUnit): string {
+  const shown = toDisplay(change, unit);
+  if (Math.abs(shown) < 0.05) return `0.0 ${unit}`;
+  return `${shown > 0 ? "+" : "−"}${Math.abs(shown).toFixed(1)} ${unit}`;
+}
+
+function EnergyBalance({ weeks, unit }: { weeks: EnergyWeek[]; unit: DisplayUnit }) {
   // BOTH halves, not just the food half. A week with five logged days but no
   // pair of weigh-ins has an intake average and no change to set it against,
   // and a column of dashes is not an answer -- it is the shape of one.
@@ -636,7 +682,7 @@ function EnergyBalance({ weeks }: { weeks: EnergyWeek[] }) {
                   {/* Signed, and never coloured. A pound down is not a win and a
                       pound up is not a failure -- the row states what happened
                       and the reader owns what it means (S70). */}
-                  {week.changeLb === null ? "—" : signedLb(week.changeLb)}
+                  {week.changeLb === null ? "—" : signedWeight(week.changeLb, unit)}
                 </span>
               </span>
             ) : (
@@ -677,12 +723,14 @@ const weightConfig = {
 
 function WeightChart({
   entries,
+  unit,
   from,
   windowKey,
   onWindowChange,
   extending,
 }: {
   entries: WeighIn[];
+  unit: DisplayUnit;
   from: string;
   windowKey: ChartWindowKey;
   onWindowChange: (key: ChartWindowKey) => void;
@@ -691,7 +739,18 @@ function WeightChart({
   // Smoothed over the WHOLE log and only then clipped, so the line entering
   // from the left carries its history rather than restarting at the window
   // edge with a fortnight of catching up to do.
-  const points = useMemo(() => chartSeries(entries, from), [entries, from]);
+  // Converted AFTER smoothing, never before: the EMA is a weighted average, so
+  // scaling its inputs or its output gives the same line -- but doing it once
+  // at the edge keeps a single place where the unit is applied (S69).
+  const points = useMemo(
+    () =>
+      chartSeries(entries, from).map((p) => ({
+        ...p,
+        weightLb: p.weightLb === null ? null : toDisplay(p.weightLb, unit),
+        trendLb: p.trendLb === null ? null : toDisplay(p.trendLb, unit),
+      })),
+    [entries, from, unit],
+  );
   const domain = useMemo(() => axisDomain(points), [points]);
 
   // Thin data is a sentence, not a chart (S79). Below the trend floor there is

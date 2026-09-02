@@ -20,7 +20,9 @@ import {
   type MacroGoals,
   type MacroKey,
 } from "@/lib/goals";
+import { ToggleGroup, ToggleGroupItem } from "@/components/ui/toggle-group";
 import { ThemeToggle } from "@/components/theme-toggle";
+import { fromDisplay, toDisplay, type DisplayUnit } from "@/lib/weight";
 import { toast } from "sonner";
 
 type Goals =
@@ -28,10 +30,17 @@ type Goals =
       calorie_goal: number;
       goal_weight_lb: number | null;
       goal_rate_lb_per_week: number | null;
+      display_weight_unit?: DisplayUnit | null;
     } & MacroGoals)
   | null;
 
 type FieldName = "calorie_goal" | MacroKey;
+
+/** A stored pound goal as the string the field starts with, or "" for no goal. */
+function showGoal(lb: number | null | undefined, unit: DisplayUnit): string {
+  if (lb == null) return "";
+  return String(Math.round(toDisplay(lb, unit) * 10) / 10);
+}
 
 const MACRO_LABELS: Record<MacroKey, string> = {
   protein_goal_g: "Protein (g)",
@@ -40,10 +49,21 @@ const MACRO_LABELS: Record<MacroKey, string> = {
 };
 
 export function GoalsForm({ goals }: { goals: Goals }) {
+  /**
+   * S69. The unit every weight on screen is shown in. Storage is always pounds,
+   * so this converts at the edges -- here, and on the progress tab.
+   *
+   * It lives on THIS screen because it is a preference, and it sits with the
+   * weight goals because those are the fields it changes under you.
+   */
+  const [unit, setUnit] = useState<DisplayUnit>(
+    goals?.display_weight_unit === "kg" ? "kg" : "lb",
+  );
   // Goals saved before the split was reconciled -- or edited straight in the
   // database -- arrive out of balance, so correct them on the way in rather
   // than waiting for the user to touch a field.
   const [form, setForm] = useState(() => {
+    const startUnit: DisplayUnit = goals?.display_weight_unit === "kg" ? "kg" : "lb";
     const stored = {
       calorie_goal: goals?.calorie_goal ?? 2000,
       protein_goal_g: goals?.protein_goal_g ?? 150,
@@ -62,9 +82,11 @@ export function GoalsForm({ goals }: { goals: Goals }) {
       // Empty string is the absent goal, and it round-trips as null. `?? ""`
       // rather than `|| ""` so a goal rate of 0 -- maintain, a real answer --
       // survives instead of reading as no goal at all (S60).
-      goal_weight_lb: goals?.goal_weight_lb != null ? String(goals.goal_weight_lb) : "",
-      goal_rate_lb_per_week:
-        goals?.goal_rate_lb_per_week != null ? String(goals.goal_rate_lb_per_week) : "",
+      // Held in the DISPLAY unit while being edited, and converted back to
+      // pounds on save. The alternative -- holding pounds and converting on
+      // every render -- makes the field fight the user's keystrokes.
+      goal_weight_lb: showGoal(goals?.goal_weight_lb, startUnit),
+      goal_rate_lb_per_week: showGoal(goals?.goal_rate_lb_per_week, startUnit),
     };
   });
   const [pending, startTransition] = useTransition();
@@ -82,10 +104,36 @@ export function GoalsForm({ goals }: { goals: Goals }) {
    * are a target for the body, not a share of the day's energy, and running
    * them through `balance` would be a category error.
    */
-  const weightGoals = () => ({
-    goal_weight_lb: parseGoal(form.goal_weight_lb),
-    goal_rate_lb_per_week: parseGoal(form.goal_rate_lb_per_week),
-  });
+  const weightGoals = () => {
+    const weight = parseGoal(form.goal_weight_lb);
+    const rate = parseGoal(form.goal_rate_lb_per_week);
+    return {
+      // Back to pounds on the way out, unrounded -- the same rule the weigh-in
+      // sheet follows, so a kg goal does not drift by a tenth per save.
+      goal_weight_lb: weight === null ? null : fromDisplay(weight, unit),
+      goal_rate_lb_per_week: rate === null ? null : fromDisplay(rate, unit),
+      display_weight_unit: unit,
+    };
+  };
+
+  /**
+   * Switching the unit REWRITES THE FIELDS rather than relabelling them.
+   * Leaving "180" in the box and changing the suffix to kg would silently
+   * restate the goal as 397 lb the next time it was saved.
+   */
+  function switchUnit(next: DisplayUnit) {
+    if (next === unit) return;
+    const convert = (text: string) => {
+      const n = parseGoal(text);
+      return n === null ? "" : String(Math.round(toDisplay(fromDisplay(n, unit), next) * 10) / 10);
+    };
+    setForm({
+      ...form,
+      goal_weight_lb: convert(form.goal_weight_lb),
+      goal_rate_lb_per_week: convert(form.goal_rate_lb_per_week),
+    });
+    setUnit(next);
+  }
 
   const current = numbers();
 
@@ -195,7 +243,7 @@ export function GoalsForm({ goals }: { goals: Goals }) {
                 htmlFor="goal_weight_lb"
                 className="text-xs font-normal text-muted-foreground"
               >
-                Goal weight (lb)
+                Goal weight ({unit})
               </FieldLabel>
               <Input
                 id="goal_weight_lb"
@@ -212,7 +260,7 @@ export function GoalsForm({ goals }: { goals: Goals }) {
                 htmlFor="goal_rate_lb_per_week"
                 className="text-xs font-normal text-muted-foreground"
               >
-                Goal rate (lb/week)
+                Goal rate ({unit}/week)
               </FieldLabel>
               <Input
                 id="goal_rate_lb_per_week"
@@ -225,10 +273,32 @@ export function GoalsForm({ goals }: { goals: Goals }) {
               />
             </Field>
           </div>
+          <div className="flex items-center justify-between gap-3 pt-1">
+            <span className="text-xs text-muted-foreground">Show weight in</span>
+            {/* Registry ToggleGroup, the same control the chart window and the
+                by-amount switch use -- two states with no default that is right
+                for everybody is a toggle, not a dropdown. */}
+            <ToggleGroup
+              type="single"
+              size="sm"
+              variant="outline"
+              value={unit}
+              onValueChange={(next) => next && switchUnit(next as DisplayUnit)}
+              aria-label="Weight unit"
+            >
+              <ToggleGroupItem value="lb" className="px-3 text-xs">
+                lb
+              </ToggleGroupItem>
+              <ToggleGroupItem value="kg" className="px-3 text-xs">
+                kg
+              </ToggleGroupItem>
+            </ToggleGroup>
+          </div>
           <FieldContent>
             <FieldDescription className="text-xs">
               Negative to lose, positive to gain, 0 to maintain. Leave either
-              blank for no goal.
+              blank for no goal. Weight is always stored in pounds; the unit only
+              changes what you read.
             </FieldDescription>
           </FieldContent>
         </FieldGroup>

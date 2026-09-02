@@ -272,9 +272,14 @@ export function weeklyRate(
  * A true zero prints as `0.0`, not as "holding" or "maintaining": those are
  * interpretations, and a rate that rounds to nothing is still a rate.
  */
-export function rateLabel(rate: Rate): string {
+export function rateLabel(rate: Rate, unit: DisplayUnit = "lb"): string {
   const sign = rate.lbPerWeek > 0 ? "+" : rate.lbPerWeek < 0 ? "−" : "";
-  return `${sign}${Math.abs(rate.lbPerWeek).toFixed(1)} lb/week`;
+  // A RATE IS A DIFFERENCE, so it scales by the factor and picks up no offset.
+  // Converting the endpoints and subtracting would give the same answer here;
+  // converting the difference is the version that stays right if a unit with an
+  // offset is ever added.
+  const shown = Math.abs(rateToDisplay(rate.lbPerWeek, unit));
+  return `${sign}${shown.toFixed(1)} ${unit}/week`;
 }
 
 /** "over the last 4 weeks" -- a rate without its window is not a fact (S59). */
@@ -403,4 +408,43 @@ export function chartWindowFrom(
     d.getDate(),
   ).padStart(2, "0")}`;
   return earliest && earliest > start ? earliest : start;
+}
+
+// ------------------------------------------- the unit you think in (S69)
+
+/**
+ * Display unit. STORAGE IS ALWAYS POUNDS (training open decision 1) and this
+ * converts at the edges -- the field, the list, the headline, the rate and the
+ * axis. All of them or none: a screen that mixes units is worse than one in the
+ * unit you did not want.
+ */
+export type DisplayUnit = "lb" | "kg";
+
+const LB_PER_KG = 2.20462262;
+
+/** Stored pounds into the unit on screen. */
+export function toDisplay(lb: number, unit: DisplayUnit): number {
+  return unit === "kg" ? lb / LB_PER_KG : lb;
+}
+
+/**
+ * What was typed, back into stored pounds.
+ *
+ * NOT rounded here. Typing 82 kg stores 180.79..., and rounding it to 180.8
+ * would mean the number read back to you is 81.99 -- a value you never entered,
+ * changing under you the moment you reopen the sheet. Rounding belongs at the
+ * display edge, which is `toDisplay` plus a toFixed, and nowhere else.
+ */
+export function fromDisplay(value: number, unit: DisplayUnit): number {
+  return unit === "kg" ? value * LB_PER_KG : value;
+}
+
+/** A rate is a difference, so it converts by the same factor, not the same way. */
+export function rateToDisplay(lbPerWeek: number, unit: DisplayUnit): number {
+  return toDisplay(lbPerWeek, unit);
+}
+
+/** The word, for a label or an axis. */
+export function unitLabel(unit: DisplayUnit): string {
+  return unit;
 }
