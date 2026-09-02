@@ -1,3 +1,5 @@
+import type { Micros } from "./micros.ts";
+
 /**
  * Where a food's numbers came from (S6). Not the same question as `verified`,
  * which is one bit ("transcribed from a label") for a question with four
@@ -25,6 +27,17 @@ export type Food = {
   carb_g: number;
   fiber_g: number;
   sodium_mg: number | null;
+  /**
+   * S36. Grams of sugar per the food's basis. A FIRST-CLASS COLUMN since 0001,
+   * not a micro -- it has had a home in the schema all along and was simply
+   * being dropped by every read and write because this type did not declare it.
+   */
+  sugar_g: number | null;
+  /**
+   * S36. The vitamins and minerals, keyed by `lib/micros.ts`. Absent is absent:
+   * a nutrient with no value is missing rather than zero.
+   */
+  micros: Micros;
   verified: boolean;
   source: FoodSource;
   /** Set for scanned packaged goods; null for whole foods and recipe outputs. */

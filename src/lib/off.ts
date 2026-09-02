@@ -1,4 +1,5 @@
 import type { Food } from "@/lib/food";
+import type { MicroKey, Micros } from "./micros.ts";
 
 /**
  * Open Food Facts client. Server-side only: the browser must not be the one
@@ -80,6 +81,48 @@ function servingGrams(product: OffProduct): number | null {
 }
 
 /**
+ * OFF's nutriment keys onto the app's vocabulary (S36).
+ *
+ * The right-hand side is `lib/micros.ts` and nothing else -- inventing a key
+ * here is how a `vitaminD_ug` ends up sitting beside a `vit_d_ug`, summing to
+ * nothing and looking fine.
+ *
+ * UNIT MISMATCHES ARE THE WHOLE RISK. OFF publishes grams for everything it can
+ * and the app stores mg or ug, so each line below carries its own factor. A
+ * missing factor is not a crash; it is calcium reported at a thousandth of the
+ * truth.
+ */
+const OFF_MICROS: [key: string, target: MicroKey, factor: number][] = [
+  ["calcium_100g", "calcium_mg", 1000],
+  ["iron_100g", "iron_mg", 1000],
+  ["potassium_100g", "potassium_mg", 1000],
+  ["magnesium_100g", "magnesium_mg", 1000],
+  ["zinc_100g", "zinc_mg", 1000],
+  ["phosphorus_100g", "phosphorus_mg", 1000],
+  ["cholesterol_100g", "cholesterol_mg", 1000],
+  ["vitamin-c_100g", "vit_c_mg", 1000],
+  ["vitamin-b6_100g", "vit_b6_mg", 1000],
+  // OFF publishes these in grams too, so a microgram target is a factor of a
+  // million. Getting this one wrong reports vitamin D as zero to two decimals.
+  ["vitamin-d_100g", "vit_d_ug", 1_000_000],
+  ["vitamin-a_100g", "vit_a_ug", 1_000_000],
+  ["vitamin-b12_100g", "vit_b12_ug", 1_000_000],
+  ["selenium_100g", "selenium_ug", 1_000_000],
+  ["folates_100g", "folate_ug", 1_000_000],
+];
+
+function offMicros(n: Nutriments): Micros {
+  const out: Micros = {};
+  for (const [key, target, factor] of OFF_MICROS) {
+    const value = num(n[key]);
+    // ABSENT IS ABSENT: a nutrient OFF has no value for stays out of the
+    // object rather than arriving as a zero somebody will later total.
+    if (value !== null) out[target] = value * factor;
+  }
+  return out;
+}
+
+/**
  * OFF publishes per-100g nutriments, which maps straight onto our per_100g
  * basis. Sodium is the one unit mismatch: they give grams, we store mg.
  */
@@ -115,6 +158,10 @@ function toFood(product: OffProduct, barcode: string): Food | null {
     carb_g: num(n["carbohydrates_100g"]) ?? 0,
     fiber_g: num(n["fiber_100g"]) ?? 0,
     sodium_mg: sodium_g === null ? null : sodium_g * 1000,
+    // S36. Already in the response `fetchOffProduct` parses, and dropped on the
+    // floor until now. No new request, no new source, no new failure mode.
+    sugar_g: num(n["sugars_100g"]),
+    micros: offMicros(n),
     verified: false,
     source: "off",
     barcode,

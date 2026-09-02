@@ -67,13 +67,12 @@ export type CnfSearchResult =
 
 export type CnfFoodResult =
   /**
-   * `micros` rides alongside the Food rather than inside it: the `foods` table
-   * has had a `micros` jsonb since 0001, but the `Food` TYPE does not carry one
-   * until S36 plumbs it through every write path. Returning it separately lets
-   * the insert store what CNF gave us without this story quietly doing S36's
-   * job -- and without throwing away values we would have to re-fetch.
+   * `micros` used to ride ALONGSIDE the Food, because the `foods` table has had
+   * a `micros` jsonb since 0001 but the `Food` type did not carry one. S36
+   * plumbed it through, so the food is now whole and the extra field is gone --
+   * which also means the CNF write path stopped needing a special case.
    */
-  | { status: "found"; food: Food; micros: Record<string, number> }
+  | { status: "found"; food: Food }
   | { status: "miss" }
   | { status: "error"; message: string };
 
@@ -260,6 +259,8 @@ const FAT = 204;
 const CARB = 205;
 const FIBRE = 291;
 const SODIUM = 307;
+// S36. A first-class column since 0001, not a micro.
+const SUGAR = 269;
 
 /**
  * The micronutrients, keyed by the vocabulary 0002 established.
@@ -340,7 +341,6 @@ export async function fetchCnfFood(code: number, description: string): Promise<C
 
   return {
     status: "found",
-    micros,
     food: {
       id: cnfFoodId(code),
       name: cnfName(description),
@@ -360,6 +360,8 @@ export async function fetchCnfFood(code: number, description: string): Promise<C
       carb_g: by.get(CARB) ?? 0,
       fiber_g: by.get(FIBRE) ?? 0,
       sodium_mg: by.get(SODIUM) ?? null,
+      sugar_g: by.get(SUGAR) ?? null,
+      micros,
       verified: false,
       source: "cnf",
       barcode: null,

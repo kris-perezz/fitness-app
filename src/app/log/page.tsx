@@ -1,5 +1,6 @@
 import { createClient } from "@/lib/supabase/server";
 import { wakingDate, type Food } from "@/lib/food";
+import { toMicros } from "@/lib/micros";
 import { LogScreen } from "@/components/log-screen";
 
 export const dynamic = "force-dynamic";
@@ -50,5 +51,11 @@ function visibleFoods(rows: CatalogRow[], userId: string | null): Food[] {
       .filter((r) => userId !== null && r.created_by === userId && r.supersedes)
       .map((r) => r.supersedes as string),
   );
-  return rows.filter((r) => !corrected.has(r.id));
+  return rows
+    .filter((r) => !corrected.has(r.id))
+    // S36. `micros` is jsonb, so what comes back is whatever is stored -- not
+    // necessarily the vocabulary this app recognises. Narrowed here, at the one
+    // boundary where a database value becomes a `Food`, so nothing downstream
+    // has to wonder whether a key is one of ours.
+    .map((r) => ({ ...r, micros: toMicros(r.micros) }));
 }

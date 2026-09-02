@@ -18,6 +18,7 @@
  */
 
 import { scale, type Food, type Macros } from "./food.ts";
+import { addMicros, scaleMicros, type Micros } from "./micros.ts";
 
 /** A stored ingredient row resolved against its food. */
 export type RecipeLine = {
@@ -91,6 +92,26 @@ export function perServingMacros(lines: RecipeLine[], servings: number): Macros 
     fiber_g: round1(total.fiber_g / servings),
     sodium_mg: Math.round(total.sodium_mg / servings),
   };
+}
+
+/**
+ * The micros one serving carries (S36).
+ *
+ * Scaled per ingredient with the SAME factor `scale()` uses, then summed and
+ * divided. Absent stays absent through the sum: an ingredient with no iron
+ * figure contributes nothing to iron rather than contributing a zero, so a
+ * recipe made of one known and one unknown food does not report the known half
+ * as the whole.
+ */
+export function perServingMicros(lines: RecipeLine[], servings: number): Micros {
+  if (!(servings > 0)) return {};
+
+  let total: Micros = {};
+  for (const line of lines) {
+    const factor = line.food.basis === "per_100g" ? line.qty / 100 : line.qty;
+    total = addMicros(total, scaleMicros(line.food.micros, factor));
+  }
+  return scaleMicros(total, 1 / servings);
 }
 
 /**
@@ -199,6 +220,10 @@ export function generatedFood(
   lines: RecipeLine[],
 ): Food {
   const per = perServingMacros(lines, details.servings);
+  // S36. Summed from the ingredients and divided the same way the macros are.
+  // A recipe row that carried macros but no micros would make cooking the one
+  // way to lose them, which is the opposite of what a recipe is for.
+  const perMicros = perServingMicros(lines, details.servings);
   return {
     id: recipeFoodId(recipeId),
     name: details.name,
@@ -221,6 +246,11 @@ export function generatedFood(
     carb_g: per.carb_g,
     fiber_g: per.fiber_g,
     sodium_mg: per.sodium_mg,
+    // Null rather than 0: nothing sums a recipe's sugar yet, and claiming a
+    // dish contains no sugar because nobody added it up is the exact "absent
+    // is absent" mistake micros are careful about (S36).
+    sugar_g: null,
+    micros: perMicros,
     // `verified` means "transcribed from a label" (0001_init.sql). A computed
     // dish never is, however trustworthy its ingredients.
     verified: false,

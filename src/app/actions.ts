@@ -236,12 +236,10 @@ export async function addCnfFood(
     return { food: null, error: "Health Canada has no usable nutrition for that food." };
   }
 
+  // Micros ride INSIDE the food now (S36), so there is nothing to add here
+  // beyond the owner -- the special case this insert used to carry is gone.
   const { error } = await supabase.from("foods").insert({
     ...result.food,
-    // Written straight to the column, which has existed since 0001. The `Food`
-    // type does not carry micros until S36, so this is deliberately not spread
-    // from `result.food` -- see the note on CnfFoodResult.
-    micros: result.micros,
     created_by: user.id,
   });
   // 23505: somebody else chose the same food first. Same outcome as finding it.

@@ -188,6 +188,11 @@ function toDraft(x: Extracted): LabelDraft | null {
     // than a claim; on the per_100g branch it mirrors `unit` as 0008 requires.
     weight_unit: unit,
     grams_per_unit: countable ? null : amount,
+    // S36 gave `Food` these fields; S37 is what fills them from the panel. Empty
+    // rather than absent so a label food is the same SHAPE as a scanned one --
+    // and empty is the honest value, since nothing has read them yet.
+    sugar_g: null,
+    micros: {},
     kcal: kcal * factor,
     protein_g: at(x.protein_g),
     fat_g: at(x.fat_g),
