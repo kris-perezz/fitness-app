@@ -21,6 +21,7 @@ import {
   type MacroKey,
 } from "@/lib/goals";
 import { ToggleGroup, ToggleGroupItem } from "@/components/ui/toggle-group";
+import { Switch } from "@/components/ui/switch";
 import { ThemeToggle } from "@/components/theme-toggle";
 import { fromDisplay, toDisplay, type DisplayUnit } from "@/lib/weight";
 import { toast } from "sonner";
@@ -31,6 +32,7 @@ type Goals =
       goal_weight_lb: number | null;
       goal_rate_lb_per_week: number | null;
       display_weight_unit?: DisplayUnit | null;
+      strict_mode?: boolean | null;
     } & MacroGoals)
   | null;
 
@@ -59,6 +61,13 @@ export function GoalsForm({ goals }: { goals: Goals }) {
   const [unit, setUnit] = useState<DisplayUnit>(
     goals?.display_weight_unit === "kg" ? "kg" : "lb",
   );
+
+  /**
+   * S75. OFF for every account and turned on only here (tone decision 3). The
+   * app never suggests it, prompts for it or upsells it -- a calm default is
+   * only a default if nothing nags you out of it.
+   */
+  const [strict, setStrict] = useState(goals?.strict_mode === true);
   // Goals saved before the split was reconciled -- or edited straight in the
   // database -- arrive out of balance, so correct them on the way in rather
   // than waiting for the user to touch a field.
@@ -113,6 +122,7 @@ export function GoalsForm({ goals }: { goals: Goals }) {
       goal_weight_lb: weight === null ? null : fromDisplay(weight, unit),
       goal_rate_lb_per_week: rate === null ? null : fromDisplay(rate, unit),
       display_weight_unit: unit,
+      strict_mode: strict,
     };
   };
 
@@ -301,6 +311,25 @@ export function GoalsForm({ goals }: { goals: Goals }) {
               changes what you read.
             </FieldDescription>
           </FieldContent>
+        </FieldGroup>
+
+        {/* S75. A Field with a real description under it, not a bare switch in
+            a row of switches -- the registry's own field-switch pattern. The
+            disclaimer is shown HERE, where the decision is made, rather than in
+            a help page nobody opens. */}
+        <FieldGroup className="gap-2">
+          <Field orientation="horizontal">
+            <FieldContent>
+              <FieldLabel htmlFor="strict_mode">Strict mode</FieldLabel>
+              <FieldDescription className="text-xs">
+                This only changes how numbers are shown — never what is logged, and never your
+                targets. Daily intake swings, and strict colours can make ordinary days feel like
+                failures. If tracking has ever been a difficult relationship for you, leave this
+                off. You can switch it back any time and nothing is kept.
+              </FieldDescription>
+            </FieldContent>
+            <Switch id="strict_mode" checked={strict} onCheckedChange={setStrict} />
+          </Field>
         </FieldGroup>
 
         <Button className="h-11 w-full text-base" onClick={save} disabled={pending}>

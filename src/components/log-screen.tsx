@@ -24,7 +24,7 @@ import {
   ItemTitle,
 } from "@/components/ui/item";
 import { cn } from "@/lib/utils";
-import { fillPercent, isAlarming, statusOf, type Metric } from "@/lib/tone";
+import { fillPercent, isAlarming, statusOf, type Metric, type Tone } from "@/lib/tone";
 import { AddSheet } from "@/components/add-sheet";
 import { ConfirmAction } from "@/components/confirm-action";
 import { EditFoodSheet } from "@/components/edit-food-sheet";
@@ -55,6 +55,8 @@ type Goals = {
   protein_goal_g: number;
   carb_goal_g: number;
   fat_goal_g: number;
+  /** S75. Read here and stored nowhere else -- the tone owns no data (S77). */
+  strict_mode?: boolean | null;
 } | null;
 
 const round = (v: number) => Math.round(v);
@@ -87,6 +89,8 @@ export function LogScreen({
   );
 
   const calorieGoal = goals?.calorie_goal ?? 2000;
+  // S75. Calm unless the user turned it on. Never suggested, never prompted.
+  const tone: Tone = goals?.strict_mode ? "strict" : "calm";
 
   const today = wakingDate();
   // S71. A day still being lived is not a day you fell short of: at 2pm, under
@@ -148,7 +152,7 @@ export function LogScreen({
         </header>
 
         <section className="border-b border-border px-5 py-6">
-          <CalorieRing consumed={totals.kcal} goal={calorieGoal} />
+          <CalorieRing consumed={totals.kcal} goal={calorieGoal} tone={tone} />
 
           <div className="mt-6 grid grid-cols-3 gap-4">
             <MacroMeter
@@ -157,6 +161,7 @@ export function LogScreen({
               value={totals.protein_g}
               goal={goals?.protein_goal_g ?? null}
               finished={finished}
+              tone={tone}
             />
             <MacroMeter
               label="Carbs"
@@ -164,6 +169,7 @@ export function LogScreen({
               value={totals.carb_g}
               goal={goals?.carb_goal_g ?? null}
               finished={finished}
+              tone={tone}
             />
             <MacroMeter
               label="Fat"
@@ -171,6 +177,7 @@ export function LogScreen({
               value={totals.fat_g}
               goal={goals?.fat_goal_g ?? null}
               finished={finished}
+              tone={tone}
             />
           </div>
         </section>
@@ -276,6 +283,7 @@ function MacroMeter({
   value,
   goal,
   finished,
+  tone,
 }: {
   label: string;
   metric: Metric;
@@ -283,9 +291,10 @@ function MacroMeter({
   goal: number | null;
   /** S71. An unfinished day is never short -- dinner has not happened yet. */
   finished: boolean;
+  tone: Tone;
 }) {
   const pct = fillPercent(value, goal);
-  const alarming = isAlarming(metric, statusOf(metric, value, goal, finished));
+  const alarming = isAlarming(metric, statusOf(metric, value, goal, finished), tone);
 
   return (
     <div>

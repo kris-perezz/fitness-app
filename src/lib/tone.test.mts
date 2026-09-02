@@ -74,3 +74,42 @@ test("the caption states the fact and nothing more", () => {
   assert.equal(captionFor("protein", 200, 155), null);
   assert.equal(captionFor("protein", 100, 155), "left");
 });
+
+test("S77: the tone cannot reach any function that produces a number", () => {
+  // S77 asks for "flip the tone, re-render a logged month, identical numbers".
+  // The structural version of that is stronger and cannot rot: the three
+  // functions that decide what a number IS take no tone argument at all, so
+  // there is no code path by which the mode could change one.
+  //
+  // Written as arity checks rather than as a comparison, because comparing
+  // `statusOf(...)` to `statusOf(...)` with no tone to vary would pass whatever
+  // the implementation did -- a test that proves only that the function is
+  // deterministic.
+  assert.equal(statusOf.length, 4, "statusOf(metric, value, goal, finished)");
+  assert.equal(fillPercent.length, 2, "fillPercent(value, goal)");
+  assert.equal(captionFor.length, 3, "captionFor(metric, value, goal)");
+
+  // And isAlarming is the ONLY one that takes it, which is what makes the tone
+  // a paint decision rather than an arithmetic one.
+  assert.equal(isAlarming.length, 2, "isAlarming(metric, status, tone = calm)");
+});
+
+test("S77: only the alarm differs between the modes", () => {
+  // And it differs in exactly one direction: strict adds red where calm had
+  // none, and never removes it. Sodium is red in both, which is S73.
+  const status = statusOf("calories", 2400, 2100, true);
+  assert.equal(isAlarming("calories", status, "calm"), false);
+  assert.equal(isAlarming("calories", status, "strict"), true);
+
+  const salty = statusOf("sodium", 3000, 2300, true);
+  assert.equal(isAlarming("sodium", salty, "calm"), true);
+  assert.equal(isAlarming("sodium", salty, "strict"), true);
+});
+
+test("S76: strict is louder about the same facts, never a new judgement", () => {
+  // A floor beaten stays met in strict mode. The mode has no way to express
+  // disapproval of something the data does not contain.
+  const met = statusOf("protein", 200, 155, true);
+  assert.equal(met, "met");
+  assert.equal(isAlarming("protein", met, "strict"), false);
+});

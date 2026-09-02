@@ -60,6 +60,12 @@ export type Goals = {
    * which already means something else on `foods` (S40).
    */
   display_weight_unit: "lb" | "kg";
+  /**
+   * S75. The whole of the tone feature: read at render time, written nowhere
+   * else. Turning it off restores calm everywhere, including for days logged
+   * while it was on (S77).
+   */
+  strict_mode: boolean;
 };
 
 export async function saveGoals(goals: Goals) {

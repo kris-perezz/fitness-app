@@ -1,4 +1,4 @@
-import { captionFor, fillPercent, isAlarming, statusOf } from "@/lib/tone";
+import { captionFor, fillPercent, isAlarming, statusOf, type Tone } from "@/lib/tone";
 
 /**
  * Calories as an arc, with the number that actually gets read -- what's left --
@@ -16,9 +16,12 @@ const CIRCUMFERENCE = 2 * Math.PI * RADIUS;
 export function CalorieRing({
   consumed,
   goal,
+  tone = "calm",
 }: {
   consumed: number;
   goal: number;
+  /** S75. Read at render time and stored nowhere (S77). */
+  tone?: Tone;
 }) {
   const remaining = goal - consumed;
   // S70/S74. The ring no longer decides what its own number means: calories are
@@ -27,7 +30,7 @@ export function CalorieRing({
   // not the colour. Red stays reserved for destructive actions and for the one
   // genuine health limit (S73), which is not this.
   const status = statusOf("calories", consumed, goal, true);
-  const alarming = isAlarming("calories", status);
+  const alarming = isAlarming("calories", status, tone);
   const caption = captionFor("calories", consumed, goal);
   // Clamped so an overshoot fills the ring rather than winding past the start.
   const fraction = fillPercent(consumed, goal) / 100;
@@ -78,6 +81,16 @@ export function CalorieRing({
           </span>
         </div>
       </div>
+
+      {/* S76. COLOUR IS NEVER THE ONLY CARRIER: strict states the overshoot in
+          words as well, so the mode survives greyscale, colour blindness and a
+          screen reader. Calm leaves the arithmetic to the reader, which is the
+          difference between the two modes rather than a second feature. */}
+      {alarming && (
+        <p className="mt-2 text-xs font-medium tabular-nums text-destructive">
+          over by {Math.abs(remaining).toLocaleString()}
+        </p>
+      )}
 
       <p className="mt-3 text-xs text-muted-foreground tabular-nums">
         {consumed.toLocaleString()} of {goal.toLocaleString()} cal
