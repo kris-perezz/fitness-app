@@ -50,6 +50,7 @@ export type OffResult =
 type Nutriments = Record<string, unknown>;
 
 type OffProduct = {
+  categories_tags?: unknown;
   product_name?: unknown;
   product_name_en?: unknown;
   generic_name?: unknown;
@@ -71,6 +72,27 @@ function num(value: unknown): number | null {
 
 function text(value: unknown): string {
   return typeof value === "string" ? value.trim() : "";
+}
+
+/**
+ * Is this measured in millilitres?
+ *
+ * `serving_quantity_unit` is the direct answer and is MISSING on a lot of real
+ * products -- two of the first five Red Bulls in OFF have no value for it, and
+ * both were being written as grams. A drink recorded in grams is not a cosmetic
+ * slip: 0008 makes `unit` and `weight_unit` the same thing on a per_100g food,
+ * so it is the label under every number the user then sees.
+ *
+ * `en:beverages` is OFF's own category root for drinks and is present where the
+ * serving field is not, so it backs the direct answer up rather than replacing
+ * it. Used by BOTH the search list and `toFood`, because a row that says
+ * "per 100 ml" and then saves a food measured in grams is worse than either
+ * answer on its own.
+ */
+function isBeverage(product: { categories_tags?: unknown; serving_quantity_unit?: unknown }): boolean {
+  if (text(product.serving_quantity_unit).toLowerCase() === "ml") return true;
+  const tags = Array.isArray(product.categories_tags) ? product.categories_tags : [];
+  return tags.some((t) => typeof t === "string" && t.toLowerCase() === "en:beverages");
 }
 
 function displayName(product: OffProduct, barcode: string): string {
@@ -165,10 +187,10 @@ function toFood(product: OffProduct, barcode: string): Food | null {
     aliases: [],
     basis: "per_100g",
     // "ml" for drinks, "g" for everything else -- see servingGrams above.
-    unit: text(product.serving_quantity_unit).toLowerCase() === "ml" ? "ml" : "g",
+    unit: isBeverage(product) ? "ml" : "g",
     // Mirrors `unit` on this basis, by the rule in 0008: a per_100g food's unit
     // IS its measure, so the two must not be allowed to disagree.
-    weight_unit: text(product.serving_quantity_unit).toLowerCase() === "ml" ? "ml" : "g",
+    weight_unit: isBeverage(product) ? "ml" : "g",
     grams_per_unit: servingGrams(product),
     // Stored at OFF's full precision, deliberately unrounded. These are
     // per-100g figures that OFF derived by DIVIDING the label's per-serving
@@ -238,8 +260,15 @@ export async function fetchOffProduct(barcode: string): Promise<OffResult> {
  * because a list of eleven products all called some variation of "Oreo" is not
  * a choice anyone can make from names alone -- the calorie figure is what
  * separates the biscuit from the yoghurt from the US formulation.
+ *
+ * `unit` is carried because a drink's "per 100g" figures are really per 100 mL,
+ * and a row that says grams about millilitres is telling the user the wrong
+ * thing before they have even tapped it. Decided by `isBeverage` here exactly as
+ * it is in `toFood`, so the list and the food it becomes cannot disagree --
+ * note the SEARCH index does not carry `serving_quantity_unit` at all, which is
+ * why the category tag has to be the signal both of them share.
  */
-export type OffHit = { barcode: string; name: string; kcal: number };
+export type OffHit = { barcode: string; name: string; kcal: number; unit: "g" | "ml" };
 
 export type OffSearchResult =
   | { status: "ok"; hits: OffHit[] }
@@ -265,6 +294,8 @@ function barcodeKey(barcode: string): string {
  */
 type OffSearchHit = {
   code?: unknown;
+  categories_tags?: unknown;
+  serving_quantity_unit?: unknown;
   product_name?: unknown;
   product_name_en?: unknown;
   generic_name?: unknown;
@@ -310,7 +341,7 @@ export async function searchOff(query: string): Promise<OffSearchResult> {
   // kilobytes of eco-score and packaging data per product.
   url.searchParams.set(
     "fields",
-    "code,product_name,product_name_en,generic_name,brands,nutriments",
+    "code,product_name,product_name_en,generic_name,brands,nutriments,categories_tags",
   );
 
   let response: Response;
@@ -372,7 +403,12 @@ export async function searchOff(query: string): Promise<OffSearchResult> {
 
     seen.add(key);
     shown.add(label);
-    hits.push({ barcode, name, kcal });
+    hits.push({
+      barcode,
+      name,
+      kcal,
+      unit: isBeverage(row) ? "ml" : "g",
+    });
   }
 
   return { status: "ok", hits };

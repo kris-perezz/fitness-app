@@ -487,7 +487,7 @@ function OffSection({
                       tells the biscuit from the yoghurt. The barcode used to be
                       here and told nobody anything. */}
                   <ItemDescription className="tabular-nums">
-                    {show(hit.kcal)} cal per 100 g
+                    {show(hit.kcal)} cal per {hit.unit === "ml" ? "100 ml" : "100 g"}
                   </ItemDescription>
                 </ItemContent>
                 {picking === hit.barcode && <Spinner />}
