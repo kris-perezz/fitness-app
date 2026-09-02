@@ -17,13 +17,6 @@ import {
   type Food,
   type Meal,
 } from "@/lib/food";
-import {
-  availableOptions,
-  displayName,
-  groupForId,
-  valuesForId,
-  variantAt,
-} from "@/lib/food-groups";
 import { addEntry, saveScannedFood } from "@/app/actions";
 import { FoodPicker, type PickerStep } from "@/components/food-picker";
 import { FoodSourceBadge } from "@/components/food-source-badge";
@@ -60,13 +53,7 @@ type Step =
   // result is assembled in memory and has never been written. Since
   // intake_entries.food_id is a foreign key, the catalog row has to land
   // before the entry does (S3).
-  /**
-   * `group` carries the food's other forms (S92) -- raw beside cooked, skinless
-   * beside skin-on -- so the drawer can offer the choice without a second
-   * request. Empty for a food that has only one form, which is nearly all of
-   * them and renders no control at all.
-   */
-  | { kind: "qty"; food: Food; scanned: boolean; group: Food[] }
+  | { kind: "qty"; food: Food; scanned: boolean }
   | { kind: "custom" };
 
 export function AddSheet({
@@ -131,7 +118,7 @@ export function AddSheet({
             foods={foods}
             step={step}
             onStep={go}
-            onPick={(food, scanned, group) => go({ kind: "qty", food, scanned, group: group ?? [] })}
+            onPick={(food, scanned) => go({ kind: "qty", food, scanned })}
             onCustom={() => go({ kind: "custom" })}
           />
         )}
@@ -139,11 +126,6 @@ export function AddSheet({
         {meal && step.kind === "qty" && (
           <QtyStep
             food={step.food}
-            group={step.group}
-            // Swapping the form keeps the quantity: 150 g of raw chicken and
-            // 150 g of cooked chicken are the same thing weighed, and retyping
-            // it would be the app forgetting what it was just told.
-            onSwap={(next) => setStep({ ...step, food: next, scanned: false })}
             scanned={step.scanned}
             date={date}
             meal={meal}
@@ -165,91 +147,6 @@ export function AddSheet({
   );
 }
 
-/**
- * The raw/cooked and skin controls, where a food has forms (S92).
- *
- * Renders NOTHING for a food with one form, which is nearly all of them -- and
- * nothing for an axis with one reachable option, so a group whose skin-on rows
- * never materialised does not grow a toggle with a single button. That rule is
- * what keeps the feature from taxing the common case.
- *
- * Picking a form SWAPS the catalog row the entry will be logged against.
- * Nothing is converted: CNF publishes no cooking yield, and 150 g of the cooked
- * form is 150 g of cooked chicken rather than a raw weight adjusted by a factor
- * nobody can check.
- */
-function FormAxes({
-  food,
-  group,
-  onSwap,
-}: {
-  food: Food;
-  group: Food[];
-  onSwap: (food: Food) => void;
-}) {
-  const def = groupForId(food.id);
-  const values = valuesForId(food.id);
-  if (!def || !values || group.length < 2) return null;
-
-  const present = new Set(group.map((f) => f.id));
-  const byId = new Map(group.map((f) => [f.id, f]));
-
-  const controls = def.axes.flatMap((axis) => {
-    // Every value this axis takes across the forms actually in the catalog. One
-    // value is not a choice, so the control does not appear.
-    const offered = axis.options.filter((o) =>
-      group.some((f) => valuesForId(f.id)?.[axis.id] === o.value),
-    );
-    if (offered.length < 2) return [];
-
-    // Reachable holding the OTHER axes where they are. The CNF grid is sparse
-    // -- there is no grilled-with-skin row -- so a combination with no food
-    // behind it is disabled rather than offered, the way a shop greys out a
-    // colour that shirt does not come in.
-    const reachable = availableOptions(def, axis.id, values, present);
-    return [{ axis, offered, reachable }];
-  });
-
-  if (controls.length === 0) return null;
-
-  return (
-    <div className="mt-4 flex flex-col gap-2">
-      {controls.map(({ axis, offered, reachable }) => (
-        <div key={axis.id} className="flex items-center justify-between gap-3">
-          <span className="text-xs text-muted-foreground">{axis.label}</span>
-          <ToggleGroup
-            type="single"
-            size="sm"
-            variant="outline"
-            value={values[axis.id]}
-            onValueChange={(next) => {
-              // A single ToggleGroup deselects when its active item is pressed
-              // again, which would leave the food with no form at all; ignore
-              // the empty value, exactly as the chart window toggle does.
-              if (!next) return;
-              const target = variantAt(def, { ...values, [axis.id]: next });
-              const swapped = target && byId.get(target.id);
-              if (swapped) onSwap(swapped);
-            }}
-            aria-label={axis.label}
-          >
-            {offered.map((o) => (
-              <ToggleGroupItem
-                key={o.value}
-                value={o.value}
-                disabled={!reachable.has(o.value)}
-                className="px-2.5 text-xs"
-              >
-                {o.label}
-              </ToggleGroupItem>
-            ))}
-          </ToggleGroup>
-        </div>
-      ))}
-    </div>
-  );
-}
-
 /** "Servings", "Cups", "Slices" -- the counting noun as a field label. */
 function countFieldLabel(food: Food): string {
   const label = countLabel(food, 2);
@@ -258,8 +155,6 @@ function countFieldLabel(food: Food): string {
 
 function QtyStep({
   food,
-  group,
-  onSwap,
   scanned,
   date,
   meal,
@@ -267,8 +162,6 @@ function QtyStep({
   onDone,
 }: {
   food: Food;
-  group: Food[];
-  onSwap: (food: Food) => void;
   scanned: boolean;
   date: string;
   meal: Meal;
@@ -398,10 +291,7 @@ function QtyStep({
         </Button>
 
         <div className="flex items-center gap-2">
-          {/* The GROUP's name where there is one. The form is stated by the
-              controls below, so repeating it in the heading would say the same
-              thing twice and disagree the moment a toggle moves. */}
-          <h3 className="text-base font-semibold leading-tight">{displayName(food)}</h3>
+          <h3 className="text-base font-semibold leading-tight">{food.name}</h3>
           <FoodSourceBadge source={food.source} />
         </div>
         {/* The scanned path is the one that lands here with numbers nobody has
@@ -421,8 +311,6 @@ function QtyStep({
             ? ` · 1 ${countLabel(food, 1)} = ${food.grams_per_unit} ${food.weight_unit}`
             : ""}
         </p>
-
-        <FormAxes food={food} group={group} onSwap={onSwap} />
 
         <Field className="mt-5">
           <div className="flex items-center justify-between gap-3">

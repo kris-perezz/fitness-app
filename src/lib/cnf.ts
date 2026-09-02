@@ -1,5 +1,4 @@
 import type { Food } from "@/lib/food";
-import { groupForId } from "./food-groups.ts";
 
 /**
  * Canadian Nutrient File client (S91). Health Canada's own composition
@@ -166,13 +165,6 @@ const PREPARATIONS = new Set([
 ]);
 
 /**
- * How far a curated group sits above anything inferred from a string. The other
- * signals top out near 100, so this is not a thumb on the scale -- it is a
- * different kind of evidence.
- */
-const GROUP_BONUS = 200;
-
-/**
  * Rank the catalog against a query.
  *
  * THE RANKING IS THE STORY (S91). 24 rows match "chicken breast" and they are
@@ -195,35 +187,14 @@ const GROUP_BONUS = 200;
  * gone rather than reduced -- it was measuring the wrong thing, not measuring
  * it too hard.
  *
- * A CURATED GROUP (S92) is a fourth signal and it outranks the other three,
- * because it is a decision somebody made about this exact food rather than an
- * inference from a string. The group answers to ITS OWN name -- "Chicken
- * breast" -- as well as to its members' descriptions, and that is what makes a
- * search for "chicken" reach it at all: ranked on descriptions alone, every
- * breast row fell outside the first 25 hits behind feet, giblets and gizzards,
- * so the curated food was invisible unless you already knew its full name.
- *
- * Its members FOLD to one row, before the limit rather than after, so merging
- * four rows frees three slots instead of shortening the list. Raw and cooked
- * remain separate catalog rows and remain a question the user answers -- the
- * question has moved into the drawer where it can be labelled, rather than
- * being four near-identical strings in a list.
+ * Deliberately NOT collapsing raw and cooked into one row. A 30% error the user
+ * could have prevented is worse than a question they had to answer.
  */
 export function rankCnf(rows: CatalogRow[], query: string, limit = 25): CnfHit[] {
   const words = query.toLowerCase().split(/\s+/).filter(Boolean);
   if (words.length === 0) return [];
 
-  /** Shared by both things a query can match: a CNF description, or a group name. */
-  const base = (text: string) => {
-    let score = 0;
-    // The plain food usually leads with the word you typed.
-    if (text.startsWith(words[0])) score += 40;
-    // Whole words over substrings: "rice" should not rank "liquorice" highly.
-    for (const w of words) if (new RegExp(`\\b${w.replace(/[.*+?^${}()|[\]\\]/g, "\\$&")}\\b`).test(text)) score += 10;
-    return score;
-  };
-
-  const scored: { hit: CnfHit; score: number; order: number }[] = [];
+  const scored: { hit: CnfHit; score: number }[] = [];
 
   for (const row of rows) {
     const code = num(row.food_code);
@@ -231,62 +202,32 @@ export function rankCnf(rows: CatalogRow[], query: string, limit = 25): CnfHit[]
     if (code === null || description === "") continue;
 
     const lower = description.toLowerCase();
-    const group = groupForId(cnfFoodId(code));
+    if (!words.every((w) => lower.includes(w))) continue;
 
-    // A curated group answers to its own name. Every word still has to appear
-    // -- in the name OR in the description -- so "chicken pancreas" reaches
-    // neither, and "chicken breast grilled" reaches the description.
-    const named = group !== null && words.every((w) => group.name.toLowerCase().includes(w));
-    const described = words.every((w) => lower.includes(w));
-    if (!named && !described) continue;
-
-    let score = -Infinity;
-    if (described) {
-      score = base(lower);
-      // The positive signal that does the real work: CNF names the plain food
-      // by ending on how it was cooked.
-      const last = lower.split(",").pop()?.trim() ?? "";
-      if (PREPARATIONS.has(last)) score += 25;
-      if (DEMOTED.some((d) => lower.includes(d))) score -= 60;
-      // A mild preference for the shorter of two otherwise equal rows. Mild
-      // because length is a weak signal here and was a misleading one as a
-      // comma count.
-      score -= description.length / 60;
+    let score = 0;
+    // The plain food usually leads with the word you typed.
+    if (lower.startsWith(words[0])) score += 40;
+    // Whole words over substrings: "rice" should not rank "liquorice" highly.
+    for (const w of words) {
+      if (new RegExp(`\\b${w.replace(/[.*+?^${}()|[\]\\]/g, "\\$&")}\\b`).test(lower)) score += 10;
     }
-    if (named) {
-      // Above anything an uncurated row can reach (the signals above top out
-      // near 100), because a curated group is a decision somebody made about
-      // this exact food rather than a guess read off a string.
-      score = Math.max(score, base(group.name.toLowerCase()) + GROUP_BONUS);
-    }
+    // The positive signal that does the real work: CNF names the plain food by
+    // ending on how it was cooked.
+    const last = lower.split(",").pop()?.trim() ?? "";
+    if (PREPARATIONS.has(last)) score += 25;
+    if (DEMOTED.some((d) => lower.includes(d))) score -= 60;
+    // A mild preference for the shorter of two otherwise equal rows. Mild
+    // because length is a weak signal here and was a misleading one as a
+    // comma count.
+    score -= description.length / 60;
 
-    // Curated order breaks ties, so a query that matched the GROUP opens on the
-    // form the file lists first -- raw, skinless -- rather than on whichever
-    // sibling happened to score highest on its own wording.
-    const order = group?.variants.findIndex((v) => v.id === cnfFoodId(code)) ?? 0;
-    scored.push({ hit: { code, description }, score, order });
+    scored.push({ hit: { code, description }, score });
   }
 
-  const ranked = scored.sort(
-    (a, b) =>
-      b.score - a.score || a.order - b.order || a.hit.description.localeCompare(b.hit.description),
-  );
-
-  // FOLD BEFORE THE LIMIT. Collapsing after it would spend slots on rows about
-  // to be merged away, which is how a search for "chicken" returned 25 hits
-  // with not one of them the food.
-  const seen = new Set<string>();
-  const hits: CnfHit[] = [];
-  for (const { hit } of ranked) {
-    const g = groupForId(cnfFoodId(hit.code));
-    if (g) {
-      if (seen.has(g.key)) continue;
-      seen.add(g.key);
-    }
-    hits.push(hit);
-    if (hits.length === limit) break;
-  }
-  return hits;
+  return scored
+    .sort((a, b) => b.score - a.score || a.hit.description.localeCompare(b.hit.description))
+    .slice(0, limit)
+    .map((s) => s.hit);
 }
 
 /** Never throws: every failure comes back as a value the UI can render. */

@@ -4,8 +4,7 @@ import { revalidatePath } from "next/cache";
 import { redirect } from "next/navigation";
 import { createClient } from "@/lib/supabase/server";
 import { fetchOffProduct, isBarcode } from "@/lib/off";
-import { cnfFoodId, fetchCnfFood, searchCnf, type CnfSearchResult } from "@/lib/cnf";
-import { cnfCodeOf, groupForId } from "@/lib/food-groups";
+import { fetchCnfFood, searchCnf, type CnfSearchResult } from "@/lib/cnf";
 import { extractLabel, type LabelDraft, type LabelResult } from "@/lib/label";
 import { generatedFood, type RecipeDetails, type RecipeLine } from "@/lib/recipe";
 import { sourceRank, type Food, type FoodSource, type Macros, type Meal } from "@/lib/food";
@@ -201,86 +200,41 @@ export async function searchCnfFoods(query: string): Promise<CnfSearchResult> {
 export async function addCnfFood(
   code: number,
   description: string,
-): Promise<{ food: Food | null; group: Food[]; error: string | null }> {
+): Promise<{ food: Food | null; error: string | null }> {
   const supabase = await createClient();
   const {
     data: { user },
   } = await supabase.auth.getUser();
-  if (!user) return { food: null, group: [], error: "Not signed in" };
+  if (!user) return { food: null, error: "Not signed in" };
 
-  const id = cnfFoodId(code);
+  const id = `cnf_${code}`;
 
-  /**
-   * THE WHOLE GROUP LANDS AT ONCE, not the one row that was tapped (S92).
-   *
-   * Materialising lazily, one row per pick, would leave the drawer reading a
-   * group with a single member -- so it would render no toggles at all, look
-   * entirely correct, and quietly be the wrong food. The alternative, fetching
-   * a sibling when the toggle moves, makes a radio button fail with "Health
-   * Canada took too long", which is not a state a radio button should have.
-   *
-   * The cost is 1-3 extra requests at ~225 ms, once per food, on a path that
-   * was already making one.
-   */
-  const wanted = groupForId(id)?.variants ?? [{ id, description }];
+  // Already in the catalog: return it rather than re-fetching. This is the
+  // second-person case and the re-log case, and it is the whole point of
+  // caching. Its own row wins over anything CNF would say now, because a fork
+  // or a correction may have happened since (S7).
+  const { data: existing } = await supabase.from("foods").select("*").eq("id", id).maybeSingle();
+  if (existing) return { food: existing as Food, error: null };
 
-  const { data: rows } = await supabase
-    .from("foods")
-    .select("*")
-    .in(
-      "id",
-      wanted.map((v) => v.id),
-    );
-  const have = new Map<string, Food>(((rows ?? []) as Food[]).map((f) => [f.id, f]));
-
-  const fresh: { food: Food; micros: Record<string, number> }[] = [];
-  for (const variant of wanted) {
-    if (have.has(variant.id)) continue;
-    const variantCode = cnfCodeOf(variant.id);
-    if (variantCode === null) continue;
-
-    const result = await fetchCnfFood(variantCode, variant.description);
-    if (result.status === "found") {
-      fresh.push(result);
-      have.set(result.food.id, result.food);
-      continue;
-    }
-    // A SIBLING that fails is dropped and the group renders without it, which
-    // is honest -- the toggle offers what exists. The row actually chosen is
-    // the one whose failure is worth interrupting for.
-    if (variant.id !== id) continue;
-    if (result.status === "miss") {
-      return { food: null, group: [], error: "Health Canada has no usable nutrition for that food." };
-    }
-    return { food: null, group: [], error: result.message };
+  const result = await fetchCnfFood(code, description);
+  if (result.status === "error") return { food: null, error: result.message };
+  if (result.status === "miss") {
+    return { food: null, error: "Health Canada has no usable nutrition for that food." };
   }
 
-  if (fresh.length > 0) {
-    // Ignoring duplicates rather than inserting blind: somebody else may own
-    // one member of this group already, and their row is the one to keep. Its
-    // own row wins over anything CNF would say now, because a fork or a
-    // correction may have happened since (S7).
-    const { error } = await supabase.from("foods").upsert(
-      fresh.map(({ food, micros }) => ({
-        ...food,
-        // Written straight to the column, which has existed since 0001. The
-        // `Food` type does not carry micros until S36, so this is deliberately
-        // not spread from `result.food` -- see the note on CnfFoodResult.
-        micros,
-        created_by: user.id,
-      })),
-      { onConflict: "id", ignoreDuplicates: true },
-    );
-    if (error) return { food: null, group: [], error: error.message };
-  }
-
-  const food = have.get(id);
-  if (!food) return { food: null, group: [], error: "Could not add that food." };
+  const { error } = await supabase.from("foods").insert({
+    ...result.food,
+    // Written straight to the column, which has existed since 0001. The `Food`
+    // type does not carry micros until S36, so this is deliberately not spread
+    // from `result.food` -- see the note on CnfFoodResult.
+    micros: result.micros,
+    created_by: user.id,
+  });
+  // 23505: somebody else chose the same food first. Same outcome as finding it.
+  if (error && error.code !== "23505") return { food: null, error: error.message };
 
   revalidatePath("/log");
-  // Curated order, not fetch order: the drawer opens on the first variant and
-  // the axis controls read their options off this list.
-  return { food, group: wanted.flatMap((v) => have.get(v.id) ?? []), error: null };
+  return { food: result.food, error: null };
 }
 
 // ------------------------------------------------------------ label photos
