@@ -96,6 +96,21 @@ export function estimateShare(days: IntakeDay[]): EstimateShare {
   return { entries, estimates, percent };
 }
 
+/**
+ * A row of the `top_foods` function (S85), which does the grouping in Postgres.
+ *
+ * `key` is the food id, or `name:<lowercased name>` for a one-off that was
+ * never a catalog row -- so two different one-offs stay two rows instead of
+ * merging into a single null group.
+ */
+export type TopFood = {
+  key: string;
+  name: string;
+  kcal: number;
+  entries: number;
+  kcal_per_entry: number;
+};
+
 /** Days actually logged in the window -- the denominator for everything else. */
 export function loggedDays(days: IntakeDay[]): number {
   return days.filter((d) => d.item_count > 0).length;

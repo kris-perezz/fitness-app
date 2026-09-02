@@ -12,10 +12,11 @@ import {
   dayTick,
   enoughToPlot,
 } from "@/lib/chart";
-import { estimateShare, loggedDays, type IntakeDay, type TrendPoint } from "@/lib/trends";
+import { estimateShare, loggedDays, type IntakeDay, type TopFood, type TrendPoint } from "@/lib/trends";
 import { Button } from "@/components/ui/button";
 import { ChartContainer, type ChartConfig } from "@/components/ui/chart";
 import { Empty, EmptyDescription, EmptyHeader, EmptyMedia, EmptyTitle } from "@/components/ui/empty";
+import { Item, ItemContent, ItemDescription, ItemTitle } from "@/components/ui/item";
 
 /**
  * The Food tab's Trends view (S83-S86). What a month of eating looks like,
@@ -52,11 +53,14 @@ export function TrendsScreen({
   days,
   calorieGoal,
   proteinGoal,
+  topFoods,
 }: {
   points: TrendPoint[];
   days: IntakeDay[];
   calorieGoal: number | null;
   proteinGoal: number | null;
+  /** Null means the query failed -- see TopFoods. Empty means nothing logged. */
+  topFoods: TopFood[] | null;
 }) {
   const logged = loggedDays(days);
   const share = estimateShare(days);
@@ -110,6 +114,8 @@ export function TrendsScreen({
             thin="A few more logged days and this becomes a pattern."
           />
 
+          <TopFoods foods={topFoods} />
+
           {/* S86. Stated flat, never coloured or graded: an estimate is a
               legitimate entry (S35), and this is context for how hard to lean
               on the two charts above rather than a score. */}
@@ -130,6 +136,64 @@ export function TrendsScreen({
         </>
       )}
     </main>
+  );
+}
+
+/**
+ * Where the calories went (S85).
+ *
+ * A LIST, not a chart. "Rice, 4,200 cal across 31 entries" changes behaviour; a
+ * pie of the same rows does not, and a pie of forty foods is unreadable anyway.
+ *
+ * Ranked by SUM, which is the whole point: the useful surprise is usually a
+ * small food eaten constantly rather than a big one eaten once, and that is
+ * exactly what a ranking by portion size hides.
+ *
+ * Sits under the charts because it is what you read after seeing the shape and
+ * asking "why".
+ */
+function TopFoods({ foods }: { foods: TopFood[] | null }) {
+  // The query failed, which today means `top_foods` (0023) has not been run
+  // yet. Said plainly rather than rendered as an empty list -- "no foods" and
+  // "could not ask" are different facts and only one of them is about eating.
+  if (foods === null) {
+    return (
+      <section className="border-b border-border px-5 py-4">
+        <h2 className="text-sm font-medium">Where the calories went</h2>
+        <p className="mt-2 text-xs text-muted-foreground">
+          Not available right now.
+        </p>
+      </section>
+    );
+  }
+
+  if (foods.length === 0) return null;
+
+  return (
+    <section className="border-b border-border py-4">
+      <h2 className="px-5 text-sm font-medium">Where the calories went</h2>
+      <p className="px-5 pt-1 text-xs text-muted-foreground">
+        Most calories over the last 30 days, whatever the portion size.
+      </p>
+      <ul className="mt-2 divide-y divide-border">
+        {foods.map((food) => (
+          <li key={food.key}>
+            <Item size="sm" className="rounded-none px-5 py-3">
+              <ItemContent className="min-w-0">
+                <ItemTitle className="font-normal">{food.name}</ItemTitle>
+                <ItemDescription className="text-xs tabular-nums">
+                  {food.entries} {food.entries === 1 ? "entry" : "entries"} ·{" "}
+                  {Math.round(food.kcal_per_entry).toLocaleString()} cal each
+                </ItemDescription>
+              </ItemContent>
+              <span className="shrink-0 text-sm tabular-nums">
+                {Math.round(food.kcal).toLocaleString()}
+              </span>
+            </Item>
+          </li>
+        ))}
+      </ul>
+    </section>
   );
 }
 
