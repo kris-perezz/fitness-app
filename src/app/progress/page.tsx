@@ -2,7 +2,7 @@ import { createClient } from "@/lib/supabase/server";
 import { wakingDate } from "@/lib/food";
 import { WINDOW_MONTHS, shiftMonth } from "@/lib/training";
 import { toWeighIn } from "@/lib/weight";
-import { weeklyEnergy } from "@/lib/energy";
+import { adherence, weeklyEnergy } from "@/lib/energy";
 import type { IntakeDay } from "@/lib/trends";
 import { ProgressHome } from "@/components/progress-home";
 
@@ -36,7 +36,8 @@ export default async function ProgressPage() {
 
   // Together rather than in sequence: the goal row is tiny and independent of
   // the weigh-ins, so chaining them would spend a round trip to learn nothing.
-  const [{ data }, { data: settings }, { data: first }, { data: intake }] = await Promise.all([
+  const [{ data }, { data: settings }, { data: first }, { data: intake }, { data: sessions }] =
+    await Promise.all([
     supabase
       .from("weigh_ins")
       .select("log_date, weight_lb, note")
@@ -61,6 +62,9 @@ export default async function ProgressPage() {
       .from("intake_days")
       .select("log_date, kcal, protein_g, estimate_count, item_count")
       .gte("log_date", from),
+    // S65. Dates only -- this counts sessions, and pulling the sets to do it
+    // would fetch a month of training to produce one integer.
+    supabase.from("workouts").select("log_date").gte("log_date", from),
   ]);
 
   const weighIns = (data ?? []).map(toWeighIn);
@@ -72,6 +76,10 @@ export default async function ProgressPage() {
       earliest={first?.log_date ?? null}
       entries={weighIns}
       weeks={weeklyEnergy((intake ?? []) as IntakeDay[], weighIns)}
+      adherence={adherence(
+        (intake ?? []) as IntakeDay[],
+        ((sessions ?? []) as { log_date: string }[]).map((w) => w.log_date),
+      )}
       // Numeric arrives from PostgREST as a string. `?? null` and not `??
       // undefined`: no goal is a state the screen renders deliberately (S60).
       goal={{

@@ -1,7 +1,7 @@
 import test from "node:test";
 import assert from "node:assert/strict";
 
-import { MIN_LOGGED_DAYS, weeklyEnergy } from "./energy.ts";
+import { MIN_LOGGED_DAYS, adherence, weeklyEnergy } from "./energy.ts";
 import type { IntakeDay } from "./trends.ts";
 import type { WeighIn } from "./weight.ts";
 
@@ -87,4 +87,27 @@ test("a week with no food logged at all is excluded rather than zero", () => {
   assert.equal(weeks[0].included, false);
   assert.equal(weeks[0].avgKcal, null);
   assert.equal(weeks[0].loggedDays, 0);
+});
+
+test("adherence counts logged days in the window and sessions this week", () => {
+  // Friday 2026-09-04. The window is the trailing 14 days; the sessions are
+  // "this week", which starts Monday 2026-08-31.
+  const days = [day("2026-09-01"), day("2026-09-02"), day("2026-08-20")];
+  const sessions = ["2026-09-01", "2026-09-03", "2026-08-25"];
+
+  const a = adherence(days, sessions, FRIDAY);
+  assert.equal(a.loggedDays, 2, "2026-08-20 is outside the 14-day window");
+  assert.equal(a.windowDays, 14);
+  assert.equal(a.sessionsThisWeek, 2, "2026-08-25 is last week");
+});
+
+test("a day logged then emptied does not count as adherence", () => {
+  const a = adherence([{ ...day("2026-09-01"), item_count: 0 }], [], FRIDAY);
+  assert.equal(a.loggedDays, 0);
+});
+
+test("two sessions on one day count once", () => {
+  // S52 allows one session a day, but the query feeding this does not promise it.
+  const a = adherence([], ["2026-09-01", "2026-09-01"], FRIDAY);
+  assert.equal(a.sessionsThisWeek, 1);
 });

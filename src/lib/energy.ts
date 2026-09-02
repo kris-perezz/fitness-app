@@ -121,3 +121,52 @@ function shift(date: string, days: number): string {
 function iso(d: Date): string {
   return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}-${String(d.getDate()).padStart(2, "0")}`;
 }
+
+// ------------------------------------------------------ did I show up (S65)
+
+/**
+ * Effort, next to outcome.
+ *
+ * ADHERENCE EXPLAINS MOST DISAPPOINTING CHARTS. A flat trend on 60% food
+ * logging is not a metabolism story, and putting those two facts on one screen
+ * is the cheapest honest thing this tab can do -- it costs two queries and it
+ * stops a month of thin logging being read as a plateau.
+ *
+ * Two numbers, not a chart. A bar chart of two figures is decoration.
+ */
+export type Adherence = {
+  /** Days with food logged in the trailing window. */
+  loggedDays: number;
+  windowDays: number;
+  /** Training sessions since Monday. */
+  sessionsThisWeek: number;
+};
+
+export const ADHERENCE_DAYS = 14;
+
+export function adherence(
+  days: IntakeDay[],
+  sessionDates: string[],
+  today = new Date(),
+  windowDays = ADHERENCE_DAYS,
+): Adherence {
+  const end = new Date(today.getFullYear(), today.getMonth(), today.getDate());
+  const start = new Date(end);
+  start.setDate(start.getDate() - (windowDays - 1));
+  const from = iso(start);
+  const to = iso(end);
+
+  const loggedDays = days.filter(
+    (d) => d.item_count > 0 && d.log_date >= from && d.log_date <= to,
+  ).length;
+
+  // THIS WEEK, not a trailing seven days: "3 sessions this week" is a claim
+  // about the week you are in, and a rolling window would answer a question
+  // nobody asked while looking at a Monday.
+  const monday = iso(mondayOf(end));
+  // Deduplicated by date, because S52 allows one session a day but the query
+  // that feeds this does not promise it.
+  const sessions = new Set(sessionDates.filter((d) => d >= monday && d <= to));
+
+  return { loggedDays, windowDays, sessionsThisWeek: sessions.size };
+}

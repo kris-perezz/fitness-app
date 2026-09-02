@@ -23,7 +23,7 @@ import {
   type ChartWindowKey,
   type WeighIn,
 } from "@/lib/weight";
-import { MIN_LOGGED_DAYS, type EnergyWeek } from "@/lib/energy";
+import { MIN_LOGGED_DAYS, type Adherence, type EnergyWeek } from "@/lib/energy";
 import { deleteWeighIn, loadWeighInWindow, saveWeighIn } from "@/app/progress-actions";
 import { Button } from "@/components/ui/button";
 import { ToggleGroup, ToggleGroupItem } from "@/components/ui/toggle-group";
@@ -69,6 +69,7 @@ export function ProgressHome({
   entries: initialEntries,
   goal,
   weeks,
+  adherence,
 }: {
   today: string;
   loadedFrom: string;
@@ -78,6 +79,8 @@ export function ProgressHome({
   goal: WeightGoal;
   /** S63. Computed on the server: it needs the food log, which this tab does not otherwise hold. */
   weeks: EnergyWeek[];
+  /** S65. Effort, so a flat trend is not read as a metabolism story. */
+  adherence: Adherence;
 }) {
   const [entries, setEntries] = useState(initialEntries);
   const [from, setFrom] = useState(loadedFrom);
@@ -195,6 +198,8 @@ export function ProgressHome({
           onWindowChange={setWindowKey}
           extending={chartUnderCovered}
         />
+
+        <ShowedUp adherence={adherence} />
 
         <EnergyBalance weeks={weeks} />
 
@@ -530,6 +535,39 @@ function WeighInSheet({
  * observations ARE the answer, and a single derived number would hide which
  * half of it was thin.
  */
+/**
+ * Effort, stated next to outcome (S65).
+ *
+ * TWO LINES, NOT A CHART. A bar chart of two numbers is decoration, and these
+ * are read once and acted on -- "I logged 8 of the last 14 days" is the whole
+ * finding.
+ *
+ * Placed ABOVE the calories-against-the-scale table on purpose: it is the
+ * context that decides how much of that table to believe, and context after the
+ * conclusion is a footnote nobody reads.
+ *
+ * No colour, no target, no praise. Adherence is a fact about the log, not a
+ * grade (S70).
+ */
+function ShowedUp({ adherence }: { adherence: Adherence }) {
+  return (
+    <section className="flex items-baseline justify-between gap-3 border-b border-border px-5 py-4">
+      <span className="text-sm">
+        <span className="tabular-nums">
+          {adherence.loggedDays} of {adherence.windowDays}
+        </span>{" "}
+        <span className="text-muted-foreground">days logged</span>
+      </span>
+      <span className="text-sm">
+        <span className="tabular-nums">{adherence.sessionsThisWeek}</span>{" "}
+        <span className="text-muted-foreground">
+          {adherence.sessionsThisWeek === 1 ? "session" : "sessions"} this week
+        </span>
+      </span>
+    </section>
+  );
+}
+
 /** A signed change in pounds. `deltaLabel` takes two readings; this takes the difference. */
 function signedLb(change: number): string {
   if (Math.abs(change) < 0.05) return "0.0 lb";
