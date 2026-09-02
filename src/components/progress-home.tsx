@@ -189,6 +189,28 @@ export function ProgressHome({
           </Button>
         </div>
 
+        {/* S67. EVERY BLOCK DEGRADES ON ITS OWN, and the first weigh-in is the
+            case where that matters most: with no readings at all, the chart,
+            the calendar, the month list, the adherence line and the weekly
+            table are six pieces of furniture around an empty room. One
+            sentence and the action above it is the honest version of this
+            screen -- and the action is already at the top, so the Empty does
+            not need to repeat it. */}
+        {entries.length === 0 ? (
+          <Empty className="py-14">
+            <EmptyHeader>
+              <EmptyMedia variant="icon">
+                <Scale />
+              </EmptyMedia>
+              <EmptyTitle>No weigh-ins yet</EmptyTitle>
+              <EmptyDescription>
+                Weigh in above and this tab starts answering whether it is working — the trend,
+                the rate, and what your calories did against it.
+              </EmptyDescription>
+            </EmptyHeader>
+          </Empty>
+        ) : (
+          <>
         <Headline head={head} rate={rate} goal={goal} />
 
         <WeightChart
@@ -262,6 +284,8 @@ export function ProgressHome({
               </li>
             ))}
           </ul>
+        )}
+          </>
         )}
       </main>
 
@@ -575,7 +599,10 @@ function signedLb(change: number): string {
 }
 
 function EnergyBalance({ weeks }: { weeks: EnergyWeek[] }) {
-  const usable = weeks.filter((w) => w.included);
+  // BOTH halves, not just the food half. A week with five logged days but no
+  // pair of weigh-ins has an intake average and no change to set it against,
+  // and a column of dashes is not an answer -- it is the shape of one.
+  const usable = weeks.filter((w) => w.included && w.changeLb !== null);
   // Nothing to say yet. Rendered as a sentence rather than an empty table,
   // because a table of dashes looks like a fault rather than a beginning.
   if (usable.length === 0) {
@@ -583,8 +610,8 @@ function EnergyBalance({ weeks }: { weeks: EnergyWeek[] }) {
       <section className="border-b border-border px-5 py-4">
         <h2 className="text-sm font-medium">Calories against the scale</h2>
         <p className="mt-2 text-xs text-muted-foreground">
-          Needs a week with at least {MIN_LOGGED_DAYS} days of food logged. An average built on
-          fewer would read as a deficit you did not run.
+          Needs a week with at least {MIN_LOGGED_DAYS} days of food logged and two weigh-ins to
+          set it against. An average built on fewer would read as a deficit you did not run.
         </p>
       </section>
     );
