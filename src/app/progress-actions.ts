@@ -124,3 +124,30 @@ function lastDayOfMonth(month: string): string {
   const d = new Date(y, m, 0);
   return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}-${String(d.getDate()).padStart(2, "0")}`;
 }
+
+/**
+ * Pin or unpin the one lift shown on the progress tab (S81).
+ *
+ * Upsert rather than update: a user who has never opened Goals has no settings
+ * row yet, and pinning a lift should not be the one action that fails because
+ * of that.
+ *
+ * `null` unpins, and is the normal state rather than an error -- Progress omits
+ * the block entirely when nothing is pinned.
+ */
+export async function pinExercise(exerciseId: string | null): Promise<{ error: string | null }> {
+  const supabase = await createClient();
+  const {
+    data: { user },
+  } = await supabase.auth.getUser();
+  if (!user) return { error: "Not signed in" };
+
+  const { error } = await supabase
+    .from("nutrition_settings")
+    .upsert({ user_id: user.id, pinned_exercise_id: exerciseId });
+  if (error) return { error: error.message };
+
+  revalidatePath("/progress");
+  revalidatePath(`/exercise/${exerciseId ?? ""}`);
+  return { error: null };
+}

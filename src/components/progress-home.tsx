@@ -1,6 +1,7 @@
 "use client";
 
 import { useEffect, useMemo, useRef, useState, useTransition } from "react";
+import Link from "next/link";
 import { Scale, Trash2 } from "lucide-react";
 import { toast } from "sonner";
 
@@ -27,6 +28,8 @@ import {
   type WeighIn,
 } from "@/lib/weight";
 import { MIN_LOGGED_DAYS, type Adherence, type EnergyWeek } from "@/lib/energy";
+import type { LiftPoint } from "@/lib/training";
+import { LiftChart, enoughSessions } from "@/components/lift-chart";
 import { deleteWeighIn, loadWeighInWindow, saveWeighIn } from "@/app/progress-actions";
 import { Button } from "@/components/ui/button";
 import { ToggleGroup, ToggleGroupItem } from "@/components/ui/toggle-group";
@@ -74,6 +77,7 @@ export function ProgressHome({
   weeks,
   adherence,
   unit,
+  pinned,
 }: {
   today: string;
   loadedFrom: string;
@@ -92,6 +96,8 @@ export function ProgressHome({
    * you did not want.
    */
   unit: DisplayUnit;
+  /** S81. Exactly one lift, or none -- which is a normal state, not an empty one. */
+  pinned: PinnedLift | null;
 }) {
   const [entries, setEntries] = useState(initialEntries);
   const [from, setFrom] = useState(loadedFrom);
@@ -232,6 +238,8 @@ export function ProgressHome({
           onWindowChange={setWindowKey}
           extending={chartUnderCovered}
         />
+
+        <PinnedLiftBlock pinned={pinned} />
 
         <ShowedUp adherence={adherence} />
 
@@ -599,6 +607,45 @@ function WeighInSheet({
  * observations ARE the answer, and a single derived number would hide which
  * half of it was thin.
  */
+export type PinnedLift = { id: string; name: string; points: LiftPoint[] };
+
+/**
+ * One lift on the progress tab (S81).
+ *
+ * A MINIATURE of the S80 chart with a tap through to the full one, and exactly
+ * one of them. Not a carousel, not a top three, not automatic: the pin is a
+ * statement of what this block is for, and a list of every exercise charted is
+ * the catalog again.
+ *
+ * No pin renders NOTHING -- not an empty state inviting one. An unpinned tab is
+ * complete, and a prompt to pin something would be the tab asking for work
+ * rather than answering a question.
+ */
+function PinnedLiftBlock({ pinned }: { pinned: PinnedLift | null }) {
+  if (!pinned) return null;
+
+  return (
+    <section className="border-b border-border px-5 py-4">
+      <div className="flex items-baseline justify-between gap-2">
+        <h2 className="text-sm font-medium">
+          <Link href={`/exercise/${pinned.id}`} className="underline-offset-4 hover:underline">
+            {pinned.name}
+          </Link>
+        </h2>
+        <span className="text-xs text-muted-foreground">Estimated 1RM</span>
+      </div>
+
+      {enoughSessions(pinned.points) ? (
+        <LiftChart points={pinned.points} compact />
+      ) : (
+        <p className="mt-2 text-xs text-muted-foreground">
+          Not enough sessions yet to draw a trend.
+        </p>
+      )}
+    </section>
+  );
+}
+
 /**
  * Effort, stated next to outcome (S65).
  *

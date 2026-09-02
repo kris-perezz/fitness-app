@@ -1,10 +1,10 @@
 "use client";
 
 import Link from "next/link";
-import { ChevronLeft, TrendingUp } from "lucide-react";
-import { CartesianGrid, Line, LineChart, XAxis, YAxis } from "recharts";
-
-import { CHART_CLASS, SERIES, X_AXIS, Y_AXIS, dayTick, measureDomain } from "@/lib/chart";
+import { ChevronLeft, Pin, PinOff, TrendingUp } from "lucide-react";
+import { useTransition } from "react";
+import { toast } from "sonner";
+import { pinExercise } from "@/app/progress-actions";
 import {
   MIN_LIFT_SESSIONS,
   REP_CAP,
@@ -16,7 +16,7 @@ import {
   type LiftSession,
 } from "@/lib/training";
 import { Button } from "@/components/ui/button";
-import { ChartContainer, type ChartConfig } from "@/components/ui/chart";
+import { LiftChart, enoughSessions } from "@/components/lift-chart";
 import { Empty, EmptyDescription, EmptyHeader, EmptyMedia, EmptyTitle } from "@/components/ui/empty";
 import { Item, ItemContent, ItemDescription, ItemTitle } from "@/components/ui/item";
 
@@ -31,30 +31,39 @@ import { Item, ItemContent, ItemDescription, ItemTitle } from "@/components/ui/i
  * alternative it offers is "nothing, whenever the exact numbers are already
  * listed underneath" -- which they are, session by session, below.
  */
-const liftConfig = {
-  e1rm: { label: "Est. 1RM", color: "var(--primary)" },
-  repBand: { label: "High-rep", color: "var(--muted-foreground)" },
-} satisfies ChartConfig;
-
 export function ExerciseScreen({
   exercise,
   points,
   sessions,
+  pinned,
 }: {
   exercise: Exercise;
   points: LiftPoint[];
   sessions: LiftSession[];
+  /** S81. Whether THIS lift is the one on the progress tab. */
+  pinned: boolean;
 }) {
-  const plottable = points.filter((p) => p.e1rm !== null || p.repBand !== null);
-  const enough = plottable.length >= MIN_LIFT_SESSIONS;
-  const showRepBand = hasRepBand(points);
+  const [pending, startTransition] = useTransition();
 
-  const domain = measureDomain(
-    points.flatMap((p) => [p.e1rm, p.repBand]),
-    // Pounds, so a pound of air either side is invisible. Five gives the line
-    // somewhere to sit without flattening it.
-    5,
-  );
+  /**
+   * ONE PIN, so pinning this lift replaces whatever was pinned before rather
+   * than adding to a list. The action takes an id and overwrites, which makes
+   * that the shape of the data rather than a rule the UI has to remember.
+   */
+  function togglePin() {
+    startTransition(async () => {
+      const res = await pinExercise(pinned ? null : exercise.id);
+      if (res.error) {
+        toast.error(res.error);
+        return;
+      }
+      toast.success(pinned ? "Unpinned" : `${exercise.name} pinned to Progress`);
+    });
+  }
+
+  const plottable = points.filter((p) => p.e1rm !== null || p.repBand !== null);
+  const enough = enoughSessions(points);
+  const showRepBand = hasRepBand(points);
 
   return (
     <main className="mx-auto w-full max-w-md flex-1 pb-[calc(6rem+env(safe-area-inset-bottom))]">
@@ -65,6 +74,19 @@ export function ExerciseScreen({
           </Link>
         </Button>
         <span className="truncate text-sm font-medium">{exercise.name}</span>
+        {/* Pushed to the right so it does not sit against the back arrow: it is
+            a setting, not part of navigation. */}
+        <Button
+          size="icon"
+          variant="ghost"
+          className="ml-auto"
+          onClick={togglePin}
+          disabled={pending}
+          aria-label={pinned ? "Unpin from Progress" : "Pin to Progress"}
+          aria-pressed={pinned}
+        >
+          {pinned ? <PinOff className="size-5" /> : <Pin className="size-5" />}
+        </Button>
       </header>
 
       {sessions.length === 0 ? (
@@ -98,47 +120,7 @@ export function ExerciseScreen({
                 trend. The sets are below in the meantime.
               </p>
             ) : (
-              <ChartContainer config={liftConfig} className={`mt-3 ${CHART_CLASS}`}>
-                <LineChart data={points} margin={{ left: 0, right: 8, top: 4 }} accessibilityLayer>
-                  <CartesianGrid vertical={false} />
-                  <XAxis dataKey="date" {...X_AXIS} tickFormatter={dayTick} />
-                  {/* Fitted, never zero-based: a lift is a measure, not a count
-                      (S79 rule 1), and a 0-300 axis draws a real 20 lb gain as
-                      a flat line. */}
-                  <YAxis domain={domain} {...Y_AXIS} width={38} />
-
-                  <Line
-                    {...SERIES}
-                    dataKey="e1rm"
-                    type="monotone"
-                    stroke="var(--color-e1rm)"
-                    strokeWidth={2.5}
-                    strokeLinecap="round"
-                    // Dots ON, unlike the weight chart: a lift has one point per
-                    // session rather than one per day, so the points are sparse
-                    // enough to mark and a reader wants to know which days were
-                    // sessions at all.
-                    dot={{ r: 2, fill: "var(--color-e1rm)", strokeWidth: 0 }}
-                  />
-
-                  {/* A SECOND SERIES, never merged into the first. S33 keeps the
-                      bands apart because Brzycki means nothing past ~10 reps: a
-                      140 x 30 squat estimates above a genuine 315 single, and
-                      one line would rate it higher. Drawn only where the
-                      exercise actually has high-rep work. */}
-                  {showRepBand && (
-                    <Line
-                      {...SERIES}
-                      dataKey="repBand"
-                      type="monotone"
-                      stroke="var(--color-repBand)"
-                      strokeWidth={1.5}
-                      strokeDasharray="4 3"
-                      dot={{ r: 1.6, fill: "var(--color-repBand)", strokeWidth: 0 }}
-                    />
-                  )}
-                </LineChart>
-              </ChartContainer>
+              <LiftChart points={points} />
             )}
 
             {showRepBand && enough && (

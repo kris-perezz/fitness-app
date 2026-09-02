@@ -3,6 +3,7 @@ import { wakingDate } from "@/lib/food";
 import { WINDOW_MONTHS, shiftMonth } from "@/lib/training";
 import { toWeighIn } from "@/lib/weight";
 import { adherence, weeklyEnergy } from "@/lib/energy";
+import { liftHistory, type WorkoutSet } from "@/lib/training";
 import type { IntakeDay } from "@/lib/trends";
 import { ProgressHome } from "@/components/progress-home";
 
@@ -45,7 +46,7 @@ export default async function ProgressPage() {
       .order("log_date", { ascending: false }),
     supabase
       .from("nutrition_settings")
-      .select("goal_weight_lb, goal_rate_lb_per_week, display_weight_unit")
+      .select("goal_weight_lb, goal_rate_lb_per_week, display_weight_unit, pinned_exercise_id")
       .maybeSingle(),
     // The first day in the log, which is what bounds S62's All. One row, and
     // the (user_id, log_date) index answers it without a scan. Fetched here
@@ -69,6 +70,14 @@ export default async function ProgressPage() {
 
   const weighIns = (data ?? []).map(toWeighIn);
 
+  /**
+   * S81. The pinned lift, fetched SECOND because the pin is only known after
+   * the settings row arrives. One extra round trip, and only when a pin exists
+   * -- no pin is a normal state and costs nothing.
+   */
+  const pinnedId = (settings?.pinned_exercise_id as string | null | undefined) ?? null;
+  const pinned = pinnedId ? await loadPinnedLift(supabase, pinnedId) : null;
+
   return (
     <ProgressHome
       today={today}
@@ -79,6 +88,7 @@ export default async function ProgressPage() {
       // S69. Defaults to lb when the column is missing, which is what the app
       // stores anyway -- so a preview running ahead of 0024 reads correctly.
       unit={settings?.display_weight_unit === "kg" ? "kg" : "lb"}
+      pinned={pinned}
       adherence={adherence(
         (intake ?? []) as IntakeDay[],
         ((sessions ?? []) as { log_date: string }[]).map((w) => w.log_date),
@@ -92,4 +102,25 @@ export default async function ProgressPage() {
       }}
     />
   );
+}
+
+/** The pinned exercise and its history, or null if it has been deleted since. */
+async function loadPinnedLift(
+  supabase: Awaited<ReturnType<typeof createClient>>,
+  exerciseId: string,
+) {
+  const [{ data: exercise }, { data: slots }] = await Promise.all([
+    supabase.from("exercises").select("id, name").eq("id", exerciseId).maybeSingle(),
+    supabase
+      .from("workout_exercises")
+      .select("workout:workouts!inner(log_date), sets:workout_sets(*)")
+      .eq("exercise_id", exerciseId),
+  ]);
+  if (!exercise) return null;
+
+  const rows = (slots ?? []) as unknown as { workout: { log_date: string }; sets: WorkoutSet[] }[];
+  const { points } = liftHistory(
+    rows.map((row) => ({ log_date: row.workout.log_date, sets: row.sets ?? [] })),
+  );
+  return { id: exercise.id as string, name: exercise.name as string, points };
 }
