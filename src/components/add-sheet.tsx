@@ -309,7 +309,7 @@ function QtyStep({
             with the information, and this is the last screen before a CNF
             number becomes an entry. */}
         {(food.source === "off" || food.source === "cnf") && (
-          <p className="mt-1 text-xs text-muted-foreground">{sourceHint(food.source)}</p>
+          <p className="mt-1 text-xs text-muted-foreground">{sourceHint(food.source, food.derived_from)}</p>
         )}
         <p className="mt-1 text-xs text-muted-foreground">
           {show(food.kcal)} cal · {show(food.protein_g)}g protein · {show(food.carb_g)}g carbs ·{" "}

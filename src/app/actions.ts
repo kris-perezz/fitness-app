@@ -366,6 +366,17 @@ export async function updateFood(
 
   const source: FoodSource = current.source === "label" ? "label" : "manual";
 
+  // S97. What the row descended from, kept because `source` no longer says it.
+  // A second correction must not rewrite this to `manual` and lose the original
+  // ancestry, so an already-forked row carries its own answer forward. A label
+  // row keeps its source and therefore needs no ancestry at all.
+  const derivedFrom: FoodSource | null =
+    source === "label"
+      ? null
+      : current.source === "manual"
+        ? (current.derived_from ?? null)
+        : current.source;
+
   const fields = {
     name: edit.name.trim(),
     grams_per_unit: edit.grams_per_unit,
@@ -383,6 +394,9 @@ export async function updateFood(
     // after this they are no longer the database's numbers -- they are yours,
     // and the hierarchy ranks them above Open Food Facts accordingly.
     source,
+    // ...but where they STARTED still matters, and for a CNF row it is a
+    // licence obligation rather than a nicety (S97, 0028).
+    derived_from: derivedFrom,
     // Somebody has now checked these against a package, which is what the
     // column has meant since 0001.
     verified: true,
