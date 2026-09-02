@@ -269,13 +269,19 @@ export function LogScreen({
 }
 
 /**
- * One macro against its goal (S72/S74).
+ * One macro, and in strict mode the goal it is measured against (S72/S74).
  *
  * TAKES THE METRIC, NOT JUST THE GOAL. A goal number cannot say which way is
  * good, and this component used to assume every one of them was a ceiling --
  * so protein went `destructive` at 200 g against a 155 g floor, red at the user
  * for hitting the thing they were aiming at. Direction is declared once in
  * `lib/tone.ts` and asked for here.
+ *
+ * S79: CALM SHOWS THE NUMBER AND STOPS. No `82 / 155g`, no bar behind it -- a
+ * fraction is a score whatever colour it is painted, and three of them under
+ * the ring turn a day of eating into three things you are behind on. The goals
+ * still exist, still drive the calorie split, and still come back the moment
+ * strict is on; the calm screen just does not grade you against them.
  */
 function MacroMeter({
   label,
@@ -293,8 +299,10 @@ function MacroMeter({
   finished: boolean;
   tone: Tone;
 }) {
-  const pct = fillPercent(value, goal);
-  const alarming = isAlarming(metric, statusOf(metric, value, goal, finished), tone);
+  // S79. The goal is a strict-mode idea. Resolved HERE rather than at the three
+  // call sites so there is one place that can ever decide to grade a macro.
+  const against = tone === "strict" ? goal : null;
+  const alarming = isAlarming(metric, statusOf(metric, value, against, finished), tone);
 
   return (
     <div>
@@ -302,20 +310,30 @@ function MacroMeter({
         <span className="text-muted-foreground">{label}</span>
         <span className="tabular-nums">
           {round(value)}
-          {goal !== null && <span className="text-muted-foreground"> / {round(goal)}g</span>}
+          {against === null ? (
+            <span className="text-muted-foreground">g</span>
+          ) : (
+            <span className="text-muted-foreground"> / {round(against)}g</span>
+          )}
         </span>
       </div>
       {/* The registry's Progress, not a hand-built bar. It carries the
           progressbar role and its aria-valuenow, which two divs and an inline
-          width never did. */}
-      <Progress
-        value={pct}
-        aria-label={`${label}: ${round(value)} of ${goal === null ? "no" : round(goal)} grams`}
-        className={cn(
-          "mt-1.5 h-1",
-          alarming && "[&>[data-slot=progress-indicator]]:bg-destructive",
-        )}
-      />
+          width never did.
+
+          Absent entirely without a goal, rather than sitting there at zero: a
+          bar with nothing to fill against is a progressbar whose aria-valuenow
+          is a lie, and visually it reads as a day you have not started. */}
+      {against !== null && (
+        <Progress
+          value={fillPercent(value, against)}
+          aria-label={`${label}: ${round(value)} of ${round(against)} grams`}
+          className={cn(
+            "mt-1.5 h-1",
+            alarming && "[&>[data-slot=progress-indicator]]:bg-destructive",
+          )}
+        />
+      )}
     </div>
   );
 }

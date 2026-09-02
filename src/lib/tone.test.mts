@@ -1,7 +1,7 @@
 import test from "node:test";
 import assert from "node:assert/strict";
 
-import { DIRECTION, captionFor, fillPercent, isAlarming, statusOf } from "./tone.ts";
+import { DIRECTION, captionFor, fillPercent, isAlarming, ringFigure, statusOf } from "./tone.ts";
 
 test("beating a protein floor is met, and is never alarming", () => {
   // THE LIVE BUG S72 NAMES. MacroMeter painted 200 g against a 155 g floor
@@ -75,11 +75,19 @@ test("the caption states the fact and nothing more", () => {
   assert.equal(captionFor("protein", 100, 155), "left");
 });
 
-test("S77: the tone cannot reach any function that produces a number", () => {
+test("S77: the tone cannot reach any function that decides what a number IS", () => {
   // S77 asks for "flip the tone, re-render a logged month, identical numbers".
   // The structural version of that is stronger and cannot rot: the three
-  // functions that decide what a number IS take no tone argument at all, so
+  // functions that decide what a number MEANS take no tone argument at all, so
   // there is no code path by which the mode could change one.
+  //
+  // S79 narrowed this from its original wording, "cannot reach any function
+  // that produces a number", and the narrowing is deliberate rather than a
+  // loosened test: the tone now also decides WHICH fact the calorie ring shows
+  // -- what you ate, or what is left of a goal. Both are the same untouched
+  // total read two ways, neither is stored, and flipping the switch back
+  // restores the other reading for every day already logged, which is the
+  // promise S77 was actually making.
   //
   // Written as arity checks rather than as a comparison, because comparing
   // `statusOf(...)` to `statusOf(...)` with no tone to vary would pass whatever
@@ -89,13 +97,15 @@ test("S77: the tone cannot reach any function that produces a number", () => {
   assert.equal(fillPercent.length, 2, "fillPercent(value, goal)");
   assert.equal(captionFor.length, 3, "captionFor(metric, value, goal)");
 
-  // And isAlarming is the ONLY one that takes it, which is what makes the tone
-  // a paint decision rather than an arithmetic one.
+  // Exactly two functions take the tone, and both choose what to SHOW rather
+  // than what to compute. Arity checks because a default parameter is invisible
+  // to `length`: both read `(…, tone = "calm")` and so declare one less.
   assert.equal(isAlarming.length, 2, "isAlarming(metric, status, tone = calm)");
+  assert.equal(ringFigure.length, 2, "ringFigure(consumed, goal, tone = calm)");
 });
 
-test("S77: only the alarm differs between the modes", () => {
-  // And it differs in exactly one direction: strict adds red where calm had
+test("S77: the alarm differs in exactly one direction between the modes", () => {
+  // Strict adds red where calm had none, and never the reverse: strict adds red where calm had
   // none, and never removes it. Sodium is red in both, which is S73.
   const status = statusOf("calories", 2400, 2100, true);
   assert.equal(isAlarming("calories", status, "calm"), false);
@@ -112,4 +122,25 @@ test("S76: strict is louder about the same facts, never a new judgement", () => 
   const met = statusOf("protein", 200, 155, true);
   assert.equal(met, "met");
   assert.equal(isAlarming("protein", met, "strict"), false);
+});
+
+test("S79: calm shows what was eaten, and only strict counts down", () => {
+  // The goal is a strict-mode idea, so calm never states a remainder -- under
+  // the goal or past it, the ring is what you ate. The arc still fills.
+  assert.deepEqual(ringFigure(1900, 2100), { value: 1900, caption: "eaten" });
+  assert.deepEqual(ringFigure(2240, 2100), { value: 2240, caption: "eaten" });
+
+  assert.deepEqual(ringFigure(1900, 2100, "strict"), { value: 200, caption: "left" });
+  assert.deepEqual(ringFigure(2100, 2100, "strict"), { value: 0, caption: "left" });
+});
+
+test("S78: even strict stops subtracting once the goal is passed", () => {
+  // Counting down is fair for a day in progress; the same subtraction run past
+  // the goal puts a tally of the overshoot in the biggest type on the screen.
+  // Strict names it in the red line under the ring instead.
+  assert.deepEqual(ringFigure(2240, 2100, "strict"), { value: 2240, caption: "eaten" });
+});
+
+test("no goal on file is not a goal of zero", () => {
+  assert.deepEqual(ringFigure(1900, 0, "strict"), { value: 1900, caption: "eaten" });
 });

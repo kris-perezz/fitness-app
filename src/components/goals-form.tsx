@@ -4,13 +4,14 @@ import { useState, useTransition } from "react";
 import { saveGoals, signOut } from "@/app/actions";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
+import { Field, FieldGroup, FieldLabel } from "@/components/ui/field";
 import {
-  Field,
-  FieldContent,
-  FieldDescription,
-  FieldGroup,
-  FieldLabel,
-} from "@/components/ui/field";
+  Popover,
+  PopoverContent,
+  PopoverDescription,
+  PopoverTrigger,
+} from "@/components/ui/popover";
+import { Info } from "lucide-react";
 import {
   MACRO_KEYS,
   balance,
@@ -42,6 +43,43 @@ type FieldName = "calorie_goal" | MacroKey;
 function showGoal(lb: number | null | undefined, unit: DisplayUnit): string {
   if (lb == null) return "";
   return String(Math.round(toDisplay(lb, unit) * 10) / 10);
+}
+
+/**
+ * The explanation for a field, behind a tap rather than under it.
+ *
+ * A goals screen accumulates prose: every field here had a paragraph beneath it
+ * explaining a rule, and four paragraphs of grey text is what a settings screen
+ * looks like when nobody has decided what matters. The rules still matter --
+ * they are just answers to a question, and an answer only has to be there when
+ * the question is asked.
+ *
+ * POPOVER, NOT TOOLTIP, and the registry has both. A Radix tooltip opens on
+ * hover and focus; this app is a phone app, where there is no hover and the
+ * only way in is a tap. Popover is the same disclosure with a trigger that
+ * exists on touch, and it takes the keyboard and the screen reader with it.
+ */
+function FieldHint({ label, children }: { label: string; children: React.ReactNode }) {
+  return (
+    <Popover>
+      <PopoverTrigger asChild>
+        <Button
+          type="button"
+          variant="ghost"
+          size="icon"
+          // Small mark, full-size target: the icon reads as 14px and the button
+          // still answers to a thumb.
+          className="-my-2 size-8 text-muted-foreground"
+          aria-label={label}
+        >
+          <Info className="size-3.5" />
+        </Button>
+      </PopoverTrigger>
+      <PopoverContent align="end" className="w-72">
+        <PopoverDescription className="text-xs">{children}</PopoverDescription>
+      </PopoverContent>
+    </Popover>
+  );
 }
 
 const MACRO_LABELS: Record<MacroKey, string> = {
@@ -192,54 +230,104 @@ export function GoalsForm({ goals }: { goals: Goals }) {
       </header>
 
       <div className="space-y-6 px-5 py-6">
-        <Field>
-          <FieldLabel htmlFor="calorie_goal" className="text-xs font-normal text-muted-foreground">
-            Daily calories
-          </FieldLabel>
-          <Input
-            id="calorie_goal"
-            type="number"
-            inputMode="decimal"
-            value={form.calorie_goal}
-            onChange={(e) => setForm({ ...form, calorie_goal: e.target.value })}
-            onBlur={() => reconcile("calorie_goal")}
-            className="h-12 text-base tabular-nums"
-          />
-        </Field>
+        {/* S75/S79. FIRST ON THE SCREEN, because it now decides what the rest
+            of the screen is for: with it off there are no macro targets to set,
+            so a form full of them would be asking for numbers nothing reads.
 
-        {/* The running total is Field's description slot rather than a loose
-            paragraph: it describes the macro group as a whole, which is why it
-            sits on the group and not on any one macro. It is not FieldError --
-            a split that disagrees with the calorie goal is a transient state
-            mid-type that `reconcile` fixes on blur, not something the user has
-            to correct. */}
+            A Field with a real description under it, not a bare switch in a row
+            of switches -- the registry's own field-switch pattern. The
+            disclaimer is shown HERE, where the decision is made, rather than in
+            a help page nobody opens. */}
         <FieldGroup className="gap-2">
-          <div className="grid grid-cols-3 gap-3">
-            {MACRO_KEYS.map((key) => (
-              <Field key={key}>
-                <FieldLabel htmlFor={key} className="text-xs font-normal text-muted-foreground">
-                  {MACRO_LABELS[key]}
-                </FieldLabel>
-                <Input
-                  id={key}
-                  type="number"
-                  inputMode="decimal"
-                  value={form[key]}
-                  onChange={(e) => setForm({ ...form, [key]: e.target.value })}
-                  onBlur={() => reconcile(key)}
-                  className="h-12 text-base tabular-nums"
-                />
-              </Field>
-            ))}
-          </div>
-          <FieldContent>
-            <FieldDescription className="text-xs">
-              Those macros add up to{" "}
-              <span className="tabular-nums text-foreground">{caloriesOf(current)}</span> calories.
-              Change any field and the rest follow.
-            </FieldDescription>
-          </FieldContent>
+          {/* Label and hint WRAPPED, like every other hinted row on this
+              screen. `orientation="horizontal"` puts `flex-auto` on a direct
+              child label, which stretches it and strands the hint against the
+              switch -- the one row where the mark sat on the right. */}
+          <Field orientation="horizontal" className="justify-between">
+            <div className="flex items-center gap-1">
+              <FieldLabel htmlFor="strict_mode">Strict mode</FieldLabel>
+              <FieldHint label="What strict mode does">
+                Shows your macro targets on the log and trends tabs, and paints them red when you
+                go past. With it off the app logs the same food and shows the same totals, without
+                scoring them against anything. If a red number would sour an ordinary day, leave
+                this off.
+              </FieldHint>
+            </div>
+            <Switch id="strict_mode" checked={strict} onCheckedChange={setStrict} />
+          </Field>
         </FieldGroup>
+
+        {/* S79. EVERY TARGET ON THIS SCREEN IS A STRICT-MODE IDEA, so in calm
+            none of them are here to set. A form of numbers that nothing on any
+            other tab will show you reads as a target you are held to somewhere
+            off screen, which is the thing we were removing.
+
+            Hidden, not cleared. The values stay in state and stay reconciled,
+            so turning strict back on finds the split exactly as it was rather
+            than a form full of defaults. */}
+        {strict && (
+          <>
+            <Field>
+              <FieldLabel
+                htmlFor="calorie_goal"
+                className="text-xs font-normal text-muted-foreground"
+              >
+                Daily calories
+              </FieldLabel>
+              <Input
+                id="calorie_goal"
+                type="number"
+                inputMode="decimal"
+                value={form.calorie_goal}
+                onChange={(e) => setForm({ ...form, calorie_goal: e.target.value })}
+                onBlur={() => reconcile("calorie_goal")}
+                className="h-12 text-base tabular-nums"
+              />
+            </Field>
+
+            {/* The three fields had no group label at all -- the paragraph
+                underneath was doing that job as well as explaining the rule.
+                With the prose behind the hint, the group needs a name of its
+                own, and the running total rides on it: it describes the macros
+                as a whole, which is why it sits here and not on any one field.
+
+                Still not a FieldError. A split that disagrees with the calorie
+                goal is a transient state mid-type that `reconcile` fixes on
+                blur, not something the user has to correct. */}
+            <FieldGroup className="gap-2">
+              <div className="mb-1 flex items-center gap-1">
+                <FieldLabel className="text-xs font-normal text-muted-foreground">
+                  Macros
+                </FieldLabel>
+                <FieldHint label="How the macro split works">
+                  These add up to the calorie goal above. Change any field and the rest follow, so
+                  the split always spends exactly the calories you set.
+                </FieldHint>
+                <span className="ml-auto text-xs tabular-nums text-muted-foreground">
+                  {caloriesOf(current)} cal
+                </span>
+              </div>
+              <div className="grid grid-cols-3 gap-3">
+                {MACRO_KEYS.map((key) => (
+                  <Field key={key}>
+                    <FieldLabel htmlFor={key} className="text-xs font-normal text-muted-foreground">
+                      {MACRO_LABELS[key]}
+                    </FieldLabel>
+                    <Input
+                      id={key}
+                      type="number"
+                      inputMode="decimal"
+                      value={form[key]}
+                      onChange={(e) => setForm({ ...form, [key]: e.target.value })}
+                      onBlur={() => reconcile(key)}
+                      className="h-12 text-base tabular-nums"
+                    />
+                  </Field>
+                ))}
+              </div>
+            </FieldGroup>
+          </>
+        )}
 
         {/* S60. On the goals tab with the rest of the prescription, and read on
             the progress tab: one screen holds what you decided, the other holds
@@ -247,44 +335,71 @@ export function GoalsForm({ goals }: { goals: Goals }) {
             file the progress tab simply states the rate and nothing sits beside
             it. Nothing else degrades. */}
         <FieldGroup className="gap-2">
-          <div className="grid grid-cols-2 gap-3">
-            <Field>
-              <FieldLabel
-                htmlFor="goal_weight_lb"
-                className="text-xs font-normal text-muted-foreground"
-              >
-                Goal weight ({unit})
+          {/* S79. The two goal fields go with the rest of the targets; the unit
+              toggle below them does NOT. It is not a goal -- it changes how
+              every weight in the app reads, including the weigh-in sheet and
+              the progress chart, and both of those work identically in calm. */}
+          {strict && (
+            <>
+            <div className="mb-1 flex items-center gap-1">
+              <FieldLabel className="text-xs font-normal text-muted-foreground">
+                Weight goal
               </FieldLabel>
-              <Input
-                id="goal_weight_lb"
-                type="number"
-                inputMode="decimal"
-                value={form.goal_weight_lb}
-                onChange={(e) => setForm({ ...form, goal_weight_lb: e.target.value })}
-                placeholder="None"
-                className="h-12 text-base tabular-nums"
-              />
-            </Field>
-            <Field>
-              <FieldLabel
-                htmlFor="goal_rate_lb_per_week"
-                className="text-xs font-normal text-muted-foreground"
-              >
-                Goal rate ({unit}/week)
+              <FieldHint label="How the weight goal reads">
+                Negative to lose, positive to gain, 0 to maintain. Leave either blank for no goal.
+              </FieldHint>
+            </div>
+            <div className="grid grid-cols-2 gap-3">
+              <Field>
+                <FieldLabel
+                  htmlFor="goal_weight_lb"
+                  className="text-xs font-normal text-muted-foreground"
+                >
+                  Goal weight ({unit})
+                </FieldLabel>
+                <Input
+                  id="goal_weight_lb"
+                  type="number"
+                  inputMode="decimal"
+                  value={form.goal_weight_lb}
+                  onChange={(e) => setForm({ ...form, goal_weight_lb: e.target.value })}
+                  placeholder="None"
+                  className="h-12 text-base tabular-nums"
+                />
+              </Field>
+              <Field>
+                <FieldLabel
+                  htmlFor="goal_rate_lb_per_week"
+                  className="text-xs font-normal text-muted-foreground"
+                >
+                  Goal rate ({unit}/week)
+                </FieldLabel>
+                <Input
+                  id="goal_rate_lb_per_week"
+                  type="number"
+                  inputMode="decimal"
+                  value={form.goal_rate_lb_per_week}
+                  onChange={(e) => setForm({ ...form, goal_rate_lb_per_week: e.target.value })}
+                  placeholder="None"
+                  className="h-12 text-base tabular-nums"
+                />
+              </Field>
+            </div>
+            </>
+          )}
+          <div className="flex items-center justify-between gap-3 pt-2">
+            <div className="flex items-center gap-1">
+              <FieldLabel className="text-xs font-normal text-muted-foreground">
+                Show weight in
               </FieldLabel>
-              <Input
-                id="goal_rate_lb_per_week"
-                type="number"
-                inputMode="decimal"
-                value={form.goal_rate_lb_per_week}
-                onChange={(e) => setForm({ ...form, goal_rate_lb_per_week: e.target.value })}
-                placeholder="None"
-                className="h-12 text-base tabular-nums"
-              />
-            </Field>
-          </div>
-          <div className="flex items-center justify-between gap-3 pt-1">
-            <span className="text-xs text-muted-foreground">Show weight in</span>
+              {/* The storage rule belongs to the TOGGLE, not to the goal
+                  fields above it -- it answers "did switching this change my
+                  numbers", and it is the one hint that has to survive into
+                  calm, where the goal fields are gone and this row is not. */}
+              <FieldHint label="How the weight unit works">
+                Weight is always stored in pounds; the unit only changes what you read.
+              </FieldHint>
+            </div>
             {/* Registry ToggleGroup, the same control the chart window and the
                 by-amount switch use -- two states with no default that is right
                 for everybody is a toggle, not a dropdown. */}
@@ -304,32 +419,6 @@ export function GoalsForm({ goals }: { goals: Goals }) {
               </ToggleGroupItem>
             </ToggleGroup>
           </div>
-          <FieldContent>
-            <FieldDescription className="text-xs">
-              Negative to lose, positive to gain, 0 to maintain. Leave either
-              blank for no goal. Weight is always stored in pounds; the unit only
-              changes what you read.
-            </FieldDescription>
-          </FieldContent>
-        </FieldGroup>
-
-        {/* S75. A Field with a real description under it, not a bare switch in
-            a row of switches -- the registry's own field-switch pattern. The
-            disclaimer is shown HERE, where the decision is made, rather than in
-            a help page nobody opens. */}
-        <FieldGroup className="gap-2">
-          <Field orientation="horizontal">
-            <FieldContent>
-              <FieldLabel htmlFor="strict_mode">Strict mode</FieldLabel>
-              <FieldDescription className="text-xs">
-                This only changes how numbers are shown — never what is logged, and never your
-                targets. Daily intake swings, and strict colours can make ordinary days feel like
-                failures. If tracking has ever been a difficult relationship for you, leave this
-                off. You can switch it back any time and nothing is kept.
-              </FieldDescription>
-            </FieldContent>
-            <Switch id="strict_mode" checked={strict} onCheckedChange={setStrict} />
-          </Field>
         </FieldGroup>
 
         <Button className="h-11 w-full text-base" onClick={save} disabled={pending}>

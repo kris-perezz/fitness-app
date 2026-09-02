@@ -130,3 +130,31 @@ export function captionFor(metric: Metric, value: number, goal: number | null): 
   if (DIRECTION[metric] === "floor" && value >= goal) return null;
   return value > goal ? "over" : "left";
 }
+
+/**
+ * The two figures in the middle of the calorie ring.
+ *
+ * CALM SHOWS WHAT YOU ATE. Not what is left: a countdown to zero is a budget
+ * draining, and the same subtraction run past the goal turns into a tally of
+ * the overshoot in the largest type on the screen. The arc still fills against
+ * the goal, so the shape of the day survives -- what goes is the score attached
+ * to it. Strict counts down, which is what strict is for.
+ *
+ * PAST THE GOAL EVEN STRICT STOPS SUBTRACTING (S78). Strict names the overshoot
+ * in its own red line under the ring, where a caption can carry it; the biggest
+ * number on the screen does not need to be one you are behind by.
+ *
+ * TAKES THE TONE, and is one of exactly two functions that may (see the S77
+ * test). What it chooses is which fact to SHOW -- both figures are the same
+ * untouched totals, nothing is stored, and flipping the switch back restores
+ * the other reading for every day already logged.
+ */
+export function ringFigure(
+  consumed: number,
+  goal: number,
+  tone: Tone = "calm",
+): { value: number; caption: string | null } {
+  if (tone !== "strict" || goal <= 0) return { value: consumed, caption: "eaten" };
+  if (consumed <= goal) return { value: goal - consumed, caption: "left" };
+  return { value: consumed, caption: "eaten" };
+}

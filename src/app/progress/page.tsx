@@ -46,7 +46,9 @@ export default async function ProgressPage() {
       .order("log_date", { ascending: false }),
     supabase
       .from("nutrition_settings")
-      .select("goal_weight_lb, goal_rate_lb_per_week, display_weight_unit, pinned_exercise_id")
+      .select(
+        "goal_weight_lb, goal_rate_lb_per_week, display_weight_unit, pinned_exercise_id, strict_mode",
+      )
       .maybeSingle(),
     // The first day in the log, which is what bounds S62's All. One row, and
     // the (user_id, log_date) index answers it without a scan. Fetched here
@@ -95,11 +97,23 @@ export default async function ProgressPage() {
       )}
       // Numeric arrives from PostgREST as a string. `?? null` and not `??
       // undefined`: no goal is a state the screen renders deliberately (S60).
-      goal={{
-        weightLb: settings?.goal_weight_lb != null ? Number(settings.goal_weight_lb) : null,
-        rateLbPerWeek:
-          settings?.goal_rate_lb_per_week != null ? Number(settings.goal_rate_lb_per_week) : null,
-      }}
+      //
+      // S79. Calm sends both halves as null, because calm has no way to SET
+      // them any more -- the fields left the goals tab with the rest of the
+      // targets. A goal you can read but not edit is worse than no goal, and
+      // S60 already built the blank state this falls back into: the rate is
+      // stated and nothing sits beside it.
+      goal={
+        settings?.strict_mode === true
+          ? {
+              weightLb: settings?.goal_weight_lb != null ? Number(settings.goal_weight_lb) : null,
+              rateLbPerWeek:
+                settings?.goal_rate_lb_per_week != null
+                  ? Number(settings.goal_rate_lb_per_week)
+                  : null,
+            }
+          : { weightLb: null, rateLbPerWeek: null }
+      }
     />
   );
 }
