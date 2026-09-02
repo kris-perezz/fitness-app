@@ -14,10 +14,9 @@ import {
   type MuscleVolume,
 } from "@/lib/training";
 import { Bar, BarChart, LabelList, XAxis, YAxis } from "recharts";
+import { AXIS_TICK, countDomain } from "@/lib/chart";
 import {
   ChartContainer,
-  ChartTooltip,
-  ChartTooltipContent,
   type ChartConfig,
 } from "@/components/ui/chart";
 import { closeStaleWorkouts, loadTrainingWindow, openWorkoutOn } from "@/app/training-actions";
@@ -153,10 +152,11 @@ export function TrainHome({
       const key = `${row.date.slice(0, 7)}|${row.muscle}`;
       byMonthMuscle.set(key, (byMonthMuscle.get(key) ?? 0) + row.sets);
     }
-    const peak = Math.max(0, ...byMonthMuscle.values());
-    // Rounded up to a ten so the ruler is stable: without it, one extra set in
-    // the biggest month rescales every bar on screen by a hair.
-    return Math.max(10, Math.ceil(peak / 10) * 10);
+    // Zero-based and rounded up to a ten, per the chart contract: sets are a
+    // COUNT, so zero is a real value here in a way it is not on a bodyweight
+    // axis, and the rounding is what keeps the ruler still when one extra set
+    // lands in the biggest month.
+    return countDomain([...byMonthMuscle.values()])[1];
   }, [volume]);
   const [, startTransition] = useTransition();
 
@@ -491,14 +491,13 @@ function MonthVolume({
               width={92}
               // Set on the tick rather than by className: recharts renders SVG
               // <text>, which a Tailwind font-size class does not reach.
-              tick={{ fontSize: 11 }}
+              tick={AXIS_TICK}
             />
-            {/* Kept for pointer devices, but it is no longer where the numbers
-                live. A tooltip is a hover affordance and this app is used on a
-                phone mid-session, one-handed -- putting the only copy of the
-                figures behind hover made them unreachable exactly where they
-                are needed. */}
-            <ChartTooltip cursor={false} content={<ChartTooltipContent />} />
+            {/* NO TOOLTIP, per the chart contract (S79 rule 3). It used to be
+                here "for pointer devices", which is the shape of exception that
+                makes a contract mean nothing -- and it was already redundant:
+                every bar carries its own figure in the LabelList below, so
+                hover had no number left to reveal. */}
             <Bar
               dataKey="sets"
               fill="var(--color-sets)"

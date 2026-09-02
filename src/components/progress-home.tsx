@@ -28,6 +28,7 @@ import { Button } from "@/components/ui/button";
 import { ToggleGroup, ToggleGroupItem } from "@/components/ui/toggle-group";
 import { Calendar } from "@/components/ui/calendar";
 import { ChartContainer, type ChartConfig } from "@/components/ui/chart";
+import { CHART_CLASS, SERIES, X_AXIS, Y_AXIS, dayTick } from "@/lib/chart";
 import { ConfirmAction } from "@/components/confirm-action";
 import {
   Drawer,
@@ -581,36 +582,16 @@ function WeightChart({
           saying so would present "not loaded yet" as "you did not weigh". */}
       <div className={extending ? "opacity-50 transition-opacity" : "transition-opacity"}>
 
-      <ChartContainer config={weightConfig} className="mt-3 h-[180px] w-full">
+      <ChartContainer config={weightConfig} className={`mt-3 ${CHART_CLASS}`}>
         <LineChart accessibilityLayer data={points} margin={{ left: 0, right: 8, top: 4 }}>
           {/* Horizontal only. Vertical rules would divide a continuous span of
               days into boxes that mean nothing -- there is no week boundary in
               this data, and S58 is built on there not being one. */}
           <CartesianGrid vertical={false} />
-          <XAxis
-            dataKey="date"
-            tickLine={false}
-            axisLine={false}
-            tickMargin={8}
-            minTickGap={48}
-            tick={{ fontSize: 11 }}
-            tickFormatter={(date: string) =>
-              new Date(`${date}T12:00:00`).toLocaleDateString(undefined, {
-                day: "numeric",
-                month: "short",
-              })
-            }
-          />
-          <YAxis
-            // Fitted, never zero-based: a 0-200 axis flattens a real cut into a
-            // horizontal line (S79). See axisDomain.
-            domain={domain}
-            tickLine={false}
-            axisLine={false}
-            tickCount={4}
-            width={34}
-            tick={{ fontSize: 11 }}
-          />
+          <XAxis dataKey="date" {...X_AXIS} tickFormatter={dayTick} />
+          {/* Fitted, never zero-based: a 0-200 axis flattens a real cut into a
+              horizontal line. The rule is S79's, applied by axisDomain. */}
+          <YAxis domain={domain} {...Y_AXIS} />
 
           {/* No ChartTooltip. There is no hover on a phone, and S79 rules out a
               touch tooltip nobody discovers -- the exact numbers are in the
@@ -626,15 +607,16 @@ function WeightChart({
               muted-foreground against primary is a brightness step this theme
               barely renders, so the two series read as one texture. */}
           <Line
+            {...SERIES}
             dataKey="weightLb"
             type="monotone"
             stroke="none"
-            connectNulls={false}
+            // The one place a series overrides the contract's `dot: false`, and
+            // it is the point of this series: the readings ARE the dots.
             dot={{ r: 1.6, fill: "var(--color-weightLb)", fillOpacity: 0.45, strokeWidth: 0 }}
-            activeDot={false}
-            isAnimationActive={false}
           />
           <Line
+            {...SERIES}
             dataKey="trendLb"
             type="monotone"
             stroke="var(--color-trendLb)"
@@ -643,12 +625,6 @@ function WeightChart({
             // keeps its own edge where it crosses a cloud of them rather than
             // dissolving into it.
             strokeLinecap="round"
-            // The whole reason the series carries nulls. A line drawn across a
-            // fortnight you did not weigh is a measurement you did not take.
-            connectNulls={false}
-            dot={false}
-            activeDot={false}
-            isAnimationActive={false}
           />
         </LineChart>
       </ChartContainer>

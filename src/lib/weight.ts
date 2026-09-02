@@ -7,6 +7,8 @@
  * decision 2, settled that way for exactly this reason.
  */
 
+import { measureDomain } from "./chart.ts";
+
 /** One scale reading. `note` is optional and never appears in a list row. */
 export type WeighIn = {
   date: string;
@@ -170,17 +172,16 @@ export function chartSeries(entries: WeighIn[], fromDate?: string): ChartPoint[]
  * The y-axis bounds for the chart, fitted to the data with a pound of air above
  * and below.
  *
- * NOT zero-based, and S79 is emphatic about why: a 0-200 lb axis flattens a
- * genuine cut into a horizontal line. Zero-based is right for counts, where zero
- * is a real value with a meaning; a bodyweight axis that reaches zero is
- * measuring against a number no reader has ever been.
+ * The RULE lives in `lib/chart.ts` now (S79) and this is the weight chart
+ * applying it -- all this function still owns is which fields of a point carry
+ * a number. Both series go in: fitting to the trend alone would let a reading
+ * sit outside its own axis.
  */
 export function axisDomain(points: ChartPoint[], pad = 1): [number, number] {
-  const values = points.flatMap((p) =>
-    [p.weightLb, p.trendLb].filter((v): v is number => v !== null),
+  return measureDomain(
+    points.flatMap((p) => [p.weightLb, p.trendLb]),
+    pad,
   );
-  if (values.length === 0) return [0, 1];
-  return [Math.floor(Math.min(...values) - pad), Math.ceil(Math.max(...values) + pad)];
 }
 
 /**
