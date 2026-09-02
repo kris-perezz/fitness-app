@@ -17,7 +17,7 @@
  * unknown weight -- represented as such, never quietly as zero.
  */
 
-import { scale, type Food, type Macros } from "./food.ts";
+import { scale, scaledMicros, type Food, type Macros } from "./food.ts";
 import { addMicros, scaleMicros, type Micros } from "./micros.ts";
 
 /** A stored ingredient row resolved against its food. */
@@ -108,8 +108,8 @@ export function perServingMicros(lines: RecipeLine[], servings: number): Micros 
 
   let total: Micros = {};
   for (const line of lines) {
-    const factor = line.food.basis === "per_100g" ? line.qty / 100 : line.qty;
-    total = addMicros(total, scaleMicros(line.food.micros, factor));
+    // The SAME factor `scale()` uses, from the one place that computes it.
+    total = addMicros(total, scaledMicros(line.food, line.qty));
   }
   return scaleMicros(total, 1 / servings);
 }

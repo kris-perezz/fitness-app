@@ -1,4 +1,4 @@
-import type { Micros } from "./micros.ts";
+import { scaleMicros, type Micros } from "./micros.ts";
 
 /**
  * Where a food's numbers came from (S6). Not the same question as `verified`,
@@ -129,8 +129,36 @@ export type Macros = {
  * qty is COUNT for per_unit foods and GRAMS for per_100g foods -- the same
  * convention log_food.py uses, so a number means the same thing in both places.
  */
+/**
+ * How much of the food's stored figures one portion is (S38).
+ *
+ * Extracted because three places needed it -- the macros, the micros and the
+ * recipe roll-up -- and a factor computed three times is a factor that will
+ * eventually be computed two ways.
+ */
+export function scaleFactor(food: Food, qty: number): number {
+  return food.basis === "per_100g" ? qty / 100 : qty;
+}
+
+/**
+ * The micros one portion carries (S38).
+ *
+ * Scaled and DENORMALISED onto the entry, never joined back to the food: an
+ * entry keeps what it was logged with, so correcting a food tomorrow cannot
+ * rewrite what a day contained last month (S7/S19).
+ */
+export function scaledMicros(food: Food, qty: number): Micros {
+  return scaleMicros(food.micros, scaleFactor(food, qty));
+}
+
+/** Sugar for one portion, or null where the food never carried a figure. */
+export function scaledSugar(food: Food, qty: number): number | null {
+  if (food.sugar_g === null) return null;
+  return Math.round((food.sugar_g * scaleFactor(food, qty) + Number.EPSILON) * 10) / 10;
+}
+
 export function scale(food: Food, qty: number): Macros {
-  const factor = food.basis === "per_100g" ? qty / 100 : qty;
+  const factor = scaleFactor(food, qty);
   const r = (n: number | null) => Math.round(((n ?? 0) * factor + Number.EPSILON) * 10) / 10;
   return {
     kcal: Math.round(food.kcal * factor),

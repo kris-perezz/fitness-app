@@ -8,8 +8,16 @@ import { fetchCnfFood, searchCnf, type CnfSearchResult } from "@/lib/cnf";
 import { extractLabel, type LabelDraft, type LabelResult } from "@/lib/label";
 import { generatedFood, type RecipeDetails, type RecipeLine } from "@/lib/recipe";
 import { sourceRank, type Food, type FoodSource, type Macros, type Meal } from "@/lib/food";
+import type { Micros } from "@/lib/micros";
 
 export type NewEntry = Macros & {
+  /**
+   * S38. Scaled at log time and stored on the row, like every other figure
+   * here. Absent stays absent: a food with no iron figure writes no iron key,
+   * so a day's total is over the entries that actually knew.
+   */
+  micros: Micros;
+  sugar_g: number | null;
   log_date: string;
   meal: Meal;
   food_id: string | null;
