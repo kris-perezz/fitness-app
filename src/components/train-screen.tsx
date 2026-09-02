@@ -358,7 +358,18 @@ function SlotSection({
     <section className="border-b border-border">
       <div className="flex items-center justify-between gap-2 px-5 pb-2 pt-4">
         <div className="min-w-0">
-          <h2 className="truncate text-sm font-semibold">{slot.name}</h2>
+          {/* The name is the way into this lift's history (S80): "is bench
+              moving" is asked while looking at bench, and the answer should not
+              be on another tab. A link rather than a button because it is
+              navigation, and it survives a long-press to open in a new tab. */}
+          <h2 className="truncate text-sm font-semibold">
+            <Link
+              href={`/exercise/${slot.exercise_id}`}
+              className="underline-offset-4 hover:underline"
+            >
+              {slot.name}
+            </Link>
+          </h2>
           {/* What this lift actually trains, from the log's own classification
               rather than the older single-value column beside it. Two copies of
               one fact drift, and had: the deadlift displayed "Back" while

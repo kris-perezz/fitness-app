@@ -17,7 +17,7 @@
  * unknown weight -- represented as such, never quietly as zero.
  */
 
-import { scale, type Food, type Macros } from "./food";
+import { scale, type Food, type Macros } from "./food.ts";
 
 /** A stored ingredient row resolved against its food. */
 export type RecipeLine = {
