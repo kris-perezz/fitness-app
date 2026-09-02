@@ -24,6 +24,7 @@ import {
   ItemTitle,
 } from "@/components/ui/item";
 import { cn } from "@/lib/utils";
+import { fillPercent, isAlarming, statusOf, type Metric } from "@/lib/tone";
 import { AddSheet } from "@/components/add-sheet";
 import { ConfirmAction } from "@/components/confirm-action";
 import { EditFoodSheet } from "@/components/edit-food-sheet";
@@ -88,6 +89,10 @@ export function LogScreen({
   const calorieGoal = goals?.calorie_goal ?? 2000;
 
   const today = wakingDate();
+  // S71. A day still being lived is not a day you fell short of: at 2pm, under
+  // a floor only means dinner has not happened. Yesterday is finished and can
+  // be summarised; today cannot.
+  const finished = date < today;
   const label =
     date === today
       ? "Today"
@@ -148,11 +153,25 @@ export function LogScreen({
           <div className="mt-6 grid grid-cols-3 gap-4">
             <MacroMeter
               label="Protein"
+              metric="protein"
               value={totals.protein_g}
               goal={goals?.protein_goal_g ?? null}
+              finished={finished}
             />
-            <MacroMeter label="Carbs" value={totals.carb_g} goal={goals?.carb_goal_g ?? null} />
-            <MacroMeter label="Fat" value={totals.fat_g} goal={goals?.fat_goal_g ?? null} />
+            <MacroMeter
+              label="Carbs"
+              metric="carbs"
+              value={totals.carb_g}
+              goal={goals?.carb_goal_g ?? null}
+              finished={finished}
+            />
+            <MacroMeter
+              label="Fat"
+              metric="fat"
+              value={totals.fat_g}
+              goal={goals?.fat_goal_g ?? null}
+              finished={finished}
+            />
           </div>
         </section>
 
@@ -242,9 +261,31 @@ export function LogScreen({
   );
 }
 
-function MacroMeter({ label, value, goal }: { label: string; value: number; goal: number | null }) {
-  const pct = goal ? Math.min(100, (value / goal) * 100) : 0;
-  const over = goal !== null && value > goal;
+/**
+ * One macro against its goal (S72/S74).
+ *
+ * TAKES THE METRIC, NOT JUST THE GOAL. A goal number cannot say which way is
+ * good, and this component used to assume every one of them was a ceiling --
+ * so protein went `destructive` at 200 g against a 155 g floor, red at the user
+ * for hitting the thing they were aiming at. Direction is declared once in
+ * `lib/tone.ts` and asked for here.
+ */
+function MacroMeter({
+  label,
+  metric,
+  value,
+  goal,
+  finished,
+}: {
+  label: string;
+  metric: Metric;
+  value: number;
+  goal: number | null;
+  /** S71. An unfinished day is never short -- dinner has not happened yet. */
+  finished: boolean;
+}) {
+  const pct = fillPercent(value, goal);
+  const alarming = isAlarming(metric, statusOf(metric, value, goal, finished));
 
   return (
     <div>
@@ -261,7 +302,10 @@ function MacroMeter({ label, value, goal }: { label: string; value: number; goal
       <Progress
         value={pct}
         aria-label={`${label}: ${round(value)} of ${goal === null ? "no" : round(goal)} grams`}
-        className={cn("mt-1.5 h-1", over && "[&>[data-slot=progress-indicator]]:bg-destructive")}
+        className={cn(
+          "mt-1.5 h-1",
+          alarming && "[&>[data-slot=progress-indicator]]:bg-destructive",
+        )}
       />
     </div>
   );

@@ -1,3 +1,5 @@
+import { captionFor, fillPercent, isAlarming, statusOf } from "@/lib/tone";
+
 /**
  * Calories as an arc, with the number that actually gets read -- what's left --
  * in the middle.
@@ -19,9 +21,16 @@ export function CalorieRing({
   goal: number;
 }) {
   const remaining = goal - consumed;
-  const over = remaining < 0;
+  // S70/S74. The ring no longer decides what its own number means: calories are
+  // a TARGET, and in calm mode going past one is a fact rather than an alarm.
+  // What changes past the goal is the caption -- `left` becomes `over` -- and
+  // not the colour. Red stays reserved for destructive actions and for the one
+  // genuine health limit (S73), which is not this.
+  const status = statusOf("calories", consumed, goal, true);
+  const alarming = isAlarming("calories", status);
+  const caption = captionFor("calories", consumed, goal);
   // Clamped so an overshoot fills the ring rather than winding past the start.
-  const fraction = goal > 0 ? Math.min(1, Math.max(0, consumed / goal)) : 0;
+  const fraction = fillPercent(consumed, goal) / 100;
 
   return (
     <div className="flex flex-col items-center">
@@ -52,20 +61,20 @@ export function CalorieRing({
             strokeLinecap="round"
             strokeDasharray={CIRCUMFERENCE}
             strokeDashoffset={CIRCUMFERENCE * (1 - fraction)}
-            className={over ? "stroke-destructive" : "stroke-primary"}
+            className={alarming ? "stroke-destructive" : "stroke-primary"}
           />
         </svg>
 
         <div className="absolute inset-0 flex flex-col items-center justify-center">
           <span
             className={`text-3xl leading-none font-semibold tabular-nums ${
-              over ? "text-destructive" : ""
+              alarming ? "text-destructive" : ""
             }`}
           >
             {Math.abs(remaining).toLocaleString()}
           </span>
           <span className="mt-1 text-xs text-muted-foreground">
-            {over ? "over" : "left"}
+            {caption}
           </span>
         </div>
       </div>
