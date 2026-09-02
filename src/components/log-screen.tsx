@@ -3,7 +3,7 @@
 import { useState, useTransition } from "react";
 import { useRouter } from "next/navigation";
 import Link from "next/link";
-import { ChevronLeft, ChevronRight, CookingPot, Pencil, Plus } from "lucide-react";
+import { ChartNoAxesColumn, ChevronLeft, ChevronRight, CookingPot, Pencil, Plus } from "lucide-react";
 import { MEALS, shiftDate, wakingDate, type Food, type Meal } from "@/lib/food";
 import { deleteEntry } from "@/app/actions";
 import { Button } from "@/components/ui/button";
@@ -124,12 +124,19 @@ export function LogScreen({
             >
               <ChevronRight className="size-5" />
             </Button>
-            {/* Recipes are a Food-section destination with no tab of its own
-                (see bottom-nav.tsx), so this header is the way in. It sits
-                after the day arrows because it is not part of them. */}
+            {/* Recipes and Trends are Food-section destinations with no tab of
+                their own (see bottom-nav.tsx), so this header is the way in.
+                They sit after the day arrows because they are not part of them
+                -- and Trends sits last because it is the one that leaves
+                today behind entirely. */}
             <Button size="icon" variant="ghost" aria-label="Recipes" asChild>
               <Link href="/recipes">
                 <CookingPot className="size-5" />
+              </Link>
+            </Button>
+            <Button size="icon" variant="ghost" aria-label="Trends" asChild>
+              <Link href="/trends">
+                <ChartNoAxesColumn className="size-5" />
               </Link>
             </Button>
           </div>
