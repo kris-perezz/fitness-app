@@ -23,6 +23,7 @@ import {
   type ChartWindowKey,
   type WeighIn,
 } from "@/lib/weight";
+import { MIN_LOGGED_DAYS, type EnergyWeek } from "@/lib/energy";
 import { deleteWeighIn, loadWeighInWindow, saveWeighIn } from "@/app/progress-actions";
 import { Button } from "@/components/ui/button";
 import { ToggleGroup, ToggleGroupItem } from "@/components/ui/toggle-group";
@@ -67,6 +68,7 @@ export function ProgressHome({
   earliest,
   entries: initialEntries,
   goal,
+  weeks,
 }: {
   today: string;
   loadedFrom: string;
@@ -74,6 +76,8 @@ export function ProgressHome({
   earliest: string | null;
   entries: WeighIn[];
   goal: WeightGoal;
+  /** S63. Computed on the server: it needs the food log, which this tab does not otherwise hold. */
+  weeks: EnergyWeek[];
 }) {
   const [entries, setEntries] = useState(initialEntries);
   const [from, setFrom] = useState(loadedFrom);
@@ -191,6 +195,8 @@ export function ProgressHome({
           onWindowChange={setWindowKey}
           extending={chartUnderCovered}
         />
+
+        <EnergyBalance weeks={weeks} />
 
         <div className="flex justify-center border-b border-border px-2 py-3">
           <Calendar
@@ -505,6 +511,80 @@ function WeighInSheet({
         </div>
       </DrawerContent>
     </Drawer>
+  );
+}
+
+/**
+ * What the calories actually did (S63).
+ *
+ * Average intake for a week beside what the trend weight did across it. The
+ * only thing in this app that a single-purpose tracker cannot do, and the
+ * argument for the food log and the scale living together.
+ *
+ * A TABLE, not a chart. Two numbers a week for eight weeks is a table; drawing
+ * it would be decoration, and the comparison is read across a row rather than
+ * along an axis.
+ *
+ * It reports and never prescribes: nothing here writes back to the calorie goal
+ * (progress open decision 4). And it does not compute a TDEE figure -- the two
+ * observations ARE the answer, and a single derived number would hide which
+ * half of it was thin.
+ */
+/** A signed change in pounds. `deltaLabel` takes two readings; this takes the difference. */
+function signedLb(change: number): string {
+  if (Math.abs(change) < 0.05) return "0.0 lb";
+  return `${change > 0 ? "+" : "−"}${Math.abs(change).toFixed(1)} lb`;
+}
+
+function EnergyBalance({ weeks }: { weeks: EnergyWeek[] }) {
+  const usable = weeks.filter((w) => w.included);
+  // Nothing to say yet. Rendered as a sentence rather than an empty table,
+  // because a table of dashes looks like a fault rather than a beginning.
+  if (usable.length === 0) {
+    return (
+      <section className="border-b border-border px-5 py-4">
+        <h2 className="text-sm font-medium">Calories against the scale</h2>
+        <p className="mt-2 text-xs text-muted-foreground">
+          Needs a week with at least {MIN_LOGGED_DAYS} days of food logged. An average built on
+          fewer would read as a deficit you did not run.
+        </p>
+      </section>
+    );
+  }
+
+  return (
+    <section className="border-b border-border px-5 py-4">
+      <h2 className="text-sm font-medium">Calories against the scale</h2>
+      <p className="mt-1 text-xs text-muted-foreground">
+        What you ate, and what the trend did that week. Nothing here changes your goal.
+      </p>
+
+      <ul className="mt-3 divide-y divide-border">
+        {weeks.map((week) => (
+          <li key={week.weekStart} className="flex items-baseline justify-between gap-3 py-2">
+            <span className="text-xs text-muted-foreground">{shortDate(week.weekStart)}</span>
+
+            {week.included ? (
+              <span className="flex items-baseline gap-3 text-sm tabular-nums">
+                <span>{week.avgKcal?.toLocaleString()} cal/day</span>
+                <span className="text-muted-foreground">
+                  {/* Signed, and never coloured. A pound down is not a win and a
+                      pound up is not a failure -- the row states what happened
+                      and the reader owns what it means (S70). */}
+                  {week.changeLb === null ? "—" : signedLb(week.changeLb)}
+                </span>
+              </span>
+            ) : (
+              /* EXCLUDED, and said so rather than silently skipped. A week that
+                 vanished would read as a week that did not happen. */
+              <span className="text-xs text-muted-foreground">
+                {week.loggedDays} of {MIN_LOGGED_DAYS} days logged
+              </span>
+            )}
+          </li>
+        ))}
+      </ul>
+    </section>
   );
 }
 
