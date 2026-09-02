@@ -1,78 +1,83 @@
 # Fitness app
 
-Phone-first food logging. Next.js + Supabase + shadcn.
+A phone-first application for logging food intake and resistance training,
+developed for personal use and deployed on Vercel.
 
-The analysis side of this system stays in the Health repo; this app is the fast
-write path.
+## Purpose
 
-## Setup
+Most nutrition trackers present a search field over a crowdsourced database and
+grade the user at the end of each day. This application proceeds from three
+different premises.
 
-### 1. Supabase project
+**Logging must be faster than recall.** A barcode, a photographed nutrition
+label, or a repeat of a frequently eaten item should require no typing.
 
-Run the migrations in order, in the SQL editor:
+**An entry retains the values it was logged with.** Energy and macronutrient
+figures are copied onto the entry at the time of logging. A subsequent
+correction to a catalogue item therefore cannot alter a record made last month.
 
-- `supabase/migrations/0001_init.sql` — tables, view, RLS
-- `supabase/migrations/0002_seed_foods.sql` — 94 foods from the Health repo
-- `supabase/migrations/0003_default_settings.sql` — gives every user a settings row
-- `supabase/migrations/0004_standard_goals_and_meals.sql` — goals plus meal on each entry
+**A logged day is an observation, not a judgement.** Exceeding a calorie target
+produces no warning colour. Red is reserved for destructive actions and for the
+single genuine health limit the application enforces.
 
-### 2. Environment
+## Features
 
-```
-cp .env.local.example .env.local
-```
+### Food logging
 
-Fill in `NEXT_PUBLIC_SUPABASE_URL` and `NEXT_PUBLIC_SUPABASE_ANON_KEY` from
-Project Settings > API.
+- **Barcode scanning.** A camera scan is resolved against Open Food Facts, and
+  the product is added to the catalogue on first use.
+- **Nutrition label capture.** A photograph of a nutrition panel is read into a
+  prefilled confirmation form, vitamins and minerals included, which is reviewed
+  before anything is saved.
+- **Ranked search** over the catalogue, ordered so that frequently logged items
+  appear first.
+- **Recipes.** A dish is composed from its ingredients, divided into servings,
+  and reconciled against its measured cooked weight.
+- **Waking-day attribution.** Entries recorded before 04:00 are filed under the
+  previous date, so a late meal is counted on the day it was eaten.
 
-### 3. Email template (REQUIRED — sign-in is broken without it)
+### Nutrition data
 
-Authentication > Emails > Magic Link. Replace the body with:
+- **Canadian Nutrient File (CNF).** Laboratory composition data published by
+  Health Canada, used for whole foods that carry no barcode.
+- **Open Food Facts**, used for packaged goods.
+- **Micronutrients.** Eighteen vitamins and minerals are recorded per entry and
+  summed across the day. An unrecorded value remains absent rather than zero, so
+  a day's total reflects only the foods for which the figure was known.
 
-```html
-<h2>Sign in</h2>
-<p><a href="{{ .SiteURL }}/auth/confirm?token_hash={{ .TokenHash }}&type=email">Open the app</a></p>
-<p>Or enter this code: <strong>{{ .Token }}</strong></p>
-```
+### Training
 
-Two reasons this is not optional:
+- **Session logging** by exercise, set, load, and repetitions, with per-side
+  loading handled for dumbbells and plate-loaded machines.
+- **Exercise catalogue** with aliases, so that common informal names resolve to
+  the correct movement.
+- **Muscle-group volume**, summarized per session.
+- **Estimated one-repetition maximum**, charted per exercise over time, with a
+  single lift pinned to the progress view.
 
-1. **The default template has no `{{ .Token }}`**, so the six-digit code the
-   login screen asks for would never arrive.
-2. **The default template uses PKCE**, whose code verifier lives in a cookie in
-   the browser that requested the link. Request on a laptop, open on a phone,
-   and it fails. `{{ .TokenHash }}` is verified server-side, so the link works
-   on any device.
+### Progress
 
-`/auth/confirm` still accepts a PKCE `?code=` as well, so an already-sent link
-keeps working.
+- **Body weight** presented as a smoothed trend rather than the daily reading.
+- **Observed energy balance.** Mean intake for a week is presented beside the
+  change in trend weight over the same week. Weeks containing too few logged
+  days are excluded, and the exclusion is stated. Nothing is inferred, and the
+  arithmetic remains visible.
+- **Trends.** A rolling 30-day view of energy and protein intake, together with
+  the foods accounting for the most calories over that window.
 
-### 4. URL configuration
+### Presentation
 
-Authentication > URL Configuration:
+- **Calm presentation by default.** Macronutrients are shown as plain figures,
+  and the energy ring reports what was consumed rather than counting down toward
+  a target.
+- **Strict mode**, disabled unless the user enables it, restores targets and
+  marks overshoots in red. It changes how figures are displayed and never what
+  is recorded.
+- **Colour is never the sole carrier of meaning.** An overshoot is also stated
+  in words, so the interface remains legible in greyscale, under colour vision
+  deficiency, and through a screen reader.
 
-- Site URL: `http://localhost:3000` in development, the Vercel URL in production
-- Redirect URLs: add `http://localhost:3000/**` and `https://<your-app>.vercel.app/**`
+## Implementation
 
-### 5. Your goals
-
-Sign in, then open Goals from the gear icon on the log screen. Migration 0003
-creates the row; the screen is where you set calories and macros.
-
-## Run
-
-```
-npm run dev
-```
-
-## Conventions
-
-- `qty` means COUNT for `per_unit` foods and GRAMS for `per_100g` foods — the
-  same convention `log_food.py` uses, so a number means the same thing in both
-  systems.
-- The log day is the WAKING day: anything before 04:00 files under the previous
-  date.
-- Catalog rows are append-only to non-creators. Correcting a shared food's
-  macros would retroactively change someone else's logged history, so a
-  correction is a new row.
-- Meals are the fixed four: Breakfast, Lunch, Dinner, Snacks.
+Next.js and React on the client, Supabase and PostgreSQL for storage, and
+Tailwind CSS with shadcn/ui for the interface.
