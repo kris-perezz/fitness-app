@@ -1,7 +1,7 @@
 "use client";
 
 import { useEffect, useRef, useState, useTransition } from "react";
-import { ChevronLeft } from "lucide-react";
+import { ChevronLeft, Sparkles } from "lucide-react";
 import {
   scale,
   show,
@@ -19,7 +19,7 @@ import {
   type Food,
   type Meal,
 } from "@/lib/food";
-import { addEntry, saveScannedFood } from "@/app/actions";
+import { addEntry, saveScannedFood, estimateEntry } from "@/app/actions";
 import { FoodPicker, type PickerStep } from "@/components/food-picker";
 import { FoodSourceBadge } from "@/components/food-source-badge";
 import {
@@ -34,6 +34,7 @@ import { ButtonGroup } from "@/components/ui/button-group";
 import { ToggleGroup, ToggleGroupItem } from "@/components/ui/toggle-group";
 import { Input } from "@/components/ui/input";
 import { Field, FieldGroup, FieldLabel } from "@/components/ui/field";
+import { Spinner } from "@/components/ui/spinner";
 import { liftForKeyboard } from "@/lib/sheet";
 import { toast } from "sonner";
 
@@ -415,6 +416,7 @@ function CustomStep({
     sodium_mg: "",
   });
   const [pending, startTransition] = useTransition();
+  const [estimating, setEstimating] = useState(false);
   const num = (v: string) => (v === "" ? 0 : Number(v));
 
   const fields: [keyof typeof f, string][] = [
@@ -425,6 +427,52 @@ function CustomStep({
     ["fiber_g", "Fibre (g)"],
     ["sodium_mg", "Sodium (mg)"],
   ];
+
+  /**
+   * S100. Only while every number is still blank.
+   *
+   * This is the whole of the overwrite design. A returned value can never land
+   * on top of something typed, re-estimating is a deliberate gesture that costs
+   * clearing the fields, and there is no confirm-before-overwrite screen to
+   * build because the situation it would guard cannot arise.
+   */
+  const untouched = fields.every(([key]) => f[key] === "");
+
+  /** One decimal, matching what every other macro field in the app shows. */
+  const round1 = (n: number) => Math.round((n + Number.EPSILON) * 10) / 10;
+
+  function estimate() {
+    setEstimating(true);
+    startTransition(async () => {
+      const res = await estimateEntry(f.name);
+      setEstimating(false);
+      if (res.status === "error") {
+        toast.error(res.message);
+        return;
+      }
+      // Not an error: saying more about the food is the useful next step, and
+      // the fields stay empty so nothing has to be undone first.
+      if (res.status === "vague") {
+        toast.warning(res.message);
+        return;
+      }
+
+      const e = res.estimate;
+      setF((prev) => ({
+        ...prev,
+        // The assumptions go into the NAME, which is where this user already
+        // writes them by hand and where the day list will keep showing them.
+        // A separate panel would be a second place to look for the same thing.
+        name: e.assumptions ? `${prev.name.trim()} — ${e.assumptions}` : prev.name,
+        kcal: String(Math.round(e.kcal)),
+        protein_g: String(round1(e.protein_g)),
+        carb_g: String(round1(e.carb_g)),
+        fat_g: String(round1(e.fat_g)),
+        fiber_g: String(round1(e.fiber_g)),
+        sodium_mg: String(Math.round(e.sodium_mg)),
+      }));
+    });
+  }
 
   function save() {
     startTransition(async () => {
@@ -469,12 +517,28 @@ function CustomStep({
           <ChevronLeft className="size-4" /> Back
         </Button>
 
+        {/* S100. The field was always a description -- people type "korean army
+            stew, 3 bowls x ~1.5 cups contents" in here. The placeholder now
+            says so, because the estimate is only as good as what it is given. */}
         <Input
-          placeholder="Food name"
+          placeholder="What you ate, and roughly how much"
           value={f.name}
           onChange={(e) => setF({ ...f, name: e.target.value })}
           className="h-11 text-base"
         />
+
+        {/* Offered only when there is something to estimate FROM and nothing to
+            overwrite. Disabled rather than hidden: it disappearing the moment a
+            digit is typed would read as a bug. */}
+        <Button
+          variant="outline"
+          className="mt-2 h-11 w-full"
+          onClick={estimate}
+          disabled={pending || f.name.trim() === "" || !untouched}
+        >
+          {estimating ? <Spinner /> : <Sparkles className="size-4" />}
+          {untouched ? "Estimate these" : "Clear the numbers to re-estimate"}
+        </Button>
 
         <FieldGroup className="mt-4 grid grid-cols-2 gap-3">
           {fields.map(([key, label]) => (

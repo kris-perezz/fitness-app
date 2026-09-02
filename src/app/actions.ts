@@ -6,6 +6,7 @@ import { createClient } from "@/lib/supabase/server";
 import { fetchOffProduct, isBarcode, searchOff, type OffSearchResult } from "@/lib/off";
 import { fetchCnfFood, searchCnf, type CnfSearchResult } from "@/lib/cnf";
 import { extractLabel, type LabelDraft, type LabelResult } from "@/lib/label";
+import { estimateFromDescription, type DescribeResult } from "@/lib/describe";
 import { generatedFood, type RecipeDetails, type RecipeLine } from "@/lib/recipe";
 import { sourceRank, type Food, type FoodSource, type Macros, type Meal } from "@/lib/food";
 import type { Micros } from "@/lib/micros";
@@ -273,6 +274,23 @@ export async function addCnfFood(
 
   revalidatePath("/log");
   return { food: result.food, error: null };
+}
+
+// ------------------------------------------------------- described estimates
+// S100. The provider lives entirely in lib/describe.ts, and this action exists
+// for the same two reasons readLabel does: the key never reaches the browser,
+// and an unauthenticated caller cannot spend it. Nothing is written -- the
+// numbers land in a form the user was already filling in, and every one of them
+// is editable before anything reaches the database.
+
+export async function estimateEntry(description: string): Promise<DescribeResult> {
+  const supabase = await createClient();
+  const {
+    data: { user },
+  } = await supabase.auth.getUser();
+  if (!user) return { status: "error", message: "Not signed in" };
+
+  return estimateFromDescription(description);
 }
 
 // ------------------------------------------------------------ label photos
