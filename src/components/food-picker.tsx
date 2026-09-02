@@ -1,9 +1,19 @@
 "use client";
 
 import { useEffect, useMemo, useRef, useState, useTransition } from "react";
-import { Camera, ChevronLeft, ImageUp, Plus, ScanBarcode, Search } from "lucide-react";
+import {
+  Camera,
+  ChevronDown,
+  ChevronLeft,
+  ImageUp,
+  Leaf,
+  Plus,
+  ScanBarcode,
+  Search,
+} from "lucide-react";
 import { searchFoods, show, basisLabel, type Food } from "@/lib/food";
-import { readLabel, saveLabelFood } from "@/app/actions";
+import { readLabel, saveLabelFood, searchCnfFoods, addCnfFood } from "@/app/actions";
+import { CNF_ATTRIBUTION, CNF_LICENCE_URL, type CnfHit } from "@/lib/cnf";
 import { downscaleToDataUrl } from "@/lib/image";
 import type { LabelDraft } from "@/lib/label";
 import { BarcodeScanner } from "@/components/barcode-scanner";
@@ -15,6 +25,12 @@ import { Field, FieldGroup, FieldLabel } from "@/components/ui/field";
 import { InputGroup, InputGroupAddon, InputGroupInput } from "@/components/ui/input-group";
 import { Item, ItemContent, ItemDescription, ItemTitle } from "@/components/ui/item";
 import { Spinner } from "@/components/ui/spinner";
+import {
+  Collapsible,
+  CollapsibleContent,
+  CollapsibleTrigger,
+} from "@/components/ui/collapsible";
+import type { MicroKey } from "@/lib/micros";
 import {
   Empty,
   EmptyDescription,
@@ -175,7 +191,7 @@ function SearchStep({
             <EmptyHeader>
               <EmptyTitle>No match for &ldquo;{query}&rdquo;</EmptyTitle>
               <EmptyDescription>
-                Scan its barcode, or photograph its label.
+                Look it up in Health Canada below, scan its barcode, or photograph its label.
               </EmptyDescription>
             </EmptyHeader>
           </Empty>
@@ -216,7 +232,128 @@ function SearchStep({
           </ul>
         )}
 
+        {/* Keyed on the query so a new search REMOUNTS this rather than
+            resetting four pieces of state in an effect. Editing the search
+            after a lookup must not leave results for a word no longer on
+            screen. */}
+        {query !== "" && <CnfSection key={query} query={query} onPick={onPick} />}
       </div>
+    </div>
+  );
+}
+
+/**
+ * S91. The Canadian Nutrient File, reached from the same search box.
+ *
+ * BELOW the local results and never mixed into them, because the two lists
+ * answer different questions: yours is "the food I have logged before", this is
+ * "the food Health Canada measured". Interleaving them would put a reference
+ * preparation above the row you built out of a real label.
+ *
+ * ON DEMAND, not per keystroke. The search itself is a filter over a cached
+ * catalog and costs nothing, but firing it on every character would render a
+ * shifting list under the one the user is already reading. A tap says "I did
+ * not find it", which is exactly when this is wanted.
+ */
+function CnfSection({ query, onPick }: { query: string; onPick: (food: Food) => void }) {
+  const [hits, setHits] = useState<CnfHit[] | null>(null);
+  const [error, setError] = useState<string | null>(null);
+  const [picking, setPicking] = useState<number | null>(null);
+  const [pending, startTransition] = useTransition();
+
+  const search = () => {
+    startTransition(async () => {
+      const res = await searchCnfFoods(query);
+      if (res.status === "error") {
+        setError(res.message);
+        setHits([]);
+        return;
+      }
+      setError(null);
+      setHits(res.hits);
+    });
+  };
+
+  const choose = (hit: CnfHit) => {
+    setPicking(hit.code);
+    startTransition(async () => {
+      const res = await addCnfFood(hit.code, hit.description);
+      setPicking(null);
+      if (res.error || !res.food) {
+        toast.error(res.error ?? "Could not add that food.");
+        return;
+      }
+      // Already written to the catalog by the action, so it is not "scanned" in
+      // the sense the caller cares about.
+      onPick(res.food);
+    });
+  };
+
+  if (hits === null) {
+    return (
+      <div className="px-5 py-4">
+        <Button variant="outline" className="h-11 w-full" onClick={search} disabled={pending}>
+          {pending ? <Spinner /> : <Leaf className="size-4" />}
+          Search Health Canada
+        </Button>
+      </div>
+    );
+  }
+
+  return (
+    <div className="border-t border-border">
+      <p className="px-5 pt-4 text-xs text-muted-foreground">
+        Health Canada · per 100 g, laboratory values for a reference food
+      </p>
+      {/* REQUIRED, not a footnote. The Open Government Licence - Canada grants
+          these rights on condition the source is acknowledged and the licence
+          linked where feasible, and the grant ends automatically if it is not.
+          It sits with the results rather than in an About screen because this
+          is the screen where the information is actually used. */}
+      <p className="px-5 pt-1 text-[11px] text-muted-foreground">
+        {CNF_ATTRIBUTION}{" "}
+        <a
+          href={CNF_LICENCE_URL}
+          target="_blank"
+          rel="noreferrer"
+          className="underline underline-offset-2"
+        >
+          Licence
+        </a>
+      </p>
+
+      {error && <p className="px-5 py-3 text-sm text-muted-foreground">{error}</p>}
+
+      {!error && hits.length === 0 && (
+        <p className="px-5 py-3 text-sm text-muted-foreground">
+          Nothing in the Canadian Nutrient File matches &ldquo;{query}&rdquo;.
+        </p>
+      )}
+
+      <ul className="divide-y divide-border">
+        {hits.map((hit) => (
+          <li key={hit.code}>
+            <Item asChild size="sm" className="rounded-none px-5 py-3 active:bg-accent">
+              <button
+                onClick={() => choose(hit)}
+                disabled={picking !== null}
+                className="text-left disabled:opacity-60"
+              >
+                <ItemContent className="min-w-0">
+                  {/* CNF's FULL description, not a shortened one. Two rows here
+                      routinely differ only in their last clause -- raw against
+                      grilled is about a 30% swing per 100 g -- so trimming it
+                      would turn a real choice into a coin toss (S91). */}
+                  <ItemTitle className="font-normal whitespace-normal">
+                    {hit.description}
+                  </ItemTitle>
+                </ItemContent>
+                {picking === hit.code && <Spinner />}
+              </button>
+            </Item>
+          </li>
+        ))}
+      </ul>
     </div>
   );
 }
@@ -271,6 +408,16 @@ function LabelStep({
       fat_g: at(draft.fat_g),
       fiber_g: at(draft.fiber_g),
       sodium_mg: at(draft.sodium_mg),
+      // S37. Blank rather than "0" where the panel had nothing: an empty field
+      // reads as "not printed", and a zero would be a claim the photo does not
+      // support -- the same rule the draft itself follows.
+      sugar_g: draft.sugar_g === null ? "" : at(draft.sugar_g),
+      ...Object.fromEntries(
+        MICRO_FIELDS.map(([key]) => {
+          const value = draft.micros[key as MicroKey];
+          return [key, value === undefined ? "" : at(value)];
+        }),
+      ),
     });
     setPhase({ kind: "draft", draft, warning });
   }
@@ -299,6 +446,13 @@ function LabelStep({
       const parsed = Number(form[key]);
       return Number.isFinite(parsed) ? parsed / f : 0;
     };
+    /** Blank means the panel did not print it, which is not the same as zero. */
+    const optional = (key: string) => {
+      const text = (form[key] ?? "").trim();
+      if (text === "") return null;
+      const parsed = Number(text);
+      return Number.isFinite(parsed) ? parsed / f : null;
+    };
 
     startTransition(async () => {
       const res = await saveLabelFood(
@@ -311,6 +465,12 @@ function LabelStep({
           fat_g: num("fat_g"),
           fiber_g: num("fiber_g"),
           sodium_mg: num("sodium_mg"),
+          // Blank stays absent all the way to the row. `num` returns 0 for an
+          // unparseable field, which is right for a macro and wrong here.
+          sugar_g: optional("sugar_g"),
+          micros: Object.fromEntries(
+            MICRO_FIELDS.map(([key]) => [key, optional(key)]).filter(([, v]) => v !== null),
+          ) as LabelDraft["micros"],
         },
         barcode,
       );
@@ -333,6 +493,20 @@ function LabelStep({
         : draft.grams_per_unit
           ? `per serving (${draft.grams_per_unit} ${draft.unit})`
           : `per 100 ${draft.unit}`;
+
+  /**
+   * S37. The rows a Canadian panel is legally required to print, plus the two
+   * it prints anyway. Behind a disclosure rather than in the grid above: six
+   * more fields would push Save below the fold, and the macros are what the
+   * user came to confirm.
+   */
+  const MICRO_FIELDS: [string, string][] = [
+    ["calcium_mg", "Calcium (mg)"],
+    ["iron_mg", "Iron (mg)"],
+    ["potassium_mg", "Potassium (mg)"],
+    ["vit_d_ug", "Vitamin D (µg)"],
+    ["cholesterol_mg", "Cholesterol (mg)"],
+  ];
 
   const macroFields: [string, string][] = [
     ["kcal", "Calories"],
@@ -464,6 +638,48 @@ function LabelStep({
                 </Field>
               ))}
             </FieldGroup>
+
+            {/* Registry Collapsible, already in the project. Closed by default:
+                the macros are what the user came to confirm, and six more
+                fields open would push Save below the fold (learning 6). The
+                values are still saved whether or not it is ever opened. */}
+            <Collapsible className="mt-4">
+              <CollapsibleTrigger asChild>
+                <Button variant="ghost" size="sm" className="-ml-2 text-muted-foreground">
+                  <ChevronDown className="size-4" />
+                  Vitamins and minerals
+                </Button>
+              </CollapsibleTrigger>
+              <CollapsibleContent>
+                <p className="pt-1 text-xs text-muted-foreground">
+                  Read from the bottom of the panel. Blank means it was not printed — leave it
+                  blank rather than entering 0.
+                </p>
+                <FieldGroup className="mt-3 grid grid-cols-2 gap-3">
+                  {[["sugar_g", "Sugars (g)"] as [string, string], ...MICRO_FIELDS].map(
+                    ([key, label]) => (
+                      <Field key={key}>
+                        <FieldLabel
+                          htmlFor={`label_${key}`}
+                          className="text-xs font-normal text-muted-foreground"
+                        >
+                          {label}
+                        </FieldLabel>
+                        <Input
+                          id={`label_${key}`}
+                          type="number"
+                          inputMode="decimal"
+                          value={form[key] ?? ""}
+                          onChange={(e) => setForm({ ...form, [key]: e.target.value })}
+                          className="h-11 text-base tabular-nums"
+                          placeholder="—"
+                        />
+                      </Field>
+                    ),
+                  )}
+                </FieldGroup>
+              </CollapsibleContent>
+            </Collapsible>
           </>
         )}
       </div>

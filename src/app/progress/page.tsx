@@ -1,14 +1,140 @@
-import { TrendingUp } from "lucide-react";
-import { SectionPlaceholder } from "@/components/section-placeholder";
+import { createClient } from "@/lib/supabase/server";
+import { wakingDate } from "@/lib/food";
+import { WINDOW_MONTHS, shiftMonth } from "@/lib/training";
+import { toWeighIn } from "@/lib/weight";
+import { adherence, weeklyEnergy } from "@/lib/energy";
+import { liftHistory, type WorkoutSet } from "@/lib/training";
+import type { IntakeDay } from "@/lib/trends";
+import { ProgressHome } from "@/components/progress-home";
+
+export const dynamic = "force-dynamic";
 
 export const metadata = { title: "Progress" };
 
-export default function ProgressPage() {
+/**
+ * S57. The progress tab's resting state: a month of weigh-ins, with the trend
+ * over them as the headline.
+ *
+ * A WINDOW, FETCHED ONCE, EXTENDED BEFORE ITS EDGE -- the same contract as the
+ * train tab, and copied from it deliberately. S57 as written asks for `?month=`
+ * on the server "the same navigation contract as /train?month=", but that
+ * contract no longer exists: the train tab moved the month into client state
+ * precisely because a round trip per calendar arrow is never seamless. Following
+ * the story's letter would build the second month pager its own last bullet
+ * warns against, so the intent wins and the story wants updating.
+ *
+ * One difference from train, forced by the maths rather than chosen: the trend
+ * needs history from BEFORE the month on screen. A ten-day half life seeded on
+ * the first of the month would read as a fresh start every month. So the
+ * headline is computed over the whole loaded window and only the list and the
+ * calendar are filtered to the month.
+ */
+export default async function ProgressPage() {
+  const today = wakingDate();
+  const supabase = await createClient();
+
+  const from = `${shiftMonth(today.slice(0, 7), -(WINDOW_MONTHS - 1))}-01`;
+
+  // Together rather than in sequence: the goal row is tiny and independent of
+  // the weigh-ins, so chaining them would spend a round trip to learn nothing.
+  const [{ data }, { data: settings }, { data: first }, { data: intake }, { data: sessions }] =
+    await Promise.all([
+    supabase
+      .from("weigh_ins")
+      .select("log_date, weight_lb, note")
+      .gte("log_date", from)
+      .order("log_date", { ascending: false }),
+    supabase
+      .from("nutrition_settings")
+      .select(
+        "goal_weight_lb, goal_rate_lb_per_week, display_weight_unit, pinned_exercise_id, strict_mode",
+      )
+      .maybeSingle(),
+    // The first day in the log, which is what bounds S62's All. One row, and
+    // the (user_id, log_date) index answers it without a scan. Fetched here
+    // rather than inferred from `data`, which only ever holds the window.
+    supabase
+      .from("weigh_ins")
+      .select("log_date")
+      .order("log_date", { ascending: true })
+      .limit(1)
+      .maybeSingle(),
+    // S63. Food and scale over the same weeks -- the one question that needs
+    // both halves of this app, and the reason they live in one.
+    supabase
+      .from("intake_days")
+      .select("log_date, kcal, protein_g, estimate_count, item_count")
+      .gte("log_date", from),
+    // S65. Dates only -- this counts sessions, and pulling the sets to do it
+    // would fetch a month of training to produce one integer.
+    supabase.from("workouts").select("log_date").gte("log_date", from),
+  ]);
+
+  const weighIns = (data ?? []).map(toWeighIn);
+
+  /**
+   * S81. The pinned lift, fetched SECOND because the pin is only known after
+   * the settings row arrives. One extra round trip, and only when a pin exists
+   * -- no pin is a normal state and costs nothing.
+   */
+  const pinnedId = (settings?.pinned_exercise_id as string | null | undefined) ?? null;
+  const pinned = pinnedId ? await loadPinnedLift(supabase, pinnedId) : null;
+
   return (
-    <SectionPlaceholder
-      icon={TrendingUp}
-      title="Progress isn't built yet"
-      description="Weight and measurements over time, once there is enough logged history to be worth charting."
+    <ProgressHome
+      today={today}
+      loadedFrom={from.slice(0, 7)}
+      earliest={first?.log_date ?? null}
+      entries={weighIns}
+      weeks={weeklyEnergy((intake ?? []) as IntakeDay[], weighIns)}
+      // S69. Defaults to lb when the column is missing, which is what the app
+      // stores anyway -- so a preview running ahead of 0024 reads correctly.
+      unit={settings?.display_weight_unit === "kg" ? "kg" : "lb"}
+      pinned={pinned}
+      adherence={adherence(
+        (intake ?? []) as IntakeDay[],
+        ((sessions ?? []) as { log_date: string }[]).map((w) => w.log_date),
+      )}
+      // Numeric arrives from PostgREST as a string. `?? null` and not `??
+      // undefined`: no goal is a state the screen renders deliberately (S60).
+      //
+      // S79. Calm sends both halves as null, because calm has no way to SET
+      // them any more -- the fields left the goals tab with the rest of the
+      // targets. A goal you can read but not edit is worse than no goal, and
+      // S60 already built the blank state this falls back into: the rate is
+      // stated and nothing sits beside it.
+      goal={
+        settings?.strict_mode === true
+          ? {
+              weightLb: settings?.goal_weight_lb != null ? Number(settings.goal_weight_lb) : null,
+              rateLbPerWeek:
+                settings?.goal_rate_lb_per_week != null
+                  ? Number(settings.goal_rate_lb_per_week)
+                  : null,
+            }
+          : { weightLb: null, rateLbPerWeek: null }
+      }
     />
   );
+}
+
+/** The pinned exercise and its history, or null if it has been deleted since. */
+async function loadPinnedLift(
+  supabase: Awaited<ReturnType<typeof createClient>>,
+  exerciseId: string,
+) {
+  const [{ data: exercise }, { data: slots }] = await Promise.all([
+    supabase.from("exercises").select("id, name").eq("id", exerciseId).maybeSingle(),
+    supabase
+      .from("workout_exercises")
+      .select("workout:workouts!inner(log_date), sets:workout_sets(*)")
+      .eq("exercise_id", exerciseId),
+  ]);
+  if (!exercise) return null;
+
+  const rows = (slots ?? []) as unknown as { workout: { log_date: string }; sets: WorkoutSet[] }[];
+  const { points } = liftHistory(
+    rows.map((row) => ({ log_date: row.workout.log_date, sets: row.sets ?? [] })),
+  );
+  return { id: exercise.id as string, name: exercise.name as string, points };
 }

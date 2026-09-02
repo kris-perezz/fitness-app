@@ -11,6 +11,11 @@
     "moduleResolution": "bundler",
     "resolveJsonModule": true,
     "isolatedModules": true,
+    // node --test strips types and runs the .mts suites directly, and
+    // Node resolves the real file, so those imports carry an explicit .ts
+    // extension. Harmless here: noEmit is on, so nothing is ever written
+    // with an extension that would not resolve at runtime.
+    "allowImportingTsExtensions": true,
     "jsx": "react-jsx",
     "incremental": true,
     "plugins": [

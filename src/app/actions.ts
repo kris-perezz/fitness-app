@@ -4,11 +4,20 @@ import { revalidatePath } from "next/cache";
 import { redirect } from "next/navigation";
 import { createClient } from "@/lib/supabase/server";
 import { fetchOffProduct, isBarcode } from "@/lib/off";
+import { fetchCnfFood, searchCnf, type CnfSearchResult } from "@/lib/cnf";
 import { extractLabel, type LabelDraft, type LabelResult } from "@/lib/label";
 import { generatedFood, type RecipeDetails, type RecipeLine } from "@/lib/recipe";
 import { sourceRank, type Food, type FoodSource, type Macros, type Meal } from "@/lib/food";
+import type { Micros } from "@/lib/micros";
 
 export type NewEntry = Macros & {
+  /**
+   * S38. Scaled at log time and stored on the row, like every other figure
+   * here. Absent stays absent: a food with no iron figure writes no iron key,
+   * so a day's total is over the entries that actually knew.
+   */
+  micros: Micros;
+  sugar_g: number | null;
   log_date: string;
   meal: Meal;
   food_id: string | null;
@@ -46,6 +55,25 @@ export type Goals = {
   protein_goal_g: number;
   carb_goal_g: number;
   fat_goal_g: number;
+  /**
+   * S60. Nullable, and the null means something specific: no goal on file. A
+   * goal RATE of 0 is "maintain", which is a decision, not an absence -- so
+   * these two must never be collapsed into a falsy check.
+   */
+  goal_weight_lb: number | null;
+  goal_rate_lb_per_week: number | null;
+  /**
+   * S69. What weights are SHOWN in. Storage stays pounds everywhere, so this
+   * never changes a stored number -- deliberately not called `weight_unit`,
+   * which already means something else on `foods` (S40).
+   */
+  display_weight_unit: "lb" | "kg";
+  /**
+   * S75. The whole of the tone feature: read at render time, written nowhere
+   * else. Turning it off restores calm everywhere, including for days logged
+   * while it was on (S77).
+   */
+  strict_mode: boolean;
 };
 
 export async function saveGoals(goals: Goals) {
@@ -62,6 +90,8 @@ export async function saveGoals(goals: Goals) {
 
   revalidatePath("/log");
   revalidatePath("/goals");
+  // S69. The progress tab reads the unit and every weight on it changes.
+  revalidatePath("/progress");
   return { error: null };
 }
 
@@ -151,6 +181,80 @@ export async function saveScannedFood(food: Food) {
 
   revalidatePath("/log");
   return { error: null };
+}
+
+// -------------------------------------------------- Canadian Nutrient File
+// S91. The generic half of the catalog. OFF is barcode-indexed and therefore
+// useless for a chicken breast; CNF is Health Canada's own composition data and
+// has no barcodes at all, which is exactly the complementary shape.
+//
+// Two actions rather than one, because they are two different moments. Searching
+// is free and reversible and happens while the user types; materialising writes
+// a catalog row everybody else will see, and only happens once they have chosen.
+
+export async function searchCnfFoods(query: string): Promise<CnfSearchResult> {
+  const supabase = await createClient();
+  const {
+    data: { user },
+  } = await supabase.auth.getUser();
+  // Not a data-protection measure -- CNF is public. It stops an unauthenticated
+  // caller using this endpoint as a free proxy for a 471 KB fetch.
+  if (!user) return { status: "error", message: "Not signed in" };
+
+  return searchCnf(query);
+}
+
+/**
+ * Turn a chosen CNF row into a catalog food and hand it back.
+ *
+ * THE CACHED ROW IS THE CURATED CATALOG. Every deliberate choice made here
+ * accumulates into `foods`, which is what makes the seed migration (S88) a
+ * promotion of things that earned their place rather than a guess made up
+ * front. It also means the second person to eat this food does not pay the
+ * round trip.
+ *
+ * `created_by` is the caller, matching every other write path -- but the id is
+ * the CNF food code, so two people choosing the same food collide on the
+ * primary key rather than forking. That is correct here and not a bug: unlike a
+ * barcode row, there is nothing person-specific to preserve. CNF said what it
+ * said, and a correction is a fork under S7 like any other.
+ */
+export async function addCnfFood(
+  code: number,
+  description: string,
+): Promise<{ food: Food | null; error: string | null }> {
+  const supabase = await createClient();
+  const {
+    data: { user },
+  } = await supabase.auth.getUser();
+  if (!user) return { food: null, error: "Not signed in" };
+
+  const id = `cnf_${code}`;
+
+  // Already in the catalog: return it rather than re-fetching. This is the
+  // second-person case and the re-log case, and it is the whole point of
+  // caching. Its own row wins over anything CNF would say now, because a fork
+  // or a correction may have happened since (S7).
+  const { data: existing } = await supabase.from("foods").select("*").eq("id", id).maybeSingle();
+  if (existing) return { food: existing as Food, error: null };
+
+  const result = await fetchCnfFood(code, description);
+  if (result.status === "error") return { food: null, error: result.message };
+  if (result.status === "miss") {
+    return { food: null, error: "Health Canada has no usable nutrition for that food." };
+  }
+
+  // Micros ride INSIDE the food now (S36), so there is nothing to add here
+  // beyond the owner -- the special case this insert used to carry is gone.
+  const { error } = await supabase.from("foods").insert({
+    ...result.food,
+    created_by: user.id,
+  });
+  // 23505: somebody else chose the same food first. Same outcome as finding it.
+  if (error && error.code !== "23505") return { food: null, error: error.message };
+
+  revalidatePath("/log");
+  return { food: result.food, error: null };
 }
 
 // ------------------------------------------------------------ label photos

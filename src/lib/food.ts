@@ -1,10 +1,12 @@
+import { scaleMicros, type Micros } from "./micros.ts";
+
 /**
  * Where a food's numbers came from (S6). Not the same question as `verified`,
  * which is one bit ("transcribed from a label") for a question with four
  * answers, and not the same question as an entry's `estimate` flag, which is
  * about how much you ate rather than what the food is.
  */
-export type FoodSource = "seed" | "off" | "label" | "manual" | "recipe";
+export type FoodSource = "seed" | "off" | "label" | "manual" | "recipe" | "cnf";
 
 export type Food = {
   id: string;
@@ -25,6 +27,17 @@ export type Food = {
   carb_g: number;
   fiber_g: number;
   sodium_mg: number | null;
+  /**
+   * S36. Grams of sugar per the food's basis. A FIRST-CLASS COLUMN since 0001,
+   * not a micro -- it has had a home in the schema all along and was simply
+   * being dropped by every read and write because this type did not declare it.
+   */
+  sugar_g: number | null;
+  /**
+   * S36. The vitamins and minerals, keyed by `lib/micros.ts`. Absent is absent:
+   * a nutrient with no value is missing rather than zero.
+   */
+  micros: Micros;
   verified: boolean;
   source: FoodSource;
   /** Set for scanned packaged goods; null for whole foods and recipe outputs. */
@@ -43,9 +56,14 @@ export type Food = {
  * a barcode, so it ranks last by default rather than by judgement.
  */
 const SOURCE_RANK: Record<FoodSource, number> = {
-  label: 4,
-  seed: 3,
-  manual: 2,
+  label: 5,
+  seed: 4,
+  manual: 3,
+  // S89. Health Canada's own laboratory data, so above OFF's crowd entries.
+  // Below `manual` and `seed` because both of those mean a person read the
+  // packet in front of them, where CNF is exact about a REFERENCE food that may
+  // not be the one you ate. Reasoning in full in 0022.
+  cnf: 2,
   off: 1,
   recipe: 0,
 };
@@ -66,6 +84,8 @@ export function sourceLabel(source: FoodSource): string {
       return "Manual";
     case "off":
       return "Open Food Facts";
+    case "cnf":
+      return "Health Canada";
     case "recipe":
       return "Recipe";
   }
@@ -82,12 +102,16 @@ export function sourceHint(source: FoodSource): string {
       return "Entered or corrected by you.";
     case "off":
       return "From the Open Food Facts database, unconfirmed. It is often the US version of a product sold here.";
+    case "cnf":
+      // The second sentence is a LICENCE OBLIGATION, not editorial. See
+      // CNF_ATTRIBUTION in lib/cnf.ts.
+      return "Laboratory values from the Canadian Nutrient File. They describe a reference food, not the one in your kitchen. Contains information licensed under the Open Government Licence – Canada.";
     case "recipe":
       return "Computed from the recipe's ingredients.";
   }
 }
 
-import { searchNamed } from "./search";
+import { searchNamed } from "./search.ts";
 
 export const MEALS = ["Breakfast", "Lunch", "Dinner", "Snacks"] as const;
 export type Meal = (typeof MEALS)[number];
@@ -105,8 +129,36 @@ export type Macros = {
  * qty is COUNT for per_unit foods and GRAMS for per_100g foods -- the same
  * convention log_food.py uses, so a number means the same thing in both places.
  */
+/**
+ * How much of the food's stored figures one portion is (S38).
+ *
+ * Extracted because three places needed it -- the macros, the micros and the
+ * recipe roll-up -- and a factor computed three times is a factor that will
+ * eventually be computed two ways.
+ */
+export function scaleFactor(food: Food, qty: number): number {
+  return food.basis === "per_100g" ? qty / 100 : qty;
+}
+
+/**
+ * The micros one portion carries (S38).
+ *
+ * Scaled and DENORMALISED onto the entry, never joined back to the food: an
+ * entry keeps what it was logged with, so correcting a food tomorrow cannot
+ * rewrite what a day contained last month (S7/S19).
+ */
+export function scaledMicros(food: Food, qty: number): Micros {
+  return scaleMicros(food.micros, scaleFactor(food, qty));
+}
+
+/** Sugar for one portion, or null where the food never carried a figure. */
+export function scaledSugar(food: Food, qty: number): number | null {
+  if (food.sugar_g === null) return null;
+  return Math.round((food.sugar_g * scaleFactor(food, qty) + Number.EPSILON) * 10) / 10;
+}
+
 export function scale(food: Food, qty: number): Macros {
-  const factor = food.basis === "per_100g" ? qty / 100 : qty;
+  const factor = scaleFactor(food, qty);
   const r = (n: number | null) => Math.round(((n ?? 0) * factor + Number.EPSILON) * 10) / 10;
   return {
     kcal: Math.round(food.kcal * factor),

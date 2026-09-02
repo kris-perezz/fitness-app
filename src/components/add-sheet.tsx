@@ -13,6 +13,8 @@ import {
   measureToCount,
   qtyFromCount,
   qtyFromMeasure,
+  scaledMicros,
+  scaledSugar,
   sourceHint,
   type Food,
   type Meal,
@@ -267,6 +269,11 @@ function QtyStep({
         qty: n,
         unit: entryUnit,
         estimate: false,
+        // S38. Scaled by the same factor as the macros beside them and stored
+        // on the row, so a correction to the food tomorrow cannot rewrite what
+        // this entry contained.
+        micros: scaledMicros(food, scaleQty),
+        sugar_g: scaledSugar(food, scaleQty),
         ...preview,
       });
       if (res.error) {
@@ -297,7 +304,11 @@ function QtyStep({
         {/* The scanned path is the one that lands here with numbers nobody has
             checked, so the hierarchy gets a full sentence rather than a badge
             at the moment it matters -- just before the entry is written. */}
-        {food.source === "off" && (
+        {/* `cnf` joins `off` here, and for a second reason on top of the first:
+            the Open Government Licence requires the acknowledgement to travel
+            with the information, and this is the last screen before a CNF
+            number becomes an entry. */}
+        {(food.source === "off" || food.source === "cnf") && (
           <p className="mt-1 text-xs text-muted-foreground">{sourceHint(food.source)}</p>
         )}
         <p className="mt-1 text-xs text-muted-foreground">
@@ -431,6 +442,11 @@ function CustomStep({
         carb_g: num(f.carb_g),
         fiber_g: num(f.fiber_g),
         sodium_mg: num(f.sodium_mg),
+        // A typed one-off carries no micronutrients, and empty is the honest
+        // answer rather than a set of zeroes -- nobody typed them (S36's rule,
+        // applied to the path where the data never existed).
+        micros: {},
+        sugar_g: null,
       });
       if (res.error) {
         toast.error(res.error);

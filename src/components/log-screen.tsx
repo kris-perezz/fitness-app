@@ -3,7 +3,7 @@
 import { useState, useTransition } from "react";
 import { useRouter } from "next/navigation";
 import Link from "next/link";
-import { ChevronLeft, ChevronRight, CookingPot, Pencil, Plus } from "lucide-react";
+import { ChartNoAxesColumn, ChevronLeft, ChevronRight, CookingPot, Pencil, Plus } from "lucide-react";
 import { MEALS, shiftDate, wakingDate, type Food, type Meal } from "@/lib/food";
 import { deleteEntry } from "@/app/actions";
 import { Button } from "@/components/ui/button";
@@ -24,6 +24,7 @@ import {
   ItemTitle,
 } from "@/components/ui/item";
 import { cn } from "@/lib/utils";
+import { fillPercent, isAlarming, statusOf, type Metric, type Tone } from "@/lib/tone";
 import { AddSheet } from "@/components/add-sheet";
 import { ConfirmAction } from "@/components/confirm-action";
 import { EditFoodSheet } from "@/components/edit-food-sheet";
@@ -54,6 +55,8 @@ type Goals = {
   protein_goal_g: number;
   carb_goal_g: number;
   fat_goal_g: number;
+  /** S75. Read here and stored nowhere else -- the tone owns no data (S77). */
+  strict_mode?: boolean | null;
 } | null;
 
 const round = (v: number) => Math.round(v);
@@ -86,8 +89,14 @@ export function LogScreen({
   );
 
   const calorieGoal = goals?.calorie_goal ?? 2000;
+  // S75. Calm unless the user turned it on. Never suggested, never prompted.
+  const tone: Tone = goals?.strict_mode ? "strict" : "calm";
 
   const today = wakingDate();
+  // S71. A day still being lived is not a day you fell short of: at 2pm, under
+  // a floor only means dinner has not happened. Yesterday is finished and can
+  // be summarised; today cannot.
+  const finished = date < today;
   const label =
     date === today
       ? "Today"
@@ -124,28 +133,52 @@ export function LogScreen({
             >
               <ChevronRight className="size-5" />
             </Button>
-            {/* Recipes are a Food-section destination with no tab of its own
-                (see bottom-nav.tsx), so this header is the way in. It sits
-                after the day arrows because it is not part of them. */}
+            {/* Recipes and Trends are Food-section destinations with no tab of
+                their own (see bottom-nav.tsx), so this header is the way in.
+                They sit after the day arrows because they are not part of them
+                -- and Trends sits last because it is the one that leaves
+                today behind entirely. */}
             <Button size="icon" variant="ghost" aria-label="Recipes" asChild>
               <Link href="/recipes">
                 <CookingPot className="size-5" />
+              </Link>
+            </Button>
+            <Button size="icon" variant="ghost" aria-label="Trends" asChild>
+              <Link href="/trends">
+                <ChartNoAxesColumn className="size-5" />
               </Link>
             </Button>
           </div>
         </header>
 
         <section className="border-b border-border px-5 py-6">
-          <CalorieRing consumed={totals.kcal} goal={calorieGoal} />
+          <CalorieRing consumed={totals.kcal} goal={calorieGoal} tone={tone} />
 
           <div className="mt-6 grid grid-cols-3 gap-4">
             <MacroMeter
               label="Protein"
+              metric="protein"
               value={totals.protein_g}
               goal={goals?.protein_goal_g ?? null}
+              finished={finished}
+              tone={tone}
             />
-            <MacroMeter label="Carbs" value={totals.carb_g} goal={goals?.carb_goal_g ?? null} />
-            <MacroMeter label="Fat" value={totals.fat_g} goal={goals?.fat_goal_g ?? null} />
+            <MacroMeter
+              label="Carbs"
+              metric="carbs"
+              value={totals.carb_g}
+              goal={goals?.carb_goal_g ?? null}
+              finished={finished}
+              tone={tone}
+            />
+            <MacroMeter
+              label="Fat"
+              metric="fat"
+              value={totals.fat_g}
+              goal={goals?.fat_goal_g ?? null}
+              finished={finished}
+              tone={tone}
+            />
           </div>
         </section>
 
@@ -235,9 +268,41 @@ export function LogScreen({
   );
 }
 
-function MacroMeter({ label, value, goal }: { label: string; value: number; goal: number | null }) {
-  const pct = goal ? Math.min(100, (value / goal) * 100) : 0;
-  const over = goal !== null && value > goal;
+/**
+ * One macro, and in strict mode the goal it is measured against (S72/S74).
+ *
+ * TAKES THE METRIC, NOT JUST THE GOAL. A goal number cannot say which way is
+ * good, and this component used to assume every one of them was a ceiling --
+ * so protein went `destructive` at 200 g against a 155 g floor, red at the user
+ * for hitting the thing they were aiming at. Direction is declared once in
+ * `lib/tone.ts` and asked for here.
+ *
+ * S79: CALM SHOWS THE NUMBER AND STOPS. No `82 / 155g`, no bar behind it -- a
+ * fraction is a score whatever colour it is painted, and three of them under
+ * the ring turn a day of eating into three things you are behind on. The goals
+ * still exist, still drive the calorie split, and still come back the moment
+ * strict is on; the calm screen just does not grade you against them.
+ */
+function MacroMeter({
+  label,
+  metric,
+  value,
+  goal,
+  finished,
+  tone,
+}: {
+  label: string;
+  metric: Metric;
+  value: number;
+  goal: number | null;
+  /** S71. An unfinished day is never short -- dinner has not happened yet. */
+  finished: boolean;
+  tone: Tone;
+}) {
+  // S79. The goal is a strict-mode idea. Resolved HERE rather than at the three
+  // call sites so there is one place that can ever decide to grade a macro.
+  const against = tone === "strict" ? goal : null;
+  const alarming = isAlarming(metric, statusOf(metric, value, against, finished), tone);
 
   return (
     <div>
@@ -245,17 +310,30 @@ function MacroMeter({ label, value, goal }: { label: string; value: number; goal
         <span className="text-muted-foreground">{label}</span>
         <span className="tabular-nums">
           {round(value)}
-          {goal !== null && <span className="text-muted-foreground"> / {round(goal)}g</span>}
+          {against === null ? (
+            <span className="text-muted-foreground">g</span>
+          ) : (
+            <span className="text-muted-foreground"> / {round(against)}g</span>
+          )}
         </span>
       </div>
       {/* The registry's Progress, not a hand-built bar. It carries the
           progressbar role and its aria-valuenow, which two divs and an inline
-          width never did. */}
-      <Progress
-        value={pct}
-        aria-label={`${label}: ${round(value)} of ${goal === null ? "no" : round(goal)} grams`}
-        className={cn("mt-1.5 h-1", over && "[&>[data-slot=progress-indicator]]:bg-destructive")}
-      />
+          width never did.
+
+          Absent entirely without a goal, rather than sitting there at zero: a
+          bar with nothing to fill against is a progressbar whose aria-valuenow
+          is a lie, and visually it reads as a day you have not started. */}
+      {against !== null && (
+        <Progress
+          value={fillPercent(value, against)}
+          aria-label={`${label}: ${round(value)} of ${round(against)} grams`}
+          className={cn(
+            "mt-1.5 h-1",
+            alarming && "[&>[data-slot=progress-indicator]]:bg-destructive",
+          )}
+        />
+      )}
     </div>
   );
 }

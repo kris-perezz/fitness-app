@@ -8,7 +8,7 @@
  * shows what happened and gets out of the way, and that restraint is the design.
  */
 
-import { searchNamed } from "./search";
+import { searchNamed } from "./search.ts";
 
 /**
  * A catalog row, as far as the CLIENT is concerned -- which is deliberately
@@ -435,4 +435,79 @@ export function trim(n: number): string {
  */
 export function isStale(workout: Workout, today: string): boolean {
   return workout.ended_at === null && workout.log_date !== today;
+}
+
+// ------------------------------------------------ one lift, over months (S80)
+
+/**
+ * A session's best working set for one exercise, as an estimated 1RM.
+ *
+ * TWO SERIES, NEVER ONE. S33 keeps 1-REP_CAP reps and everything above it in
+ * separate bands because Brzycki means nothing past about ten reps -- a merged
+ * line rates a 140 x 30 squat above a genuine 315 single, which is the exact
+ * mistake this app refuses to make anywhere else. Null where a session had no
+ * set in that band, so the chart draws a gap rather than a slope down to zero.
+ */
+export type LiftPoint = { date: string; e1rm: number | null; repBand: number | null };
+
+/** What was actually lifted that day. The chart shows shape; these show facts. */
+export type LiftSession = { date: string; sets: WorkoutSet[] };
+
+/**
+ * Below this the chart is a sentence instead (S79 rule 4). Four sessions,
+ * because a beginner's lifts climb visibly without a chart and three points is
+ * a straight line with an opinion.
+ */
+export const MIN_LIFT_SESSIONS = 4;
+
+/**
+ * Every session containing one exercise, folded into chart points and set lists.
+ *
+ * MERGED BY DATE, not by slot. The same lift twice in one session -- heavy, then
+ * a back-off -- is deliberately two `workout_exercises` rows (0009), and
+ * plotting them as two points would put two dots on one day and imply the
+ * second was a decline.
+ */
+export function liftHistory(
+  slots: { log_date: string; sets: WorkoutSet[] }[],
+): { points: LiftPoint[]; sessions: LiftSession[] } {
+  const byDate = new Map<string, WorkoutSet[]>();
+  for (const slot of slots) {
+    const list = byDate.get(slot.log_date) ?? [];
+    list.push(...slot.sets.filter(isWorkingSet));
+    byDate.set(slot.log_date, list);
+  }
+
+  const dates = [...byDate.keys()].sort();
+  const points: LiftPoint[] = [];
+  const sessions: LiftSession[] = [];
+
+  for (const date of dates) {
+    const sets = byDate.get(date) ?? [];
+    let e1rm = 0;
+    let repBand = 0;
+    for (const set of sets) {
+      const reps = set.reps ?? 0;
+      if (reps <= 0) continue;
+      const e = estimated1RM(set.load_lb, set.reps);
+      if (reps <= REP_CAP) e1rm = Math.max(e1rm, e);
+      else repBand = Math.max(repBand, e);
+    }
+    // A session with only unfilled or zero-rep sets contributes no point at
+    // all, rather than a zero -- it is a slot somebody opened and left.
+    if (sets.length === 0) continue;
+    points.push({
+      date,
+      e1rm: e1rm > 0 ? Math.round(e1rm) : null,
+      repBand: repBand > 0 ? Math.round(repBand) : null,
+    });
+    sessions.push({ date, sets });
+  }
+
+  return { points, sessions: sessions.reverse() };
+}
+
+/** Does this exercise have any high-rep work at all? Decides the second series. */
+export function hasRepBand(points: LiftPoint[]): boolean {
+  return points.some((p) => p.repBand !== null);
 }

@@ -1,4 +1,5 @@
 import type { Food } from "@/lib/food";
+import type { MicroKey, Micros } from "@/lib/micros";
 
 /**
  * Nutrition label extraction (S4, S5).
@@ -43,6 +44,15 @@ type Extracted = {
   carb_g: number | null;
   fiber_g: number | null;
   sodium_mg: number | null;
+  // S37. Calcium, iron, potassium and vitamin D are LEGALLY REQUIRED on a
+  // Canadian panel, so they are on every photo the OCR step already looks at.
+  // Sugars and cholesterol are printed there too.
+  sugars_g: number | null;
+  calcium_mg: number | null;
+  iron_mg: number | null;
+  potassium_mg: number | null;
+  vit_d_ug: number | null;
+  cholesterol_mg: number | null;
 };
 
 /** A draft food, not a saved one: every field is editable before it is written. */
@@ -69,6 +79,12 @@ const SCHEMA = {
     carb_g: { type: ["number", "null"] },
     fiber_g: { type: ["number", "null"] },
     sodium_mg: { type: ["number", "null"] },
+    sugars_g: { type: ["number", "null"] },
+    calcium_mg: { type: ["number", "null"] },
+    iron_mg: { type: ["number", "null"] },
+    potassium_mg: { type: ["number", "null"] },
+    vit_d_ug: { type: ["number", "null"] },
+    cholesterol_mg: { type: ["number", "null"] },
   },
   required: [
     "name",
@@ -82,6 +98,12 @@ const SCHEMA = {
     "carb_g",
     "fiber_g",
     "sodium_mg",
+    "sugars_g",
+    "calcium_mg",
+    "iron_mg",
+    "potassium_mg",
+    "vit_d_ug",
+    "cholesterol_mg",
   ],
   additionalProperties: false,
 } as const;
@@ -100,6 +122,19 @@ once, not twice.
 
 Ignore the "% Daily Value / % valeur quotidienne" column entirely. Those are
 percentages, not amounts, and they sit immediately beside the amounts you do want.
+
+THIS MATTERS MOST FOR THE VITAMINS AND MINERALS at the bottom of the panel. For
+those rows the % column is usually the more prominent of the two and is sometimes
+the only thing printed in large type -- "Calcium 260 mg 20 %" means 260, never 20.
+If a row prints ONLY a percentage and no amount, that field is null.
+
+The mineral rows are bilingual like the rest: "Calcium / Calcium",
+"Iron / Fer", "Potassium / Potassium", "Vitamin D / Vitamine D",
+"Cholesterol / Cholestérol", "Sugars / Sucres". One set of numbers, read once.
+
+Units for these rows as printed on a Canadian panel: calcium, iron, potassium and
+cholesterol in milligrams; vitamin D in micrograms (µg / mcg); sugars in grams.
+Convert if the panel prints something else.
 
 basis: "per_serving" if the panel is headed by a serving ("Per 1 shake (325 mL)",
 "Pour 1 frappé", "Per 3 pieces"). "per_100" if it is headed per 100 g or 100 mL.
@@ -126,6 +161,30 @@ ingredients, and never describe the package.`;
 function envKey(): string | null {
   const key = process.env.OPENAI_API_KEY;
   return key === undefined || key === "" ? null : key;
+}
+
+/**
+ * The panel's mineral rows onto the app's vocabulary (S37).
+ *
+ * Scaled by the caller's `at`, which carries the per-serving to per-100 factor
+ * -- the macros above go through the same function, so a label cannot end up
+ * with its macros on one basis and its minerals on another.
+ */
+function labelMicros(x: Extracted, at: (v: number | null) => number): Micros {
+  const rows: [value: number | null, key: MicroKey][] = [
+    [x.calcium_mg, "calcium_mg"],
+    [x.iron_mg, "iron_mg"],
+    [x.potassium_mg, "potassium_mg"],
+    [x.vit_d_ug, "vit_d_ug"],
+    [x.cholesterol_mg, "cholesterol_mg"],
+  ];
+  const out: Micros = {};
+  for (const [value, key] of rows) {
+    // A row printed only as a percentage arrives null from the model, which is
+    // the honest answer and must not become a zero.
+    if (value !== null) out[key] = at(value);
+  }
+  return out;
 }
 
 /** Positive, finite, and not an obvious misread. Null covers everything else. */
@@ -188,6 +247,12 @@ function toDraft(x: Extracted): LabelDraft | null {
     // than a claim; on the per_100g branch it mirrors `unit` as 0008 requires.
     weight_unit: unit,
     grams_per_unit: countable ? null : amount,
+    // S37. Read off the panel and scaled by the same `factor` as the macros,
+    // so a per-serving label becomes per-100 g consistently across every field.
+    // ABSENT IS ABSENT (S36): a row the OCR could not read stays out of the
+    // object rather than arriving as a zero somebody will later total.
+    sugar_g: x.sugars_g === null ? null : at(x.sugars_g),
+    micros: labelMicros(x, at),
     kcal: kcal * factor,
     protein_g: at(x.protein_g),
     fat_g: at(x.fat_g),
