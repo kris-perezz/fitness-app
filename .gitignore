@@ -46,3 +46,7 @@ next-env.d.ts
 # Personal instructions to the coding agent. AGENTS.md stays tracked --
 # it is the project contract; this file is whatever you want it to be.
 CLAUDE.md
+
+# Personal, one-time data imports. One person's history, run by hand in the
+# Supabase SQL Editor -- never schema, never replayed on another database.
+supabase/personal/
