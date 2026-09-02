@@ -3,7 +3,7 @@
 import { revalidatePath } from "next/cache";
 import { redirect } from "next/navigation";
 import { createClient } from "@/lib/supabase/server";
-import { fetchOffProduct, isBarcode } from "@/lib/off";
+import { fetchOffProduct, isBarcode, searchOff, type OffSearchResult } from "@/lib/off";
 import { fetchCnfFood, searchCnf, type CnfSearchResult } from "@/lib/cnf";
 import { extractLabel, type LabelDraft, type LabelResult } from "@/lib/label";
 import { generatedFood, type RecipeDetails, type RecipeLine } from "@/lib/recipe";
@@ -202,6 +202,24 @@ export async function searchCnfFoods(query: string): Promise<CnfSearchResult> {
   if (!user) return { status: "error", message: "Not signed in" };
 
   return searchCnf(query);
+}
+
+/**
+ * S96. The same door as `searchCnfFoods`, onto Open Food Facts by name.
+ *
+ * The auth check is doing MORE work here than it does for CNF. That one guards
+ * a public dataset against being proxied for free; this one guards a shared
+ * ten-requests-a-minute budget that every signed-in user draws from, because
+ * the rate limit is per IP and the IP is this server's.
+ */
+export async function searchOffFoods(query: string): Promise<OffSearchResult> {
+  const supabase = await createClient();
+  const {
+    data: { user },
+  } = await supabase.auth.getUser();
+  if (!user) return { status: "error", message: "Not signed in" };
+
+  return searchOff(query);
 }
 
 /**
