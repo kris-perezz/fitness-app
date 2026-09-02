@@ -4,7 +4,8 @@ import { useEffect, useMemo, useRef, useState, useTransition } from "react";
 import { Camera, ChevronLeft, ImageUp, Leaf, Plus, ScanBarcode, Search } from "lucide-react";
 import { searchFoods, show, basisLabel, type Food } from "@/lib/food";
 import { readLabel, saveLabelFood, searchCnfFoods, addCnfFood } from "@/app/actions";
-import { CNF_ATTRIBUTION, CNF_LICENCE_URL, type CnfHit } from "@/lib/cnf";
+import { CNF_ATTRIBUTION, CNF_LICENCE_URL, cnfFoodId, type CnfHit } from "@/lib/cnf";
+import { collapseGroups, displayName, groupForId } from "@/lib/food-groups";
 import { downscaleToDataUrl } from "@/lib/image";
 import type { LabelDraft } from "@/lib/label";
 import { BarcodeScanner } from "@/components/barcode-scanner";
@@ -57,7 +58,13 @@ export function FoodPicker({
    * Open Food Facts result is assembled in memory and has never been written,
    * and anything referencing it by id has to save the catalog row first (S3).
    */
-  onPick: (food: Food, scanned: boolean) => void;
+  /**
+   * `group` is the food's siblings (S92) -- the other forms of the same food,
+   * in curated order -- so the caller can offer the raw/cooked choice without
+   * going back to the database for rows it has just been handed. Empty for the
+   * foods that have no forms, which is nearly all of them.
+   */
+  onPick: (food: Food, scanned: boolean, group?: Food[]) => void;
   /** Omitted where typing a one-off makes no sense, which hides the button. */
   onCustom?: () => void;
 }) {
@@ -86,7 +93,7 @@ export function FoodPicker({
   return (
     <SearchStep
       foods={foods}
-      onPick={(food) => onPick(food, false)}
+      onPick={(food, group) => onPick(food, false, group)}
       onScan={() => onStep({ kind: "scan" })}
       onLabel={() => onStep({ kind: "label", barcode: null })}
       onCustom={onCustom}
@@ -102,7 +109,7 @@ function SearchStep({
   onCustom,
 }: {
   foods: Food[];
-  onPick: (food: Food) => void;
+  onPick: (food: Food, group?: Food[]) => void;
   onScan: () => void;
   onLabel: () => void;
   onCustom?: () => void;
@@ -110,7 +117,24 @@ function SearchStep({
   const [query, setQuery] = useState("");
   const [picked, setPicked] = useState<string | null>(null);
   const inputRef = useRef<HTMLInputElement>(null);
-  const results = useMemo(() => searchFoods(foods, query), [foods, query]);
+  /**
+   * Ranked, then folded so a food with several forms appears once (S92).
+   * Collapsing AFTER ranking keeps the member the query actually matched -- a
+   * search for "grilled" should not surrender its place to whichever form the
+   * curated file happens to list first.
+   */
+  const results = useMemo(
+    () => collapseGroups(searchFoods(foods, query), (f) => f.id),
+    [foods, query],
+  );
+
+  /** The forms of a collapsed row that are actually in the catalog. */
+  const siblings = (food: Food): Food[] => {
+    const group = groupForId(food.id);
+    if (!group) return [];
+    const byId = new Map(foods.map((f) => [f.id, f]));
+    return group.variants.flatMap((v) => byId.get(v.id) ?? []);
+  };
 
   useEffect(() => {
     const t = setTimeout(() => inputRef.current?.focus(), 120);
@@ -192,13 +216,16 @@ function SearchStep({
                   <button
                     onClick={() => {
                       setPicked(f.id);
-                      onPick(f);
+                      onPick(f, siblings(f));
                     }}
                     disabled={picked !== null}
                     className="text-left disabled:opacity-60"
                   >
                     <ItemContent className="min-w-0">
-                      <ItemTitle className="font-normal">{f.name}</ItemTitle>
+                      {/* The GROUP's name where there is one: this row stands
+                          for every form of the food, so it must not be labelled
+                          with the one form that happened to rank first. */}
+                      <ItemTitle className="font-normal">{displayName(f)}</ItemTitle>
                       {/* S6. Below the name rather than beside it: the badge
                           must never push the name into an ellipsis, and the
                           description line is where the row already answers
@@ -240,7 +267,13 @@ function SearchStep({
  * shifting list under the one the user is already reading. A tap says "I did
  * not find it", which is exactly when this is wanted.
  */
-function CnfSection({ query, onPick }: { query: string; onPick: (food: Food) => void }) {
+function CnfSection({
+  query,
+  onPick,
+}: {
+  query: string;
+  onPick: (food: Food, group?: Food[]) => void;
+}) {
   const [hits, setHits] = useState<CnfHit[] | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [picking, setPicking] = useState<number | null>(null);
@@ -255,7 +288,10 @@ function CnfSection({ query, onPick }: { query: string; onPick: (food: Food) => 
         return;
       }
       setError(null);
-      setHits(res.hits);
+      // Folded the same way the local list is: 24 chicken-breast rows are one
+      // food, and the choice between its forms belongs in the drawer rather
+      // than in a list of strings differing in their fifth comma (S92).
+      setHits(collapseGroups(res.hits, (h) => cnfFoodId(h.code)));
     });
   };
 
@@ -269,8 +305,9 @@ function CnfSection({ query, onPick }: { query: string; onPick: (food: Food) => 
         return;
       }
       // Already written to the catalog by the action, so it is not "scanned" in
-      // the sense the caller cares about.
-      onPick(res.food);
+      // the sense the caller cares about. The action materialises the whole
+      // group, so its forms come back with it.
+      onPick(res.food, res.group);
     });
   };
 
@@ -328,9 +365,12 @@ function CnfSection({ query, onPick }: { query: string; onPick: (food: Food) => 
                   {/* CNF's FULL description, not a shortened one. Two rows here
                       routinely differ only in their last clause -- raw against
                       grilled is about a 30% swing per 100 g -- so trimming it
-                      would turn a real choice into a coin toss (S91). */}
+                      would turn a real choice into a coin toss (S91).
+                      A CURATED group is the exception and not a contradiction:
+                      the distinction is still made, it has just moved to a
+                      toggle in the drawer where it can be labelled (S92). */}
                   <ItemTitle className="font-normal whitespace-normal">
-                    {hit.description}
+                    {groupForId(cnfFoodId(hit.code))?.name ?? hit.description}
                   </ItemTitle>
                 </ItemContent>
                 {picking === hit.code && <Spinner />}
