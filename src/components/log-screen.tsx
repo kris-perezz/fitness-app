@@ -3,9 +3,17 @@
 import { useState, useTransition } from "react";
 import { useRouter } from "next/navigation";
 import Link from "next/link";
-import { ChartNoAxesColumn, ChevronLeft, ChevronRight, CookingPot, Pencil, Plus } from "lucide-react";
+import {
+  BookmarkPlus,
+  ChartNoAxesColumn,
+  ChevronLeft,
+  ChevronRight,
+  CookingPot,
+  Pencil,
+  Plus,
+} from "lucide-react";
 import { MEALS, shiftDate, wakingDate, type Food, type Meal } from "@/lib/food";
-import { deleteEntry } from "@/app/actions";
+import { deleteEntry, saveEntryAsFood } from "@/app/actions";
 import { Button } from "@/components/ui/button";
 import { Progress } from "@/components/ui/progress";
 import { ButtonGroup } from "@/components/ui/button-group";
@@ -255,6 +263,9 @@ export function LogScreen({
           setDetail(null);
           setEditing(food);
         }}
+        // S99. The new row has to reach the catalog this screen was rendered
+        // with, or the food you just saved is missing from the next search.
+        onSavedAsFood={() => router.refresh()}
       />
       <EditFoodSheet
         food={editing}
@@ -343,12 +354,14 @@ function EntryDetail({
   food,
   onClose,
   onEditFood,
+  onSavedAsFood,
 }: {
   entry: Entry | null;
   /** The catalog row this entry was logged against, when it still exists. */
   food: Food | null;
   onClose: () => void;
   onEditFood: (food: Food) => void;
+  onSavedAsFood: () => void;
 }) {
   const [pending, startTransition] = useTransition();
 
@@ -407,6 +420,33 @@ function EntryDetail({
                     onClick={() => onEditFood(food)}
                   >
                     <Pencil className="size-4" /> Edit food
+                  </Button>
+                )}
+                {/* S99. The other half of the same slot: an entry with a
+                    catalog row behind it can be corrected, and one without can
+                    be turned into a row. Only ever one of the two shows, so
+                    the group stays at two buttons under a thumb. */}
+                {!food && entry.food_id === null && (
+                  <Button
+                    variant="outline"
+                    className="h-11 flex-1"
+                    disabled={pending}
+                    onClick={() =>
+                      startTransition(async () => {
+                        const res = await saveEntryAsFood(entry.id);
+                        if (res.error || !res.food) {
+                          toast.error(res.error ?? "Could not save that as a food.");
+                          return;
+                        }
+                        // Says forward-looking out loud. This entry keeps the
+                        // numbers and the estimate flag it was logged with.
+                        toast.success(`Saved ${res.food.name}. Next time it is in search.`);
+                        onSavedAsFood();
+                        onClose();
+                      })
+                    }
+                  >
+                    <BookmarkPlus className="size-4" /> Save as food
                   </Button>
                 )}
                 <ConfirmAction

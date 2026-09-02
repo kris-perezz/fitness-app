@@ -327,6 +327,104 @@ export async function saveLabelFood(
   return { food, error: null };
 }
 
+/**
+ * S99. Turn an entry you typed into a food you can log again.
+ *
+ * THE GAP THIS CLOSES IS TOTAL. A typed one-off is terminal: the entry detail
+ * offers "Edit food" only where `food_id` is set, so a dish with no label to
+ * photograph and no ingredients to list -- a restaurant sandwich, a cafe drink
+ * -- has to be retyped and re-derived every single time it is eaten.
+ *
+ * FORWARD-LOOKING ONLY, the same rule S7 states for corrections. The entry that
+ * seeded this keeps its own numbers and its own `estimate` flag: it WAS typed
+ * with no catalog row behind it, and relinking it afterwards would rewrite that
+ * history to make a past day look better sourced than it was.
+ *
+ * `per_unit` on the entry's own unit, because a typed entry is written as
+ * `qty 1 / unit "serving"` (add-sheet.tsx) and its macros are therefore the
+ * whole portion. Nothing here converts, guesses a gram weight, or invents a
+ * number the entry did not already carry.
+ */
+export async function saveEntryAsFood(
+  entryId: string,
+): Promise<{ food: Food | null; error: string | null }> {
+  const supabase = await createClient();
+  const {
+    data: { user },
+  } = await supabase.auth.getUser();
+  if (!user) return { food: null, error: "Not signed in" };
+
+  // Scoped to the user as well as the id, matching updateRecipe and
+  // deleteRecipe: a wrong id fails as "not found" rather than reaching for
+  // somebody else's row and relying on RLS to say no.
+  const { data, error } = await supabase
+    .from("intake_entries")
+    .select("*")
+    .eq("id", entryId)
+    .eq("user_id", user.id)
+    .maybeSingle();
+  if (error) return { food: null, error: error.message };
+  if (!data) return { food: null, error: "Entry not found" };
+
+  const entry = data as {
+    name: string;
+    unit: string;
+    food_id: string | null;
+    kcal: number;
+    protein_g: number;
+    fat_g: number;
+    carb_g: number;
+    fiber_g: number;
+    sodium_mg: number | null;
+    sugar_g: number | null;
+    micros: Micros | null;
+  };
+
+  // Already a catalog food. Not an error the user can act on, and offering the
+  // button at all in that case is the caller's bug rather than theirs.
+  if (entry.food_id !== null) {
+    return { food: null, error: "That entry already came from a food." };
+  }
+
+  const name = entry.name.trim();
+  if (!name) return { food: null, error: "That entry has no name to save." };
+
+  const food: Food = {
+    id: `manual_${crypto.randomUUID()}`,
+    name,
+    aliases: [],
+    basis: "per_unit",
+    unit: entry.unit,
+    grams_per_unit: null,
+    // On per_unit the measure is only meaningful alongside a gram weight, and
+    // there is none. "g" is the column's default rather than a claim.
+    weight_unit: "g",
+    kcal: entry.kcal,
+    protein_g: entry.protein_g,
+    fat_g: entry.fat_g,
+    carb_g: entry.carb_g,
+    fiber_g: entry.fiber_g,
+    sodium_mg: entry.sodium_mg,
+    sugar_g: entry.sugar_g,
+    // Absent stays absent (S36): a typed entry carries `{}` and copying that
+    // is right, where filling in zeroes would invent a claim.
+    micros: entry.micros ?? {},
+    // Nobody transcribed a package here -- the numbers came out of the same
+    // head that typed the name.
+    verified: false,
+    source: "manual",
+    barcode: null,
+  };
+
+  const { error: insertError } = await supabase
+    .from("foods")
+    .insert({ ...food, created_by: user.id });
+  if (insertError) return { food: null, error: insertError.message };
+
+  revalidatePath("/log");
+  return { food, error: null };
+}
+
 // ------------------------------------------------------------- corrections
 // S7. Open Food Facts has the US Premier Protein shake at 230 mg sodium; the
 // Canadian packet says 250. Fixing that is a forward-looking edit and only ever
