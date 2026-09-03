@@ -145,9 +145,9 @@ function score(path) {
 
   // ------------------------------------------------------------- stability
   // Within-item coefficient of variation across repeats: the direct
-  // measurement of the noise S35 says is the expensive kind of error. If this
-  // comes back as exactly 0.0, the cache defeated the repeats -- see the
-  // header of run.mjs.
+  // measurement of the noise S35 says is the expensive kind of error. If EVERY
+  // fixture comes back at exactly 0.0, the cache may have defeated the repeats
+  // -- see the header of run.mjs.
   const byId = new Map();
   for (const r of answered) {
     if (!byId.has(r.id)) byId.set(r.id, []);
@@ -164,11 +164,21 @@ function score(path) {
     cvs.push((sd / mean) * 100);
   }
   const cv = median(cvs);
+  // A MEDIAN ALONE MISREADS THIS METRIC, and it did once already: a run where
+  // most fixtures repeat exactly and a handful swing 10% has a median CV of
+  // 0.0, which was read off as "the estimator is deterministic" when a quarter
+  // of the set was not. Noise is not a middle-of-the-distribution property --
+  // one wobbling fixture is one wobbling entry in the log. So the share that
+  // moved at all and the worst of them are printed beside it, and the "no
+  // variance" line below is gated on ALL of them holding still, not the median.
+  const moved = cvs.filter((v) => v > 0).length;
+  const worst = cvs.length > 0 ? Math.max(...cvs) : 0;
   console.log(`run-to-run CV (median, kcal)  ${fmt(cv)}%`);
-  if (cv === 0 && cvs.length > 0) {
-    // Zero is ambiguous and the two readings are opposite, so say how to tell
-    // them apart rather than guessing. A cache hit returns in well under a
-    // millisecond; a real call to the API is three orders of magnitude slower.
+  console.log(`  fixtures that moved at all  ${moved}/${cvs.length}   worst ${fmt(worst)}%`);
+  if (moved === 0 && cvs.length > 0) {
+    // Zero everywhere is ambiguous and the two readings are opposite, so say
+    // how to tell them apart rather than guessing. A cache hit returns in well
+    // under a millisecond; a real call is three orders of magnitude slower.
     const ms = median(answered.map((r) => r.ms).filter((v) => typeof v === "number"));
     console.log(
       ms !== null && ms > 100
