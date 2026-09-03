@@ -19,6 +19,8 @@
  * NEXT_PUBLIC_ prefix.
  */
 
+import { createHash } from "node:crypto";
+
 const API = "https://api.openai.com/v1/responses";
 
 /**
@@ -38,8 +40,12 @@ const MODEL = "gpt-5.6-luna";
  */
 const REASONING_EFFORT = "low";
 
-/** Prose in, six numbers out. Faster than a label read, and no image to upload. */
-const TIMEOUT_MS = 20_000;
+/**
+ * Prose alone is fast. A photo on mobile data is not, so this sits between the
+ * text-only case and lib/label.ts's 45s -- a meal photo is one pass over a
+ * plate, not a dense table read at an angle.
+ */
+const TIMEOUT_MS = 30_000;
 
 /**
  * THE MOST IMPORTANT LINE IN THIS FILE IS "the whole portion described".
@@ -56,17 +62,36 @@ const TIMEOUT_MS = 20_000;
  * user's own log already does this by hand ("Assumes ~3 large scrambled eggs
  * ... revise if egg count differs"), so this is their convention, not a new one.
  */
-const PROMPT = `You estimate the nutrition of a food or meal from a written description.
+const PROMPT = `You estimate the nutrition of a food or meal from a written description, and
+from a photograph of it when one is given.
+
+WHEN THERE IS A PHOTO, the two inputs answer different questions and neither
+overrides the other wholesale. The photo tells you what is on the plate and how
+much of it: the items, their relative sizes, how full the bowl is, how many
+pieces. The description tells you what the photo cannot show: the milk in the
+drink, the oil in the pan, the sauce under the rice, whether it is the diet
+version, a weight from a scale. Where the description states a fact, take it --
+a stated weight always beats an eyeballed one. Where it is silent, read the photo.
+Where they genuinely conflict, follow the description and say so in assumptions.
+
+Judge portion size from what is next to the food. A standard dinner plate is
+about 27 cm, a fork about 19 cm, a can 355 mL. Say in the assumptions what you
+scaled against.
 
 Return macros for THE WHOLE PORTION DESCRIBED, not per 100 g and not per serving.
 If the description says "3 bowls", estimate all three. If it says "240g cooked",
 estimate 240g. If it gives no amount, assume one ordinary single portion and say
 so in the assumptions.
 
-Set too_vague to true, and leave every number null, when the description names no
-food at all or is too unspecific to estimate within roughly 30% -- "chicken",
-"snack", "lunch". Do not guess in those cases. A description that names a food
-and any rough amount is NOT too vague.
+Set too_vague to true, and leave every number null, when there is no photo AND the
+description names no food at all or is too unspecific to estimate within roughly
+30% -- "chicken", "snack", "lunch". Do not guess in those cases. A description
+that names a food and any rough amount is NOT too vague, and neither is a photo
+you can actually see food in.
+
+Set too_vague to true for a photo you cannot identify food in at all, or one
+where the quantity is genuinely unbounded -- a buffet spread, a shared table, a
+hotpot -- unless the description says what was taken from it.
 
 Write assumptions as one short sentence naming the specific things you assumed:
 size, cooking method, milk, oil, sauce, whether skin or bones were eaten. Say the
@@ -152,9 +177,17 @@ const SCHEMA = {
 const CACHE_LIMIT = 50;
 const cache = new Map<string, Estimate>();
 
-/** Case and whitespace are not part of what was asked. */
-function cacheKey(description: string): string {
-  return description.trim().toLowerCase().replace(/\s+/g, " ");
+/**
+ * Case and whitespace are not part of what was asked. The photo is, so it is
+ * hashed into the key rather than ignored -- otherwise the first text-only
+ * answer would be replayed for every later photo of the same words, which is
+ * the exact opposite of what attaching a photo is asking for.
+ */
+function cacheKey(description: string, image: string | null): string {
+  const words = description.trim().toLowerCase().replace(/\s+/g, " ");
+  if (image === null) return words;
+  const digest = createHash("sha256").update(image).digest("hex").slice(0, 16);
+  return `${words}|${digest}`;
 }
 
 /** Non-negative and finite, or the field did not really arrive. */
@@ -194,13 +227,24 @@ function readOutput(body: unknown): Estimated | null {
 }
 
 /** Never throws: every failure comes back as a value the UI can render. */
-export async function estimateFromDescription(description: string): Promise<DescribeResult> {
+export async function estimateFromDescription(
+  description: string,
+  /** A data URL from lib/image.ts, already downscaled. Optional by design. */
+  image?: string | null,
+): Promise<DescribeResult> {
   const text = description.trim();
-  if (text.length < 3) {
+  const photo = image ?? null;
+
+  if (photo !== null && !photo.startsWith("data:image/")) {
+    return { status: "error", message: "That does not look like a photo." };
+  }
+  // A photo carries the whole question on its own, so the floor on the words
+  // only applies when the words are all there is.
+  if (photo === null && text.length < 3) {
     return { status: "vague", message: "Say what you ate and roughly how much." };
   }
 
-  const key = cacheKey(text);
+  const key = cacheKey(text, photo);
   const hit = cache.get(key);
   if (hit) return { status: "ok", estimate: hit };
 
@@ -220,7 +264,22 @@ export async function estimateFromDescription(description: string): Promise<Desc
         reasoning: { effort: REASONING_EFFORT },
         input: [
           { role: "system", content: PROMPT },
-          { role: "user", content: text },
+          {
+            role: "user",
+            // Text BEFORE the image. OpenAI's vision guidance is explicit that
+            // the model reads content in order and that putting the instruction
+            // first measurably improves extraction -- and here the description
+            // is the half that says what the photo cannot show.
+            content: [
+              { type: "input_text", text: text === "" ? "(no description given)" : text },
+              // "high" for the same reason lib/label.ts uses it: the detail that
+              // decides the answer is small -- how full the bowl is, how many
+              // pieces are left, what is under the sauce.
+              ...(photo === null
+                ? []
+                : [{ type: "input_image", image_url: photo, detail: "high" }]),
+            ],
+          },
         ],
         text: {
           format: { type: "json_schema", name: "food_estimate", strict: true, schema: SCHEMA },

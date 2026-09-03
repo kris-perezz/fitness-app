@@ -283,14 +283,18 @@ export async function addCnfFood(
 // numbers land in a form the user was already filling in, and every one of them
 // is editable before anything reaches the database.
 
-export async function estimateEntry(description: string): Promise<DescribeResult> {
+export async function estimateEntry(
+  description: string,
+  /** S101. A downscaled data URL, or null for the text-only case. */
+  image?: string | null,
+): Promise<DescribeResult> {
   const supabase = await createClient();
   const {
     data: { user },
   } = await supabase.auth.getUser();
   if (!user) return { status: "error", message: "Not signed in" };
 
-  return estimateFromDescription(description);
+  return estimateFromDescription(description, image ?? null);
 }
 
 // ------------------------------------------------------------ label photos

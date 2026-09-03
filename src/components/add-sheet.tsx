@@ -1,7 +1,7 @@
 "use client";
 
 import { useEffect, useRef, useState, useTransition } from "react";
-import { ChevronLeft, Sparkles } from "lucide-react";
+import { Camera, ChevronLeft, ImageUp, Sparkles, X } from "lucide-react";
 import {
   scale,
   show,
@@ -36,6 +36,7 @@ import { Input } from "@/components/ui/input";
 import { Field, FieldGroup, FieldLabel } from "@/components/ui/field";
 import { Spinner } from "@/components/ui/spinner";
 import { liftForKeyboard } from "@/lib/sheet";
+import { downscaleToDataUrl } from "@/lib/image";
 import { toast } from "sonner";
 
 /**
@@ -417,6 +418,20 @@ function CustomStep({
   });
   const [pending, startTransition] = useTransition();
   const [estimating, setEstimating] = useState(false);
+  /**
+   * S101. The downscaled data URL and a label for the row that says one is
+   * attached. Held here rather than sent immediately: the photo is half the
+   * question and the description is the other half, so nothing goes anywhere
+   * until the user taps estimate.
+   */
+  const [photo, setPhoto] = useState<string | null>(null);
+  const [photoError, setPhotoError] = useState<string | null>(null);
+  // Two inputs, not one: `capture` is a hint the browser cannot be asked to
+  // drop per click, so a single input either always opens the camera or never
+  // does. The same reasoning as LabelStep, and the same reason -- a meal is as
+  // often photographed a minute ago as it is right now.
+  const cameraRef = useRef<HTMLInputElement>(null);
+  const uploadRef = useRef<HTMLInputElement>(null);
   const num = (v: string) => (v === "" ? 0 : Number(v));
 
   const fields: [keyof typeof f, string][] = [
@@ -441,10 +456,21 @@ function CustomStep({
   /** One decimal, matching what every other macro field in the app shows. */
   const round1 = (n: number) => Math.round((n + Number.EPSILON) * 10) / 10;
 
+  async function attach(file: File) {
+    setPhotoError(null);
+    try {
+      setPhoto(await downscaleToDataUrl(file));
+    } catch {
+      // Reached most often by an upload rather than a capture: Android pickers
+      // hand back HEICs and PDFs the canvas cannot decode.
+      setPhotoError("That file could not be opened as a photo.");
+    }
+  }
+
   function estimate() {
     setEstimating(true);
     startTransition(async () => {
-      const res = await estimateEntry(f.name);
+      const res = await estimateEntry(f.name, photo);
       setEstimating(false);
       if (res.status === "error") {
         toast.error(res.message);
@@ -527,6 +553,78 @@ function CustomStep({
           className="h-11 text-base"
         />
 
+        {/* Cleared on change so picking the same file twice fires it twice. */}
+        <input
+          ref={cameraRef}
+          type="file"
+          accept="image/*"
+          capture="environment"
+          className="hidden"
+          onChange={(e) => {
+            const file = e.target.files?.[0];
+            e.target.value = "";
+            if (file) void attach(file);
+          }}
+        />
+        <input
+          ref={uploadRef}
+          type="file"
+          accept="image/*"
+          className="hidden"
+          onChange={(e) => {
+            const file = e.target.files?.[0];
+            e.target.value = "";
+            if (file) void attach(file);
+          }}
+        />
+
+        {/* S101. The photo says what is on the plate and how much; the line
+            above says what it cannot show -- the oil, the milk, the sauce, a
+            weight off a scale. Neither is the whole question, which is why both
+            go in the same request and why this sits directly under the text. */}
+        <ButtonGroup className="mt-2 w-full">
+          <Button
+            variant="outline"
+            className="h-11 flex-1"
+            onClick={() => cameraRef.current?.click()}
+            disabled={pending}
+          >
+            <Camera className="size-4" /> {photo ? "Retake" : "Photo"}
+          </Button>
+          <Button
+            variant="outline"
+            className="h-11 flex-1"
+            onClick={() => uploadRef.current?.click()}
+            disabled={pending}
+          >
+            <ImageUp className="size-4" /> Upload
+          </Button>
+          {photo && (
+            <Button
+              variant="outline"
+              className="h-11 flex-1"
+              onClick={() => setPhoto(null)}
+              disabled={pending}
+            >
+              <X className="size-4" /> Remove
+            </Button>
+          )}
+        </ButtonGroup>
+
+        {photoError && <p className="mt-2 text-xs text-destructive">{photoError}</p>}
+
+        {photo && (
+          /* A data URL has no remote host for next/image to optimise and no
+             intrinsic width to reason about, and lib/image.ts has already cut
+             it to 1600px on the long edge before it ever reaches here. */
+          /* eslint-disable-next-line @next/next/no-img-element */
+          <img
+            src={photo}
+            alt="The meal being estimated"
+            className="mt-2 max-h-40 w-full rounded-md object-cover"
+          />
+        )}
+
         {/* Offered only when there is something to estimate FROM and nothing to
             overwrite. Disabled rather than hidden: it disappearing the moment a
             digit is typed would read as a bug. */}
@@ -534,7 +632,7 @@ function CustomStep({
           variant="outline"
           className="mt-2 h-11 w-full"
           onClick={estimate}
-          disabled={pending || f.name.trim() === "" || !untouched}
+          disabled={pending || (f.name.trim() === "" && photo === null) || !untouched}
         >
           {estimating ? <Spinner /> : <Sparkles className="size-4" />}
           {untouched ? "Estimate these" : "Clear the numbers to re-estimate"}
