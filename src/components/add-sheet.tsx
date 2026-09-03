@@ -621,7 +621,7 @@ function CustomStep({
           <img
             src={photo}
             alt="The meal being estimated"
-            className="mt-2 max-h-40 w-full rounded-md object-cover"
+            className="mt-2 h-40 w-full rounded-md object-cover"
           />
         )}
 
