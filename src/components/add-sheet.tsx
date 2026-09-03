@@ -34,7 +34,22 @@ import { ButtonGroup } from "@/components/ui/button-group";
 import { ToggleGroup, ToggleGroupItem } from "@/components/ui/toggle-group";
 import { Input } from "@/components/ui/input";
 import { Field, FieldGroup, FieldLabel } from "@/components/ui/field";
+import {
+  Item,
+  ItemActions,
+  ItemContent,
+  ItemDescription,
+  ItemGroup,
+  ItemTitle,
+} from "@/components/ui/item";
+import {
+  InputGroup,
+  InputGroupAddon,
+  InputGroupInput,
+  InputGroupText,
+} from "@/components/ui/input-group";
 import { Spinner } from "@/components/ui/spinner";
+import { MACROS, rowsFrom, scaleOf, totals, type Row } from "@/lib/portion";
 import { liftForKeyboard } from "@/lib/sheet";
 import { downscaleToDataUrl } from "@/lib/image";
 import { toast } from "sonner";
@@ -432,6 +447,8 @@ function CustomStep({
   // often photographed a minute ago as it is right now.
   const cameraRef = useRef<HTMLInputElement>(null);
   const uploadRef = useRef<HTMLInputElement>(null);
+  /** S102. The itemised plate behind the six numbers. See lib/portion.ts. */
+  const [rows, setRows] = useState<Row[]>([]);
   const num = (v: string) => (v === "" ? 0 : Number(v));
 
   const fields: [keyof typeof f, string][] = [
@@ -467,6 +484,27 @@ function CustomStep({
     }
   }
 
+  /**
+   * The six boxes as strings, from a set of rows. Whole numbers for calories and
+   * sodium and one decimal for the rest, matching what the form shows already.
+   */
+  function boxesFrom(next: Row[]) {
+    const sums = totals(next);
+    return Object.fromEntries(
+      MACROS.map((field) => [
+        field,
+        String(field === "kcal" || field === "sodium_mg" ? Math.round(sums[field]) : round1(sums[field])),
+      ]),
+    ) as Record<(typeof MACROS)[number], string>;
+  }
+
+  /** A corrected mass re-derives all six totals, with no second API call. */
+  function reweigh(index: number, grams: string) {
+    const next = rows.map((row, n) => (n === index ? { ...row, grams } : row));
+    setRows(next);
+    setF((prev) => ({ ...prev, ...boxesFrom(next) }));
+  }
+
   function estimate() {
     setEstimating(true);
     startTransition(async () => {
@@ -484,18 +522,18 @@ function CustomStep({
       }
 
       const e = res.estimate;
+      const next = rowsFrom(e.components);
+      setRows(next);
       setF((prev) => ({
         ...prev,
         // The assumptions go into the NAME, which is where this user already
         // writes them by hand and where the day list will keep showing them.
         // A separate panel would be a second place to look for the same thing.
         name: e.assumptions ? `${prev.name.trim()} — ${e.assumptions}` : prev.name,
-        kcal: String(Math.round(e.kcal)),
-        protein_g: String(round1(e.protein_g)),
-        carb_g: String(round1(e.carb_g)),
-        fat_g: String(round1(e.fat_g)),
-        fiber_g: String(round1(e.fiber_g)),
-        sodium_mg: String(Math.round(e.sodium_mg)),
+        // Re-summed locally rather than read off `e`, even though nothing has
+        // been corrected yet and the two agree to the digit. One path means a
+        // first estimate and a re-weighed one cannot round differently.
+        ...boxesFrom(next),
       }));
     });
   }
@@ -637,6 +675,59 @@ function CustomStep({
           {estimating ? <Spinner /> : <Sparkles className="size-4" />}
           {untouched ? "Estimate these" : "Clear the numbers to re-estimate"}
         </Button>
+
+        {/* S102. The masses the estimate ran on, where the person who saw the
+            plate can overrule them. This is the whole point of itemising: a
+            measured plate came back 35-45% high because ONE assumed weight was
+            too big, and a single prose sentence left no way to say so short of
+            rejecting all six numbers.
+
+            Hidden once every field is blank, which is the "clear to re-estimate"
+            gesture -- a weight list with nothing to weigh would be a leftover. */}
+        {rows.length > 0 && !untouched && (
+          <div className="mt-4">
+            <p className="text-xs text-muted-foreground">
+              What it weighed. Fix one and the numbers follow.
+            </p>
+            <ItemGroup className="mt-1 gap-1">
+              {rows.map((row, index) => (
+                <Item key={`${row.base.item}-${index}`} size="xs" variant="muted">
+                  <ItemContent className="min-w-0">
+                    <ItemTitle className="truncate">{row.base.item}</ItemTitle>
+                    <ItemDescription className="tabular-nums">
+                      {Math.round(row.base.kcal * scaleOf(row))} kcal
+                    </ItemDescription>
+                  </ItemContent>
+                  <ItemActions>
+                    {row.base.grams === null ? (
+                      /* No mass was guessed, so there is nothing to correct --
+                         an egg is an egg. Said plainly rather than shown as an
+                         empty box the user would try to type into. */
+                      <span className="text-xs text-muted-foreground">as served</span>
+                    ) : (
+                      <InputGroup className="w-24">
+                        <InputGroupInput
+                          type="number"
+                          inputMode="numeric"
+                          value={row.grams}
+                          onChange={(e) => reweigh(index, e.target.value)}
+                          // Selected on focus so the first digit replaces the
+                          // guess, matching the weight field on progress.
+                          onFocus={(e) => e.currentTarget.select()}
+                          aria-label={`Grams of ${row.base.item}`}
+                          className="tabular-nums"
+                        />
+                        <InputGroupAddon align="inline-end">
+                          <InputGroupText>g</InputGroupText>
+                        </InputGroupAddon>
+                      </InputGroup>
+                    )}
+                  </ItemActions>
+                </Item>
+              ))}
+            </ItemGroup>
+          </div>
+        )}
 
         <FieldGroup className="mt-4 grid grid-cols-2 gap-3">
           {fields.map(([key, label]) => (

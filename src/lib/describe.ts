@@ -20,6 +20,11 @@
  */
 
 import { createHash } from "node:crypto";
+import { rowsFrom, totals, type Component } from "./portion.ts";
+
+// Re-exported so the form can type its rows without importing this file,
+// which would put the API key's module -- and node:crypto -- in the bundle.
+export type { Component };
 
 const API = "https://api.openai.com/v1/responses";
 
@@ -61,6 +66,15 @@ const TIMEOUT_MS = 30_000;
  * because an estimate whose reasoning is invisible cannot be corrected -- the
  * user's own log already does this by hand ("Assumes ~3 large scrambled eggs
  * ... revise if egg count differs"), so this is their convention, not a new one.
+ *
+ * ITEMISING IS THE SAME HONESTY RULE, TAKEN SERIOUSLY. A measured plate of
+ * pulled pork poutine came back at 1450 kcal because the model assumed 640 g of
+ * food on a small side plate. It had identified every item correctly; it had
+ * simply guessed one mass too high, and it said so -- inside a prose sentence,
+ * where the number could be read but not changed. Restating the plate size in
+ * the description moved the answer 7%; stating a weight moved it 26%. So the
+ * fix is not a better guess, it is putting the guessed masses somewhere the
+ * person who saw the plate can overrule the one that is wrong.
  */
 const PROMPT = `You estimate the nutrition of a food or meal from a written description, and
 from a photograph of it when one is given.
@@ -78,7 +92,19 @@ Judge portion size from what is next to the food. A standard dinner plate is
 about 27 cm, a fork about 19 cm, a can 355 mL. Say in the assumptions what you
 scaled against.
 
-Return macros for THE WHOLE PORTION DESCRIBED, not per 100 g and not per serving.
+ITEMISE THE PLATE BEFORE YOU PUT A NUMBER ON IT. Return one component for each
+distinct food you can name -- the fries, the curds, the gravy, the meat -- each
+with the grams you are assuming for that item and the macros for that mass
+alone. Never return a single component standing for the whole meal, and never
+name one "meal" or "plate": the assumed grams are the part most likely to be
+wrong, and separating them is what lets a wrong answer be corrected instead of
+thrown away. Combine two foods only when they are genuinely inseparable, such
+as a sauce already stirred through.
+
+Do not return overall totals. They are computed by adding your components up,
+so each component's numbers have to stand on their own.
+
+Your components together must cover THE WHOLE PORTION DESCRIBED, not per 100 g and not per serving.
 If the description says "3 bowls", estimate all three. If it says "240g cooked",
 estimate 240g. If it gives no amount, assume one ordinary single portion and say
 so in the assumptions.
@@ -93,10 +119,12 @@ Set too_vague to true for a photo you cannot identify food in at all, or one
 where the quantity is genuinely unbounded -- a buffet spread, a shared table, a
 hotpot -- unless the description says what was taken from it.
 
-Write assumptions as one short sentence naming the specific things you assumed:
-size, cooking method, milk, oil, sauce, whether skin or bones were eaten. Say the
-things that would change the answer most if wrong. Do not restate the description
-back. Do not apologise or hedge in general terms.
+Write assumptions as one short sentence naming the specific things you assumed
+that a weight does not capture: cooking method, milk, oil, sauce, cut of meat,
+whether skin or bones were eaten, what you scaled the portion against. Do NOT
+list the component masses again -- they are already itemised, and repeating them
+here only makes the sentence longer. Do not restate the description back. Do not
+apologise or hedge in general terms.
 
 Estimate conservatively upward where a dish is typically prepared with more fat
 than a home cook would use -- restaurant portions, deep-fried items, anything
@@ -105,20 +133,35 @@ finished with butter or oil in a pan you did not control.
 Numbers are for the whole portion, in the units named: kcal, grams for protein,
 fat, carbohydrate and fibre, milligrams for sodium.`;
 
-type Estimated = {
-  too_vague: boolean;
-  assumptions: string | null;
-  kcal: number | null;
-  protein_g: number | null;
-  fat_g: number | null;
-  carb_g: number | null;
-  fiber_g: number | null;
-  sodium_mg: number | null;
+type EstimatedComponent = {
+  item: unknown;
+  grams: unknown;
+  kcal: unknown;
+  protein_g: unknown;
+  fat_g: unknown;
+  carb_g: unknown;
+  fiber_g: unknown;
+  sodium_mg: unknown;
 };
 
-/** The six macros the custom-entry form holds, plus what was assumed to get them. */
+type Estimated = {
+  too_vague: boolean;
+  components: EstimatedComponent[] | null;
+  assumptions: string | null;
+};
+
+/**
+ * The six macros the custom-entry form holds, plus what was assumed to get them.
+ *
+ * The six totals are computed here by summing `components`, never read from the
+ * model. That is the same rule the rest of the app follows for derived numbers,
+ * and it has a second payoff specific to this file: because the totals are a
+ * function of the components, the user editing one component's grams re-derives
+ * a correct total without another API call.
+ */
 export type Estimate = {
   assumptions: string;
+  components: Component[];
   kcal: number;
   protein_g: number;
   fat_g: number;
@@ -134,11 +177,11 @@ export type DescribeResult =
   | { status: "vague"; message: string }
   | { status: "error"; message: string };
 
-const SCHEMA = {
+const COMPONENT_SCHEMA = {
   type: "object",
   properties: {
-    too_vague: { type: "boolean" },
-    assumptions: { type: ["string", "null"] },
+    item: { type: "string" },
+    grams: { type: ["number", "null"] },
     kcal: { type: ["number", "null"] },
     protein_g: { type: ["number", "null"] },
     fat_g: { type: ["number", "null"] },
@@ -147,8 +190,8 @@ const SCHEMA = {
     sodium_mg: { type: ["number", "null"] },
   },
   required: [
-    "too_vague",
-    "assumptions",
+    "item",
+    "grams",
     "kcal",
     "protein_g",
     "fat_g",
@@ -156,6 +199,26 @@ const SCHEMA = {
     "fiber_g",
     "sodium_mg",
   ],
+  additionalProperties: false,
+} as const;
+
+/**
+ * `components` is listed BEFORE `assumptions` on purpose. Structured output is
+ * generated in property order, so the model itemises the plate and commits to a
+ * mass per item before it writes the sentence explaining itself -- the sentence
+ * then describes a decision already made rather than standing in for one.
+ *
+ * There are no total fields. Totals are a sum, and a sum is arithmetic this
+ * codebase does not ask a language model to perform.
+ */
+const SCHEMA = {
+  type: "object",
+  properties: {
+    too_vague: { type: "boolean" },
+    components: { type: "array", items: COMPONENT_SCHEMA },
+    assumptions: { type: ["string", "null"] },
+  },
+  required: ["too_vague", "components", "assumptions"],
   additionalProperties: false,
 } as const;
 
@@ -194,6 +257,39 @@ function cacheKey(description: string, image: string | null): string {
 function macro(value: unknown): number | null {
   if (typeof value !== "number" || !Number.isFinite(value) || value < 0) return null;
   return value;
+}
+
+/**
+ * A row survives only if it is named and carries a usable calorie figure.
+ *
+ * Dropping the rest is safe in a way it would not be if these were totals: a
+ * nameless row cannot be shown, and a row with no calories contributes nothing
+ * to any of the six sums, so neither one changes an answer by being discarded.
+ * Zero is the fallback for the other five macros for the same reason the form
+ * treats a blank box as zero -- nobody typed a number there either.
+ */
+function readComponents(value: unknown): Component[] {
+  if (!Array.isArray(value)) return [];
+  const rows: Component[] = [];
+  for (const raw of value) {
+    const c = raw as EstimatedComponent;
+    const item = typeof c.item === "string" ? c.item.trim() : "";
+    const kcal = macro(c.kcal);
+    if (item === "" || kcal === null) continue;
+    rows.push({
+      item,
+      // A mass of zero is not a mass, and scaling by it divides by zero in the
+      // UI, so it is stored as "no mass given" rather than as a number.
+      grams: macro(c.grams) || null,
+      kcal,
+      protein_g: macro(c.protein_g) ?? 0,
+      fat_g: macro(c.fat_g) ?? 0,
+      carb_g: macro(c.carb_g) ?? 0,
+      fiber_g: macro(c.fiber_g) ?? 0,
+      sodium_mg: macro(c.sodium_mg) ?? 0,
+    });
+  }
+  return rows;
 }
 
 /**
@@ -317,25 +413,23 @@ export async function estimateFromDescription(
     };
   }
 
-  const kcal = macro(parsed.kcal);
+  const components = readComponents(parsed.components);
+  // Summed through lib/portion.ts, which is also what the form re-sums with
+  // after a weight is corrected. One implementation, both sides.
+  const summed = totals(rowsFrom(components));
   // Calories are the one field the form will not save without, so an estimate
   // without them is not a partial answer -- it is a failed one, and dressing it
-  // up as a filled-in form would be worse than saying so.
-  if (kcal === null) {
+  // up as a filled-in form would be worse than saying so. With components that
+  // covers one more case than it used to: a list that arrived but adds to
+  // nothing is a failure too, however many rows it has.
+  if (components.length === 0 || summed.kcal === 0) {
     return { status: "vague", message: "Could not put a number on that. Try describing it more fully." };
   }
 
   const estimate: Estimate = {
     assumptions: typeof parsed.assumptions === "string" ? parsed.assumptions.trim() : "",
-    kcal,
-    // Zero where the model returned nothing, matching what the form does with a
-    // blank box. A macro is never absent-but-unknown here the way a micro is:
-    // the six fields are always written, and `num("")` is already 0 on save.
-    protein_g: macro(parsed.protein_g) ?? 0,
-    fat_g: macro(parsed.fat_g) ?? 0,
-    carb_g: macro(parsed.carb_g) ?? 0,
-    fiber_g: macro(parsed.fiber_g) ?? 0,
-    sodium_mg: macro(parsed.sodium_mg) ?? 0,
+    components,
+    ...summed,
   };
 
   // Oldest out first. The cap is about not growing without bound on a long-lived
