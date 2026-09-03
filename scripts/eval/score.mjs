@@ -166,7 +166,15 @@ function score(path) {
   const cv = median(cvs);
   console.log(`run-to-run CV (median, kcal)  ${fmt(cv)}%`);
   if (cv === 0 && cvs.length > 0) {
-    console.log("  ^ exactly zero across every fixture means the cache was not bypassed.");
+    // Zero is ambiguous and the two readings are opposite, so say how to tell
+    // them apart rather than guessing. A cache hit returns in well under a
+    // millisecond; a real call to the API is three orders of magnitude slower.
+    const ms = median(answered.map((r) => r.ms).filter((v) => typeof v === "number"));
+    console.log(
+      ms !== null && ms > 100
+        ? `  ^ real calls (median ${Math.round(ms)}ms), so this is genuine determinism, not the cache.`
+        : `  ^ median call took ${fmt(ms, 0)}ms -- too fast to be real. The cache was NOT bypassed.`,
+    );
   }
 
   // -------------------------------------------------------- per-stratum bias
