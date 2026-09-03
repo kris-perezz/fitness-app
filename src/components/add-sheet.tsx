@@ -431,8 +431,29 @@ function CustomStep({
     fiber_g: "",
     sodium_mg: "",
   });
-  const [pending, startTransition] = useTransition();
+  /**
+   * TWO TRANSITIONS, BECAUSE THERE ARE TWO ACTIONS.
+   *
+   * One shared `pending` meant the footer button read "Adding" for the whole of
+   * an estimate, announcing a write that was not happening. A pending flag is
+   * about one action, and estimating is not saving.
+   */
+  const [saving, startSaving] = useTransition();
+  /**
+   * The transition's own pending flag is deliberately dropped. It stays true
+   * until the request resolves, which is exactly wrong for a Stop button: the
+   * spinner would keep turning for seconds after the user asked it to stop.
+   * What is on screen follows `estimating` below, which the user can clear.
+   */
+  const [, startEstimating] = useTransition();
   const [estimating, setEstimating] = useState(false);
+  /**
+   * Which estimate is current. A result whose id is stale is dropped rather
+   * than written into the form -- that is what makes Stop actually stop, and it
+   * is also what keeps an answer for the old photo from landing on the new one
+   * now that the photo buttons stay live during a call.
+   */
+  const attempt = useRef(0);
   /**
    * S101. The downscaled data URL and a label for the row that says one is
    * attached. Held here rather than sent immediately: the photo is half the
@@ -473,8 +494,19 @@ function CustomStep({
   /** One decimal, matching what every other macro field in the app shows. */
   const round1 = (n: number) => Math.round((n + Number.EPSILON) * 10) / 10;
 
+  /**
+   * A new photo is a new question, so any answer to the old one is void. Also
+   * what Stop does: the request cannot be recalled from the server, but its
+   * answer can be refused, and the spinner stops the moment it is asked to.
+   */
+  function discardInFlight() {
+    attempt.current += 1;
+    setEstimating(false);
+  }
+
   async function attach(file: File) {
     setPhotoError(null);
+    discardInFlight();
     try {
       setPhoto(await downscaleToDataUrl(file));
     } catch {
@@ -506,9 +538,15 @@ function CustomStep({
   }
 
   function estimate() {
+    const id = (attempt.current += 1);
     setEstimating(true);
-    startTransition(async () => {
+    startEstimating(async () => {
       const res = await estimateEntry(f.name, photo);
+      // Stopped, or the photo changed while this was in the air. The request
+      // was still paid for; what is avoided is six numbers appearing for a
+      // question the user has already moved on from. Nothing is reset here --
+      // whatever superseded this call already did that.
+      if (attempt.current !== id) return;
       setEstimating(false);
       if (res.status === "error") {
         toast.error(res.message);
@@ -539,7 +577,7 @@ function CustomStep({
   }
 
   function save() {
-    startTransition(async () => {
+    startSaving(async () => {
       const res = await addEntry({
         log_date: date,
         meal,
@@ -625,7 +663,7 @@ function CustomStep({
             variant="outline"
             className="h-11 flex-1"
             onClick={() => cameraRef.current?.click()}
-            disabled={pending}
+            disabled={saving}
           >
             <Camera className="size-4" /> {photo ? "Retake" : "Photo"}
           </Button>
@@ -633,7 +671,7 @@ function CustomStep({
             variant="outline"
             className="h-11 flex-1"
             onClick={() => uploadRef.current?.click()}
-            disabled={pending}
+            disabled={saving}
           >
             <ImageUp className="size-4" /> Upload
           </Button>
@@ -641,8 +679,11 @@ function CustomStep({
             <Button
               variant="outline"
               className="h-11 flex-1"
-              onClick={() => setPhoto(null)}
-              disabled={pending}
+              onClick={() => {
+                discardInFlight();
+                setPhoto(null);
+              }}
+              disabled={saving}
             >
               <X className="size-4" /> Remove
             </Button>
@@ -665,16 +706,30 @@ function CustomStep({
 
         {/* Offered only when there is something to estimate FROM and nothing to
             overwrite. Disabled rather than hidden: it disappearing the moment a
-            digit is typed would read as a bug. */}
+            digit is typed would read as a bug.
+
+            WHILE A CALL IS IN FLIGHT THIS BECOMES STOP, rather than a disabled
+            spinner. A disabled control cannot be focused, so disabling the one
+            the user just pressed drops keyboard and screen-reader focus to the
+            top of the sheet; and a request that can run to a 30s timeout is
+            well past the 10s mark where people stop waiting and want a way out.
+            Turning the trigger into its own escape hatch solves both without
+            adding a control that is dead most of the time. */}
         <Button
           variant="outline"
           className="mt-2 h-11 w-full"
-          onClick={estimate}
-          disabled={pending || (f.name.trim() === "" && photo === null) || !untouched}
+          onClick={estimating ? discardInFlight : estimate}
+          disabled={!estimating && ((f.name.trim() === "" && photo === null) || !untouched)}
         >
           {estimating ? <Spinner /> : <Sparkles className="size-4" />}
-          {untouched ? "Estimate these" : "Clear the numbers to re-estimate"}
+          {estimating ? "Stop" : untouched ? "Estimate these" : "Clear the numbers to re-estimate"}
         </Button>
+
+        {/* Announced rather than only drawn, so the state of a call that can
+            last ten seconds is not carried by a spinner alone. */}
+        <span role="status" aria-live="polite" className="sr-only">
+          {estimating ? "Estimating" : ""}
+        </span>
 
         {/* S102. The masses the estimate ran on, where the person who saw the
             plate can overrule them. This is the whole point of itemising: a
@@ -753,9 +808,9 @@ function CustomStep({
         <Button
           className="h-11 w-full text-base"
           onClick={save}
-          disabled={pending || f.name.trim() === "" || f.kcal === ""}
+          disabled={saving || f.name.trim() === "" || f.kcal === ""}
         >
-          {pending ? "Adding" : "Add"}
+          {saving ? "Adding" : "Add"}
         </Button>
       </div>
     </div>
