@@ -297,6 +297,37 @@ export function wakingDate(now = new Date()): string {
   return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}-${String(d.getDate()).padStart(2, "0")}`;
 }
 
+/**
+ * A day of the log, as it comes out of `intake_entries`.
+ *
+ * Macros are DENORMALISED onto the row at log time (S7/S19), which is why this
+ * carries its own numbers rather than a food id and a quantity: correcting a
+ * food tomorrow must not rewrite what you ate today.
+ */
+export type IntakeEntry = Macros & {
+  id: string;
+  log_date: string;
+  /** Null for a one-off typed straight into the log -- there is no catalog row
+   * behind it, so there is nothing to correct (S7). */
+  food_id: string | null;
+  name: string;
+  meal: Meal;
+  qty: number;
+  unit: string;
+  estimate: boolean;
+};
+
+/**
+ * The log's window, in DAYS rather than the months the train and progress tabs
+ * count in, because a day arrow moves a day and nobody steps back six months
+ * one tap at a time. Sixty days is a season of eating, and the screen fetches
+ * the next sixty while you are still two weeks from needing them.
+ */
+export const LOG_WINDOW_DAYS = 60;
+
+/** Extend once you are this close to either edge of the window held. */
+export const LOG_BUFFER_DAYS = 14;
+
 /** Shift a YYYY-MM-DD date string by whole days. */
 export function shiftDate(date: string, days: number): string {
   const d = new Date(`${date}T12:00:00`);

@@ -17,6 +17,7 @@ import {
   scaledSugar,
   sourceHint,
   type Food,
+  type IntakeEntry,
   type Meal,
 } from "@/lib/food";
 import { addEntry, saveScannedFood, estimateEntry } from "@/app/actions";
@@ -80,11 +81,14 @@ export function AddSheet({
   onOpenChange,
   foods,
   date,
+  onAdded,
 }: {
   meal: Meal | null;
   onOpenChange: (open: boolean) => void;
   foods: Food[];
   date: string;
+  /** The stored row, so the log can show it without going back to the server. */
+  onAdded: (entry: IntakeEntry) => void;
 }) {
   const [step, setStep] = useState<Step>({ kind: "search" });
   const [wasOpen, setWasOpen] = useState(meal !== null);
@@ -149,7 +153,10 @@ export function AddSheet({
             date={date}
             meal={meal}
             onBack={() => go({ kind: "search" })}
-            onDone={() => onOpenChange(false)}
+            onDone={(entry) => {
+              onAdded(entry);
+              onOpenChange(false);
+            }}
           />
         )}
 
@@ -158,7 +165,10 @@ export function AddSheet({
             date={date}
             meal={meal}
             onBack={() => go({ kind: "search" })}
-            onDone={() => onOpenChange(false)}
+            onDone={(entry) => {
+              onAdded(entry);
+              onOpenChange(false);
+            }}
           />
         )}
       </DrawerContent>
@@ -185,7 +195,7 @@ function QtyStep({
   date: string;
   meal: Meal;
   onBack: () => void;
-  onDone: () => void;
+  onDone: (entry: IntakeEntry) => void;
 }) {
   // S5 and S40. A food that knows what one of it weighs can be logged either
   // way: "1 cup" is what you pour, "150 ml" is what you actually poured. The
@@ -293,12 +303,12 @@ function QtyStep({
         sugar_g: scaledSugar(food, scaleQty),
         ...preview,
       });
-      if (res.error) {
-        toast.error(res.error);
+      if (res.error || !res.entry) {
+        toast.error(res.error ?? "Could not add that.");
         return;
       }
       toast.success(`Added to ${meal}`);
-      onDone();
+      onDone(res.entry);
     });
   }
 
@@ -420,7 +430,7 @@ function CustomStep({
   date: string;
   meal: Meal;
   onBack: () => void;
-  onDone: () => void;
+  onDone: (entry: IntakeEntry) => void;
 }) {
   const [f, setF] = useState({
     name: "",
@@ -598,12 +608,12 @@ function CustomStep({
         micros: {},
         sugar_g: null,
       });
-      if (res.error) {
-        toast.error(res.error);
+      if (res.error || !res.entry) {
+        toast.error(res.error ?? "Could not add that.");
         return;
       }
       toast.success(`Added to ${meal}`);
-      onDone();
+      onDone(res.entry);
     });
   }
 

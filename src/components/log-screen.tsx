@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useTransition } from "react";
+import { useEffect, useMemo, useRef, useState, useTransition } from "react";
 import { useRouter } from "next/navigation";
 import Link from "next/link";
 import {
@@ -12,8 +12,17 @@ import {
   Pencil,
   Plus,
 } from "lucide-react";
-import { MEALS, shiftDate, wakingDate, type Food, type Meal } from "@/lib/food";
-import { deleteEntry, saveEntryAsFood } from "@/app/actions";
+import {
+  LOG_BUFFER_DAYS,
+  LOG_WINDOW_DAYS,
+  MEALS,
+  shiftDate,
+  wakingDate,
+  type Food,
+  type IntakeEntry,
+  type Meal,
+} from "@/lib/food";
+import { deleteEntry, loadIntakeWindow, saveEntryAsFood } from "@/app/actions";
 import { Button } from "@/components/ui/button";
 import { Progress } from "@/components/ui/progress";
 import { ButtonGroup } from "@/components/ui/button-group";
@@ -40,23 +49,7 @@ import { FoodSourceBadge } from "@/components/food-source-badge";
 import { CalorieRing } from "@/components/calorie-ring";
 import { toast } from "sonner";
 
-type Entry = {
-  id: string;
-  /** Null for a one-off typed straight into the log -- there is no catalog row
-   * behind it, so there is nothing to correct (S7). */
-  food_id: string | null;
-  name: string;
-  meal: Meal;
-  qty: number;
-  unit: string;
-  estimate: boolean;
-  kcal: number;
-  protein_g: number;
-  fat_g: number;
-  carb_g: number;
-  fiber_g: number;
-  sodium_mg: number;
-};
+type Entry = IntakeEntry;
 
 type Goals = {
   calorie_goal: number;
@@ -71,12 +64,18 @@ const round = (v: number) => Math.round(v);
 const withCommas = (v: number) => round(v).toLocaleString();
 
 export function LogScreen({
-  date,
+  date: initialDate,
+  loadedFrom,
+  loadedTo,
   foods,
-  entries,
+  entries: initialEntries,
   goals,
 }: {
+  /** The day to open on -- today, or whatever `?date=` asked for. */
   date: string;
+  /** Oldest and newest day the server sent, inclusive. */
+  loadedFrom: string;
+  loadedTo: string;
   foods: Food[];
   entries: Entry[];
   goals: Goals;
@@ -86,7 +85,56 @@ export function LogScreen({
   const [detail, setDetail] = useState<Entry | null>(null);
   const [editing, setEditing] = useState<Food | null>(null);
 
-  const totals = entries.reduce(
+  // The day is state, not a URL parameter and not a server round trip. Every
+  // entry in the window is already here, so an arrow is a filter rather than a
+  // fetch -- which is the only way it is ever instant.
+  const [date, setDate] = useState(initialDate);
+
+  // The window, and everything in it. Grown outwards in place rather than
+  // refetched, so a day already held is never asked for twice.
+  const [entries, setEntries] = useState(initialEntries);
+  const [from, setFrom] = useState(loadedFrom);
+  const [to, setTo] = useState(loadedTo);
+  const loading = useRef(false);
+
+  const today = wakingDate();
+
+  /**
+   * Extend BEFORE the edge is reached, not when it is hit -- the same contract
+   * train-home.tsx keeps, and see the comment there for why.
+   *
+   * Two directions rather than one, because days page forward as well as back.
+   * Forward stops at today: there is nothing after it to hold.
+   */
+  useEffect(() => {
+    if (loading.current) return;
+
+    const back = date < shiftDate(from, LOG_BUFFER_DAYS);
+    const forward = to < today && date > shiftDate(to, -LOG_BUFFER_DAYS);
+    if (!back && !forward) return;
+
+    const nextFrom = back ? shiftDate(from, -LOG_WINDOW_DAYS) : from;
+    const ahead = shiftDate(to, LOG_WINDOW_DAYS);
+    const nextTo = forward ? (ahead > today ? today : ahead) : to;
+
+    // Only the stretch not already held. Asking for the whole new window would
+    // re-fetch the days on screen and hand back duplicates of them.
+    const fetchFrom = back ? nextFrom : shiftDate(to, 1);
+    const fetchTo = back ? shiftDate(from, -1) : nextTo;
+
+    loading.current = true;
+    void loadIntakeWindow(fetchFrom, fetchTo).then((res) => {
+      loading.current = false;
+      if (res.error) return; // Silent: nothing is broken, there is just less history on screen.
+      setEntries((prev) => [...prev, ...res.entries]);
+      setFrom(nextFrom);
+      setTo(nextTo);
+    });
+  }, [date, from, to, today]);
+
+  const dayEntries = useMemo(() => entries.filter((e) => e.log_date === date), [entries, date]);
+
+  const totals = dayEntries.reduce(
     (a, e) => ({
       kcal: a.kcal + e.kcal,
       protein_g: a.protein_g + e.protein_g,
@@ -100,7 +148,6 @@ export function LogScreen({
   // S75. Calm unless the user turned it on. Never suggested, never prompted.
   const tone: Tone = goals?.strict_mode ? "strict" : "calm";
 
-  const today = wakingDate();
   // S71. A day still being lived is not a day you fell short of: at 2pm, under
   // a floor only means dinner has not happened. Yesterday is finished and can
   // be summarised; today cannot.
@@ -124,7 +171,7 @@ export function LogScreen({
             size="icon"
             variant="ghost"
             aria-label="Previous day"
-            onClick={() => router.push(`/log?date=${shiftDate(date, -1)}`)}
+            onClick={() => setDate(shiftDate(date, -1))}
           >
             <ChevronLeft className="size-5" />
           </Button>
@@ -137,7 +184,7 @@ export function LogScreen({
               variant="ghost"
               aria-label="Next day"
               disabled={date >= today}
-              onClick={() => router.push(`/log?date=${shiftDate(date, 1)}`)}
+              onClick={() => setDate(shiftDate(date, 1))}
             >
               <ChevronRight className="size-5" />
             </Button>
@@ -191,7 +238,7 @@ export function LogScreen({
         </section>
 
         {MEALS.map((meal) => {
-          const items = entries.filter((e) => e.meal === meal);
+          const items = dayEntries.filter((e) => e.meal === meal);
           const mealKcal = items.reduce((sum, e) => sum + e.kcal, 0);
 
           return (
@@ -252,11 +299,16 @@ export function LogScreen({
         onOpenChange={(open) => !open && setAddingTo(null)}
         foods={foods}
         date={date}
+        // The window is what the screen reads now, so a saved entry has to land
+        // in it. A revalidate still runs on the server for whoever loads the
+        // page next; it can no longer be what puts the food on this one.
+        onAdded={(entry) => setEntries((prev) => [...prev, entry])}
       />
       <EntryDetail
         entry={detail}
         food={detail?.food_id ? (foods.find((f) => f.id === detail.food_id) ?? null) : null}
         onClose={() => setDetail(null)}
+        onDeleted={(id) => setEntries((prev) => prev.filter((e) => e.id !== id))}
         onEditFood={(food) => {
           // Close the entry first: two stacked drawers fight over the scroll
           // lock, and the detail has nothing left to say once the form is up.
@@ -353,6 +405,7 @@ function EntryDetail({
   entry,
   food,
   onClose,
+  onDeleted,
   onEditFood,
   onSavedAsFood,
 }: {
@@ -360,6 +413,7 @@ function EntryDetail({
   /** The catalog row this entry was logged against, when it still exists. */
   food: Food | null;
   onClose: () => void;
+  onDeleted: (id: string) => void;
   onEditFood: (food: Food) => void;
   onSavedAsFood: () => void;
 }) {
@@ -463,6 +517,7 @@ function EntryDetail({
                         toast.error(res.error);
                         return;
                       }
+                      onDeleted(entry.id);
                       onClose();
                     })
                   }

@@ -8,7 +8,14 @@ import { fetchCnfFood, searchCnf, type CnfSearchResult } from "@/lib/cnf";
 import { extractLabel, type LabelDraft, type LabelResult } from "@/lib/label";
 import { estimateFromDescription, type DescribeResult } from "@/lib/describe";
 import { generatedFood, type RecipeDetails, type RecipeLine } from "@/lib/recipe";
-import { sourceRank, type Food, type FoodSource, type Macros, type Meal } from "@/lib/food";
+import {
+  sourceRank,
+  type Food,
+  type FoodSource,
+  type IntakeEntry,
+  type Macros,
+  type Meal,
+} from "@/lib/food";
 import type { Micros } from "@/lib/micros";
 
 export type NewEntry = Macros & {
@@ -28,18 +35,60 @@ export type NewEntry = Macros & {
   estimate: boolean;
 };
 
-export async function addEntry(entry: NewEntry) {
+/**
+ * The stored row is RETURNED, not just written. The log holds its window in the
+ * browser so that changing day is a filter rather than a fetch, which means a
+ * new entry has to arrive as data -- a revalidate alone would leave the screen
+ * showing the day it was already showing, minus the food just added.
+ */
+export async function addEntry(
+  entry: NewEntry,
+): Promise<{ entry: IntakeEntry | null; error: string | null }> {
   const supabase = await createClient();
   const {
     data: { user },
   } = await supabase.auth.getUser();
-  if (!user) return { error: "Not signed in" };
+  if (!user) return { entry: null, error: "Not signed in" };
 
-  const { error } = await supabase.from("intake_entries").insert({ ...entry, user_id: user.id });
-  if (error) return { error: error.message };
+  const { data, error } = await supabase
+    .from("intake_entries")
+    .insert({ ...entry, user_id: user.id })
+    .select(ENTRY_COLUMNS)
+    .single();
+  if (error) return { entry: null, error: error.message };
 
   revalidatePath("/log");
-  return { error: null };
+  return { entry: data as unknown as IntakeEntry, error: null };
+}
+
+/** What the log screen reads. `micros` and `sugar_g` are stored and not shown. */
+const ENTRY_COLUMNS =
+  "id, log_date, food_id, name, meal, qty, unit, estimate, kcal, protein_g, fat_g, carb_g, fiber_g, sodium_mg";
+
+/**
+ * Every entry between two days, for the window the log tab pages through.
+ *
+ * The mirror of `loadTrainingWindow`, and it exists for the same reason: the
+ * day on screen is client state, so stepping to a day already held costs
+ * nothing and only the edges of the window ever reach the network.
+ */
+export async function loadIntakeWindow(
+  from: string,
+  to: string,
+): Promise<{ entries: IntakeEntry[]; error: string | null }> {
+  const day = /^\d{4}-\d{2}-\d{2}$/;
+  if (!day.test(from) || !day.test(to)) return { entries: [], error: "Bad date range" };
+
+  const supabase = await createClient();
+  const { data, error } = await supabase
+    .from("intake_entries")
+    .select(ENTRY_COLUMNS)
+    .gte("log_date", from)
+    .lte("log_date", to)
+    .order("created_at", { ascending: true });
+  if (error) return { entries: [], error: error.message };
+
+  return { entries: (data ?? []) as unknown as IntakeEntry[], error: null };
 }
 
 export async function deleteEntry(id: string) {
