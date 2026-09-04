@@ -2,9 +2,7 @@ import { createClient } from "@/lib/supabase/server";
 import { wakingDate } from "@/lib/food";
 import { WINDOW_MONTHS, shiftMonth } from "@/lib/training";
 import { toWeighIn } from "@/lib/weight";
-import { adherence, weeklyEnergy } from "@/lib/energy";
 import { liftHistory, type WorkoutSet } from "@/lib/training";
-import type { IntakeDay } from "@/lib/trends";
 import { ProgressHome } from "@/components/progress-home";
 
 export const dynamic = "force-dynamic";
@@ -37,8 +35,7 @@ export default async function ProgressPage() {
 
   // Together rather than in sequence: the goal row is tiny and independent of
   // the weigh-ins, so chaining them would spend a round trip to learn nothing.
-  const [{ data }, { data: settings }, { data: first }, { data: intake }, { data: sessions }] =
-    await Promise.all([
+  const [{ data }, { data: settings }, { data: first }] = await Promise.all([
     supabase
       .from("weigh_ins")
       .select("log_date, weight_lb, note")
@@ -59,15 +56,6 @@ export default async function ProgressPage() {
       .order("log_date", { ascending: true })
       .limit(1)
       .maybeSingle(),
-    // S63. Food and scale over the same weeks -- the one question that needs
-    // both halves of this app, and the reason they live in one.
-    supabase
-      .from("intake_days")
-      .select("log_date, kcal, protein_g, estimate_count, item_count")
-      .gte("log_date", from),
-    // S65. Dates only -- this counts sessions, and pulling the sets to do it
-    // would fetch a month of training to produce one integer.
-    supabase.from("workouts").select("log_date").gte("log_date", from),
   ]);
 
   const weighIns = (data ?? []).map(toWeighIn);
@@ -86,15 +74,10 @@ export default async function ProgressPage() {
       loadedFrom={from.slice(0, 7)}
       earliest={first?.log_date ?? null}
       entries={weighIns}
-      weeks={weeklyEnergy((intake ?? []) as IntakeDay[], weighIns)}
       // S69. Defaults to lb when the column is missing, which is what the app
       // stores anyway -- so a preview running ahead of 0024 reads correctly.
       unit={settings?.display_weight_unit === "kg" ? "kg" : "lb"}
       pinned={pinned}
-      adherence={adherence(
-        (intake ?? []) as IntakeDay[],
-        ((sessions ?? []) as { log_date: string }[]).map((w) => w.log_date),
-      )}
       // Numeric arrives from PostgREST as a string. `?? null` and not `??
       // undefined`: no goal is a state the screen renders deliberately (S60).
       //

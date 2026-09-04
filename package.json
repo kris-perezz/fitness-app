@@ -8,7 +8,9 @@
     "start": "next start",
     "lint": "eslint",
     "test": "node --test \"src/**/*.test.mts\"",
-    "check:ui": "node scripts/check-ui-primitives.mjs"
+    "check:ui": "node scripts/check-ui-primitives.mjs",
+    "eval:describe": "node scripts/eval/run.mjs",
+    "eval:score": "node scripts/eval/score.mjs"
   },
   "engines": {
     "node": ">=24"

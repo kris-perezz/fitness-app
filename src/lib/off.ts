@@ -9,6 +9,30 @@ import type { MicroKey, Micros } from "./micros.ts";
 const API = "https://world.openfoodfacts.org/api/v2/product";
 const TIMEOUT_MS = 5000;
 
+/**
+ * Text search (S96), which is a DIFFERENT SERVICE, not another path on `API`.
+ *
+ * Open Food Facts states plainly that full-text search is not in the v2 API:
+ * `/api/v2/search` filters by category, brand and nutrient but cannot take a
+ * product name. The legacy `/cgi/search.pl` still answers and is deprecated.
+ * Search-a-licious is the one they point at for new work, so it is the one
+ * used here.
+ *
+ * TEN REQUESTS A MINUTE PER IP, and their docs say in as many words: do not
+ * use it for search-as-you-type, you will be blocked. That is not a detail to
+ * design around later -- it is why this is reached from a button and never from
+ * a keystroke, the same shape `CnfSection` already uses for its own reasons.
+ */
+const SEARCH_API = "https://search.openfoodfacts.org/search";
+const SEARCH_TIMEOUT_MS = 8000;
+const SEARCH_LIMIT = 20;
+
+/**
+ * OFF asks anonymous clients to identify themselves, in this format.
+ * One constant so the barcode path and the search path cannot drift.
+ */
+const USER_AGENT = "fitness-app/0.1 (name and barcode lookup)";
+
 /** OFF is barcode-indexed, so the barcode IS the natural key for a scanned food. */
 export function offFoodId(barcode: string): string {
   return `off_${barcode}`;
@@ -26,6 +50,7 @@ export type OffResult =
 type Nutriments = Record<string, unknown>;
 
 type OffProduct = {
+  categories_tags?: unknown;
   product_name?: unknown;
   product_name_en?: unknown;
   generic_name?: unknown;
@@ -47,6 +72,27 @@ function num(value: unknown): number | null {
 
 function text(value: unknown): string {
   return typeof value === "string" ? value.trim() : "";
+}
+
+/**
+ * Is this measured in millilitres?
+ *
+ * `serving_quantity_unit` is the direct answer and is MISSING on a lot of real
+ * products -- two of the first five Red Bulls in OFF have no value for it, and
+ * both were being written as grams. A drink recorded in grams is not a cosmetic
+ * slip: 0008 makes `unit` and `weight_unit` the same thing on a per_100g food,
+ * so it is the label under every number the user then sees.
+ *
+ * `en:beverages` is OFF's own category root for drinks and is present where the
+ * serving field is not, so it backs the direct answer up rather than replacing
+ * it. Used by BOTH the search list and `toFood`, because a row that says
+ * "per 100 ml" and then saves a food measured in grams is worse than either
+ * answer on its own.
+ */
+function isBeverage(product: { categories_tags?: unknown; serving_quantity_unit?: unknown }): boolean {
+  if (text(product.serving_quantity_unit).toLowerCase() === "ml") return true;
+  const tags = Array.isArray(product.categories_tags) ? product.categories_tags : [];
+  return tags.some((t) => typeof t === "string" && t.toLowerCase() === "en:beverages");
 }
 
 function displayName(product: OffProduct, barcode: string): string {
@@ -141,10 +187,10 @@ function toFood(product: OffProduct, barcode: string): Food | null {
     aliases: [],
     basis: "per_100g",
     // "ml" for drinks, "g" for everything else -- see servingGrams above.
-    unit: text(product.serving_quantity_unit).toLowerCase() === "ml" ? "ml" : "g",
+    unit: isBeverage(product) ? "ml" : "g",
     // Mirrors `unit` on this basis, by the rule in 0008: a per_100g food's unit
     // IS its measure, so the two must not be allowed to disagree.
-    weight_unit: text(product.serving_quantity_unit).toLowerCase() === "ml" ? "ml" : "g",
+    weight_unit: isBeverage(product) ? "ml" : "g",
     grams_per_unit: servingGrams(product),
     // Stored at OFF's full precision, deliberately unrounded. These are
     // per-100g figures that OFF derived by DIVIDING the label's per-serving
@@ -174,11 +220,7 @@ export async function fetchOffProduct(barcode: string): Promise<OffResult> {
   try {
     response = await fetch(`${API}/${encodeURIComponent(barcode)}.json`, {
       signal: AbortSignal.timeout(TIMEOUT_MS),
-      headers: {
-        Accept: "application/json",
-        // OFF asks anonymous clients to identify themselves.
-        "User-Agent": "fitness-app/0.1 (barcode lookup)",
-      },
+      headers: { Accept: "application/json", "User-Agent": USER_AGENT },
     });
   } catch (err) {
     const timedOut = err instanceof DOMException && err.name === "TimeoutError";
@@ -209,4 +251,165 @@ export async function fetchOffProduct(barcode: string): Promise<OffResult> {
   // The product exists but carries no usable nutrition -- still a miss, so the
   // UI drops into manual entry instead of showing an error it cannot act on.
   return food ? { status: "found", food } : { status: "miss" };
+}
+
+/**
+ * One row in the name-search list. Deliberately not a Food: see `searchOff`.
+ *
+ * `kcal` is per 100 g and comes free with the search response. It is here
+ * because a list of eleven products all called some variation of "Oreo" is not
+ * a choice anyone can make from names alone -- the calorie figure is what
+ * separates the biscuit from the yoghurt from the US formulation.
+ *
+ * `unit` is carried because a drink's "per 100g" figures are really per 100 mL,
+ * and a row that says grams about millilitres is telling the user the wrong
+ * thing before they have even tapped it. Decided by `isBeverage` here exactly as
+ * it is in `toFood`, so the list and the food it becomes cannot disagree --
+ * note the SEARCH index does not carry `serving_quantity_unit` at all, which is
+ * why the category tag has to be the signal both of them share.
+ */
+export type OffHit = { barcode: string; name: string; kcal: number; unit: "g" | "ml" };
+
+export type OffSearchResult =
+  | { status: "ok"; hits: OffHit[] }
+  | { status: "error"; message: string };
+
+/**
+ * The same product is listed under both its UPC-12 and its EAN-13, which differ
+ * by a leading zero -- 622201428501 and 0622201428501 are one packet of Oreos,
+ * both resolving to the same 483 kcal record. Comparing the padded forms is what
+ * stops the list showing it twice.
+ *
+ * Only for DEDUPING. The barcode itself is passed on untouched, because it is
+ * the key the product endpoint and the catalog are keyed on.
+ */
+function barcodeKey(barcode: string): string {
+  return barcode.replace(/^0+/, "");
+}
+
+/**
+ * Search-a-licious returns `brands` as an ARRAY, where the v2 product endpoint
+ * returns it as a comma-separated string. Same field name, two shapes, and the
+ * one place in this file that has to know.
+ */
+type OffSearchHit = {
+  code?: unknown;
+  categories_tags?: unknown;
+  serving_quantity_unit?: unknown;
+  product_name?: unknown;
+  product_name_en?: unknown;
+  generic_name?: unknown;
+  brands?: unknown;
+  nutriments?: Nutriments;
+};
+
+function hitName(hit: OffSearchHit): string {
+  const name =
+    text(hit.product_name) || text(hit.product_name_en) || text(hit.generic_name);
+  const brands = Array.isArray(hit.brands) ? hit.brands : [];
+  const brand = text(brands[0]);
+  if (name && brand && !name.toLowerCase().includes(brand.toLowerCase())) {
+    return `${brand} ${name}`;
+  }
+  return name || brand;
+}
+
+/**
+ * Find products by name (S96).
+ *
+ * HANDS BACK BARCODES, NOT FOODS. The chosen row is then fetched through
+ * `fetchOffProduct` like any scan, so `toFood` stays the single mapping and the
+ * serving-size fields the search index does not carry still arrive. One product
+ * lookup on tap, against a search index that is rate-limited far harder than
+ * the product endpoint is -- the cheap request is the one made per selection,
+ * not per query.
+ *
+ * A hit with no energy is dropped rather than listed. OFF is full of products
+ * contributed as a photo and a barcode with no nutrition behind them, and a row
+ * that can only dead-end is worse than a shorter list.
+ *
+ * Never throws: every failure comes back as a value the UI can render.
+ */
+export async function searchOff(query: string): Promise<OffSearchResult> {
+  const q = query.trim();
+  if (q.length < 2) return { status: "ok", hits: [] };
+
+  const url = new URL(SEARCH_API);
+  url.searchParams.set("q", q);
+  url.searchParams.set("page_size", String(SEARCH_LIMIT));
+  // Without this the index returns every field it holds, which is tens of
+  // kilobytes of eco-score and packaging data per product.
+  url.searchParams.set(
+    "fields",
+    "code,product_name,product_name_en,generic_name,brands,nutriments,categories_tags",
+  );
+
+  let response: Response;
+  try {
+    response = await fetch(url, {
+      signal: AbortSignal.timeout(SEARCH_TIMEOUT_MS),
+      headers: { Accept: "application/json", "User-Agent": USER_AGENT },
+    });
+  } catch (err) {
+    const timedOut = err instanceof DOMException && err.name === "TimeoutError";
+    return {
+      status: "error",
+      message: timedOut
+        ? "Open Food Facts took too long to answer."
+        : "Could not reach Open Food Facts.",
+    };
+  }
+
+  // Their documented penalty for searching too often, and the one error worth
+  // naming: it is not a fault, and waiting fixes it.
+  if (response.status === 429) {
+    return { status: "error", message: "Too many searches just now. Try again in a minute." };
+  }
+  if (!response.ok) {
+    return { status: "error", message: `Open Food Facts returned ${response.status}.` };
+  }
+
+  let body: { hits?: unknown } | null;
+  try {
+    body = await response.json();
+  } catch {
+    return { status: "error", message: "Open Food Facts sent an unreadable response." };
+  }
+
+  const rows = Array.isArray(body?.hits) ? (body.hits as OffSearchHit[]) : [];
+  const hits: OffHit[] = [];
+  // Two different collisions, so two keys. `seen` is the same packet listed
+  // under both its barcode forms; `shown` is the same packet entered by several
+  // contributors under separate barcodes -- a search for "oreo" returns six rows
+  // all called "Oreo" at 483 cal, and no one can pick between those.
+  const seen = new Set<string>();
+  const shown = new Set<string>();
+
+  for (const row of rows) {
+    const barcode = text(row.code);
+    if (!isBarcode(barcode)) continue;
+    const key = barcodeKey(barcode);
+    if (seen.has(key)) continue;
+    const kcal = num(row.nutriments?.["energy-kcal_100g"]);
+    if (kcal === null) continue;
+    const name = hitName(row);
+    if (!name) continue;
+    // Same name AND the same calories means the same thing to log, whichever
+    // row you tap. Names alone would be too aggressive: OFF genuinely carries a
+    // US and a Canadian formulation of one product under one name, and those
+    // differ in the calories, which is exactly what this keeps apart.
+    const label = `${name.toLowerCase()}|${Math.round(kcal)}`;
+    if (shown.has(label)) continue;
+
+    seen.add(key);
+    shown.add(label);
+    hits.push({
+      barcode,
+      name,
+      kcal,
+      unit: isBeverage(row) ? "ml" : "g",
+    });
+  }
+
+  return { status: "ok", hits };
 }

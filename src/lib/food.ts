@@ -3,8 +3,14 @@ import { scaleMicros, type Micros } from "./micros.ts";
 /**
  * Where a food's numbers came from (S6). Not the same question as `verified`,
  * which is one bit ("transcribed from a label") for a question with four
- * answers, and not the same question as an entry's `estimate` flag, which is
- * about how much you ate rather than what the food is.
+ * answers, and not the same question as an entry's `estimate` flag.
+ *
+ * S98 corrected what that last one means. It was documented here, in S6 and in
+ * S39 as being about QUANTITY -- how much you ate rather than what the food is
+ * -- and no code ever implemented that. It is set in two hard-coded places and
+ * means "this entry has no catalog row behind it". So the two are still
+ * different questions, and this one is still the only answer to "how good are
+ * these numbers"; the difference is just not the one that was written down.
  */
 export type FoodSource = "seed" | "off" | "label" | "manual" | "recipe" | "cnf";
 
@@ -40,6 +46,16 @@ export type Food = {
   micros: Micros;
   verified: boolean;
   source: FoodSource;
+  /**
+   * S97. What this row descended from, where that is not what it is now.
+   *
+   * Correcting a food's numbers makes them yours, so `source` becomes `manual`
+   * -- but a Canadian Nutrient File row carries an attribution obligation that
+   * outlives the edit, and dropping it on the way through was the defect. This
+   * remembers the ancestry the licence attaches to; `source` still answers how
+   * good the numbers are now, and it is still the only one that ranks.
+   */
+  derived_from?: FoodSource | null;
   /** Set for scanned packaged goods; null for whole foods and recipe outputs. */
   barcode?: string | null;
 };
@@ -91,14 +107,32 @@ export function sourceLabel(source: FoodSource): string {
   }
 }
 
-/** One line saying how much salt to take the numbers with. */
-export function sourceHint(source: FoodSource): string {
+/**
+ * One line saying how much salt to take the numbers with.
+ *
+ * S97. `derivedFrom` is what the row was before it was corrected. It changes
+ * only the `manual` case, and only to say what the numbers descend from --
+ * everywhere else the source already answers the question by itself. The CNF
+ * branch of it is the reason this parameter exists: the licence obligation
+ * attaches to the information, so it has to survive the edit that stops the row
+ * being a Health Canada row.
+ */
+export function sourceHint(source: FoodSource, derivedFrom?: FoodSource | null): string {
   switch (source) {
     case "label":
       return "Read from a photo of the nutrition panel and confirmed field by field.";
     case "seed":
       return "Transcribed from the package by hand.";
     case "manual":
+      if (derivedFrom === "cnf") {
+        // The last sentence is the same LICENCE OBLIGATION the `cnf` branch
+        // carries, and dropping it here is precisely the defect S97 fixes.
+        // "Started as" rather than "from": the numbers are the user's now.
+        return "Entered or corrected by you, starting from a Canadian Nutrient File food. Contains information licensed under the Open Government Licence – Canada.";
+      }
+      if (derivedFrom === "off") {
+        return "Entered or corrected by you, starting from an Open Food Facts product.";
+      }
       return "Entered or corrected by you.";
     case "off":
       return "From the Open Food Facts database, unconfirmed. It is often the US version of a product sold here.";
@@ -262,6 +296,42 @@ export function wakingDate(now = new Date()): string {
   if (d.getHours() < 4) d.setDate(d.getDate() - 1);
   return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}-${String(d.getDate()).padStart(2, "0")}`;
 }
+
+/**
+ * A day of the log, as it comes out of `intake_entries`.
+ *
+ * Macros are DENORMALISED onto the row at log time (S7/S19), which is why this
+ * carries its own numbers rather than a food id and a quantity: correcting a
+ * food tomorrow must not rewrite what you ate today.
+ */
+export type IntakeEntry = Macros & {
+  id: string;
+  log_date: string;
+  /** Null for a one-off typed straight into the log -- there is no catalog row
+   * behind it, so there is nothing to correct (S7). */
+  food_id: string | null;
+  name: string;
+  meal: Meal;
+  qty: number;
+  unit: string;
+  estimate: boolean;
+};
+
+/**
+ * The log's window, in DAYS rather than the months the train and progress tabs
+ * count in, because a day arrow moves one day and nobody steps back six months
+ * one tap at a time.
+ *
+ * A month is already generous for a control that moves a day at a time: at this
+ * log's density it is around 250 rows, and the window ships inside the page --
+ * on the one route the bottom nav prefetches from every other tab. The buffer
+ * is what actually has to be big enough, and a week of arrows is far longer
+ * than the query behind it takes.
+ */
+export const LOG_WINDOW_DAYS = 30;
+
+/** Extend once you are this close to either edge of the window held. */
+export const LOG_BUFFER_DAYS = 7;
 
 /** Shift a YYYY-MM-DD date string by whole days. */
 export function shiftDate(date: string, days: number): string {

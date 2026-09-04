@@ -133,7 +133,7 @@ function EditForm({
           <h2 className="text-lg font-semibold leading-tight">{food.name}</h2>
           <FoodSourceBadge source={food.source} />
         </div>
-        <p className="mt-1 text-xs text-muted-foreground">{sourceHint(food.source)}</p>
+        <p className="mt-1 text-xs text-muted-foreground">{sourceHint(food.source, food.derived_from)}</p>
 
         <p className="mt-3 text-xs text-muted-foreground">
           Everything below is per {basisLabel(food)}. Changing it fixes every future log of

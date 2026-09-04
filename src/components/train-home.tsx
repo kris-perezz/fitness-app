@@ -102,13 +102,19 @@ export function TrainHome({
 
     loading.current = true;
     const nextFrom = shiftMonth(from, -WINDOW_MONTHS);
-    void loadTrainingWindow(nextFrom, shiftMonth(from, -1)).then((res) => {
-      loading.current = false;
-      if (res.error) return; // Silent: nothing is broken, there is just less history on screen.
-      setSessions((prev) => [...prev, ...res.sessions]);
-      setVolume((prev) => [...prev, ...res.volume]);
-      setFrom(nextFrom);
-    });
+    void loadTrainingWindow(nextFrom, shiftMonth(from, -1))
+      .then((res) => {
+        if (res.error) return; // Silent: nothing is broken, there is just less history on screen.
+        setSessions((prev) => [...prev, ...res.sessions]);
+        setVolume((prev) => [...prev, ...res.volume]);
+        setFrom(nextFrom);
+      })
+      // In `finally` so a rejected call releases the guard too. Clearing it
+      // only on success latches it for the session and every later extension
+      // is skipped.
+      .finally(() => {
+        loading.current = false;
+      });
   }, [month, from]);
 
   const monthSessions = useMemo(

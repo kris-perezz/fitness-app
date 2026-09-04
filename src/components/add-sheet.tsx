@@ -1,7 +1,7 @@
 "use client";
 
 import { useEffect, useRef, useState, useTransition } from "react";
-import { ChevronLeft } from "lucide-react";
+import { Camera, ChevronLeft, ImageUp, Sparkles, X } from "lucide-react";
 import {
   scale,
   show,
@@ -17,9 +17,10 @@ import {
   scaledSugar,
   sourceHint,
   type Food,
+  type IntakeEntry,
   type Meal,
 } from "@/lib/food";
-import { addEntry, saveScannedFood } from "@/app/actions";
+import { addEntry, saveScannedFood, estimateEntry } from "@/app/actions";
 import { FoodPicker, type PickerStep } from "@/components/food-picker";
 import { FoodSourceBadge } from "@/components/food-source-badge";
 import {
@@ -34,7 +35,24 @@ import { ButtonGroup } from "@/components/ui/button-group";
 import { ToggleGroup, ToggleGroupItem } from "@/components/ui/toggle-group";
 import { Input } from "@/components/ui/input";
 import { Field, FieldGroup, FieldLabel } from "@/components/ui/field";
+import {
+  Item,
+  ItemActions,
+  ItemContent,
+  ItemDescription,
+  ItemGroup,
+  ItemTitle,
+} from "@/components/ui/item";
+import {
+  InputGroup,
+  InputGroupAddon,
+  InputGroupInput,
+  InputGroupText,
+} from "@/components/ui/input-group";
+import { Spinner } from "@/components/ui/spinner";
+import { MACROS, rowsFrom, scaleOf, totals, type Row } from "@/lib/portion";
 import { liftForKeyboard } from "@/lib/sheet";
+import { downscaleToDataUrl } from "@/lib/image";
 import { toast } from "sonner";
 
 /**
@@ -63,11 +81,14 @@ export function AddSheet({
   onOpenChange,
   foods,
   date,
+  onAdded,
 }: {
   meal: Meal | null;
   onOpenChange: (open: boolean) => void;
   foods: Food[];
   date: string;
+  /** The stored row, so the log can show it without going back to the server. */
+  onAdded: (entry: IntakeEntry) => void;
 }) {
   const [step, setStep] = useState<Step>({ kind: "search" });
   const [wasOpen, setWasOpen] = useState(meal !== null);
@@ -132,7 +153,10 @@ export function AddSheet({
             date={date}
             meal={meal}
             onBack={() => go({ kind: "search" })}
-            onDone={() => onOpenChange(false)}
+            onDone={(entry) => {
+              onAdded(entry);
+              onOpenChange(false);
+            }}
           />
         )}
 
@@ -141,7 +165,10 @@ export function AddSheet({
             date={date}
             meal={meal}
             onBack={() => go({ kind: "search" })}
-            onDone={() => onOpenChange(false)}
+            onDone={(entry) => {
+              onAdded(entry);
+              onOpenChange(false);
+            }}
           />
         )}
       </DrawerContent>
@@ -168,7 +195,7 @@ function QtyStep({
   date: string;
   meal: Meal;
   onBack: () => void;
-  onDone: () => void;
+  onDone: (entry: IntakeEntry) => void;
 }) {
   // S5 and S40. A food that knows what one of it weighs can be logged either
   // way: "1 cup" is what you pour, "150 ml" is what you actually poured. The
@@ -276,12 +303,12 @@ function QtyStep({
         sugar_g: scaledSugar(food, scaleQty),
         ...preview,
       });
-      if (res.error) {
-        toast.error(res.error);
+      if (res.error || !res.entry) {
+        toast.error(res.error ?? "Could not add that.");
         return;
       }
       toast.success(`Added to ${meal}`);
-      onDone();
+      onDone(res.entry);
     });
   }
 
@@ -308,8 +335,8 @@ function QtyStep({
             the Open Government Licence requires the acknowledgement to travel
             with the information, and this is the last screen before a CNF
             number becomes an entry. */}
-        {(food.source === "off" || food.source === "cnf") && (
-          <p className="mt-1 text-xs text-muted-foreground">{sourceHint(food.source)}</p>
+        {(food.source === "off" || food.source === "cnf" || food.derived_from === "cnf") && (
+          <p className="mt-1 text-xs text-muted-foreground">{sourceHint(food.source, food.derived_from)}</p>
         )}
         <p className="mt-1 text-xs text-muted-foreground">
           {show(food.kcal)} cal · {show(food.protein_g)}g protein · {show(food.carb_g)}g carbs ·{" "}
@@ -403,7 +430,7 @@ function CustomStep({
   date: string;
   meal: Meal;
   onBack: () => void;
-  onDone: () => void;
+  onDone: (entry: IntakeEntry) => void;
 }) {
   const [f, setF] = useState({
     name: "",
@@ -414,7 +441,55 @@ function CustomStep({
     fiber_g: "",
     sodium_mg: "",
   });
-  const [pending, startTransition] = useTransition();
+  /**
+   * TWO TRANSITIONS, BECAUSE THERE ARE TWO ACTIONS.
+   *
+   * One shared `pending` meant the footer button read "Adding" for the whole of
+   * an estimate, announcing a write that was not happening. A pending flag is
+   * about one action, and estimating is not saving.
+   */
+  const [saving, startSaving] = useTransition();
+  /**
+   * The transition's own pending flag is deliberately dropped. It stays true
+   * until the request resolves, which is exactly wrong for a Stop button: the
+   * spinner would keep turning for seconds after the user asked it to stop.
+   * What is on screen follows `estimating` below, which the user can clear.
+   */
+  const [, startEstimating] = useTransition();
+  const [estimating, setEstimating] = useState(false);
+  /**
+   * Which estimate is current. A result whose id is stale is dropped rather
+   * than written into the form -- that is what makes Stop actually stop, and it
+   * is also what keeps an answer for the old photo from landing on the new one
+   * now that the photo buttons stay live during a call.
+   */
+  const attempt = useRef(0);
+  /**
+   * S101. The downscaled data URL and a label for the row that says one is
+   * attached. Held here rather than sent immediately: the photo is half the
+   * question and the description is the other half, so nothing goes anywhere
+   * until the user taps estimate.
+   */
+  const [photo, setPhoto] = useState<string | null>(null);
+  const [photoError, setPhotoError] = useState<string | null>(null);
+  // Two inputs, not one: `capture` is a hint the browser cannot be asked to
+  // drop per click, so a single input either always opens the camera or never
+  // does. The same reasoning as LabelStep, and the same reason -- a meal is as
+  // often photographed a minute ago as it is right now.
+  const cameraRef = useRef<HTMLInputElement>(null);
+  const uploadRef = useRef<HTMLInputElement>(null);
+  /** S102. The itemised plate behind the six numbers. See lib/portion.ts. */
+  const [rows, setRows] = useState<Row[]>([]);
+  /**
+   * Exactly what the last estimate appended to the description, so the next one
+   * can take it back off before asking again.
+   *
+   * Without this, estimating twice sends the model its own assumptions as part
+   * of the question and the field grows a tail of them. If the user has since
+   * edited the end of the description, the suffix no longer matches and the
+   * whole field is used -- which is right, because then it is theirs again.
+   */
+  const [appended, setAppended] = useState<string | null>(null);
   const num = (v: string) => (v === "" ? 0 : Number(v));
 
   const fields: [keyof typeof f, string][] = [
@@ -426,8 +501,117 @@ function CustomStep({
     ["sodium_mg", "Sodium (mg)"],
   ];
 
+  /**
+   * S100. Estimating OVERWRITES, and asking again is one tap.
+   *
+   * The first design let an estimate land only on a blank form, so a second
+   * opinion cost clearing six boxes by hand -- and missing one of them left the
+   * button dead with nothing on screen saying which. The guard protected typed
+   * numbers from a machine that was asked to replace them, which is not a
+   * danger: pressing estimate IS the request to replace them.
+   */
+
+  /** One decimal, matching what every other macro field in the app shows. */
+  const round1 = (n: number) => Math.round((n + Number.EPSILON) * 10) / 10;
+
+  /**
+   * A new photo is a new question, so any answer to the old one is void. Also
+   * what Stop does: the request cannot be recalled from the server, but its
+   * answer can be refused, and the spinner stops the moment it is asked to.
+   */
+  function discardInFlight() {
+    attempt.current += 1;
+    setEstimating(false);
+  }
+
+  async function attach(file: File) {
+    setPhotoError(null);
+    discardInFlight();
+    try {
+      setPhoto(await downscaleToDataUrl(file));
+    } catch {
+      // Reached most often by an upload rather than a capture: Android pickers
+      // hand back HEICs and PDFs the canvas cannot decode.
+      setPhotoError("That file could not be opened as a photo.");
+    }
+  }
+
+  /**
+   * The six boxes as strings, from a set of rows. Whole numbers for calories and
+   * sodium and one decimal for the rest, matching what the form shows already.
+   */
+  function boxesFrom(next: Row[]) {
+    const sums = totals(next);
+    return Object.fromEntries(
+      MACROS.filter((field) => !corrected.current.has(field)).map((field) => [
+        field,
+        String(field === "kcal" || field === "sodium_mg" ? Math.round(sums[field]) : round1(sums[field])),
+      ]),
+    ) as Partial<Record<(typeof MACROS)[number], string>>;
+  }
+
+  /**
+   * Macro boxes the user has retyped since the estimate landed. A re-derived
+   * total must not overwrite a figure somebody corrected on purpose -- they
+   * know the plate and the model does not.
+   */
+  const corrected = useRef(new Set<string>());
+
+  /** A corrected mass re-derives the totals, with no second API call. */
+  function reweigh(index: number, grams: string) {
+    const next = rows.map((row, n) => (n === index ? { ...row, grams } : row));
+    setRows(next);
+    setF((prev) => ({ ...prev, ...boxesFrom(next) }));
+  }
+
+  function estimate() {
+    const id = (attempt.current += 1);
+    setEstimating(true);
+    const described =
+      appended && f.name.endsWith(appended) ? f.name.slice(0, -appended.length) : f.name;
+    startEstimating(async () => {
+      const res = await estimateEntry(described, photo);
+      // Stopped, or the photo changed while this was in the air. The request
+      // was still paid for; what is avoided is six numbers appearing for a
+      // question the user has already moved on from. Nothing is reset here --
+      // whatever superseded this call already did that.
+      if (attempt.current !== id) return;
+      setEstimating(false);
+      if (res.status === "error") {
+        toast.error(res.message);
+        return;
+      }
+      // Not an error: saying more about the food is the useful next step, and
+      // the fields stay empty so nothing has to be undone first.
+      if (res.status === "vague") {
+        toast.warning(res.message);
+        return;
+      }
+
+      const e = res.estimate;
+      const next = rowsFrom(e.components);
+      // A fresh estimate is a fresh set of numbers, so nothing is being
+      // protected from it any more.
+      corrected.current.clear();
+      setRows(next);
+      // The assumptions go into the NAME, which is where this user already
+      // writes them by hand and where the day list will keep showing them. A
+      // separate panel would be a second place to look for the same thing.
+      const suffix = e.assumptions ? ` — ${e.assumptions}` : null;
+      setAppended(suffix);
+      setF((prev) => ({
+        ...prev,
+        name: `${described.trim()}${suffix ?? ""}`,
+        // Re-summed locally rather than read off `e`, even though nothing has
+        // been corrected yet and the two agree to the digit. One path means a
+        // first estimate and a re-weighed one cannot round differently.
+        ...boxesFrom(next),
+      }));
+    });
+  }
+
   function save() {
-    startTransition(async () => {
+    startSaving(async () => {
       const res = await addEntry({
         log_date: date,
         meal,
@@ -448,12 +632,12 @@ function CustomStep({
         micros: {},
         sugar_g: null,
       });
-      if (res.error) {
-        toast.error(res.error);
+      if (res.error || !res.entry) {
+        toast.error(res.error ?? "Could not add that.");
         return;
       }
       toast.success(`Added to ${meal}`);
-      onDone();
+      onDone(res.entry);
     });
   }
 
@@ -469,12 +653,172 @@ function CustomStep({
           <ChevronLeft className="size-4" /> Back
         </Button>
 
+        {/* S100. The field was always a description -- people type "korean army
+            stew, 3 bowls x ~1.5 cups contents" in here. The placeholder now
+            says so, because the estimate is only as good as what it is given. */}
         <Input
-          placeholder="Food name"
+          placeholder="What you ate, and roughly how much"
           value={f.name}
           onChange={(e) => setF({ ...f, name: e.target.value })}
           className="h-11 text-base"
         />
+
+        {/* Cleared on change so picking the same file twice fires it twice. */}
+        <input
+          ref={cameraRef}
+          type="file"
+          accept="image/*"
+          capture="environment"
+          className="hidden"
+          onChange={(e) => {
+            const file = e.target.files?.[0];
+            e.target.value = "";
+            if (file) void attach(file);
+          }}
+        />
+        <input
+          ref={uploadRef}
+          type="file"
+          accept="image/*"
+          className="hidden"
+          onChange={(e) => {
+            const file = e.target.files?.[0];
+            e.target.value = "";
+            if (file) void attach(file);
+          }}
+        />
+
+        {/* S101. The photo says what is on the plate and how much; the line
+            above says what it cannot show -- the oil, the milk, the sauce, a
+            weight off a scale. Neither is the whole question, which is why both
+            go in the same request and why this sits directly under the text. */}
+        <ButtonGroup className="mt-2 w-full">
+          <Button
+            variant="outline"
+            className="h-11 flex-1"
+            onClick={() => cameraRef.current?.click()}
+            disabled={saving}
+          >
+            <Camera className="size-4" /> {photo ? "Retake" : "Photo"}
+          </Button>
+          <Button
+            variant="outline"
+            className="h-11 flex-1"
+            onClick={() => uploadRef.current?.click()}
+            disabled={saving}
+          >
+            <ImageUp className="size-4" /> Upload
+          </Button>
+          {photo && (
+            <Button
+              variant="outline"
+              className="h-11 flex-1"
+              onClick={() => {
+                discardInFlight();
+                setPhoto(null);
+              }}
+              disabled={saving}
+            >
+              <X className="size-4" /> Remove
+            </Button>
+          )}
+        </ButtonGroup>
+
+        {photoError && <p className="mt-2 text-xs text-destructive">{photoError}</p>}
+
+        {photo && (
+          /* A data URL has no remote host for next/image to optimise and no
+             intrinsic width to reason about, and lib/image.ts has already cut
+             it to 1600px on the long edge before it ever reaches here. */
+          /* eslint-disable-next-line @next/next/no-img-element */
+          <img
+            src={photo}
+            alt="The meal being estimated"
+            className="mt-2 h-40 w-full rounded-md object-cover"
+          />
+        )}
+
+        {/* Dead only when there is nothing to estimate FROM -- no description
+            and no photo. Whatever is already in the boxes is not a reason to
+            refuse: a second answer to the same plate is the common request, and
+            it costs one tap.
+
+            WHILE A CALL IS IN FLIGHT THIS BECOMES STOP, rather than a disabled
+            spinner. A disabled control cannot be focused, so disabling the one
+            the user just pressed drops keyboard and screen-reader focus to the
+            top of the sheet; and a request that can run to a 30s timeout is
+            well past the 10s mark where people stop waiting and want a way out.
+            Turning the trigger into its own escape hatch solves both without
+            adding a control that is dead most of the time. */}
+        <Button
+          variant="outline"
+          className="mt-2 h-11 w-full"
+          onClick={estimating ? discardInFlight : estimate}
+          disabled={!estimating && f.name.trim() === "" && photo === null}
+        >
+          {estimating ? <Spinner /> : <Sparkles className="size-4" />}
+          {estimating ? "Stop" : rows.length > 0 ? "Estimate again" : "Estimate these"}
+        </Button>
+
+        {/* Announced rather than only drawn, so the state of a call that can
+            last ten seconds is not carried by a spinner alone. */}
+        <span role="status" aria-live="polite" className="sr-only">
+          {estimating ? "Estimating" : ""}
+        </span>
+
+        {/* S102. The masses the estimate ran on, where the person who saw the
+            plate can overrule them. This is the whole point of itemising: a
+            measured plate came back 35-45% high because ONE assumed weight was
+            too big, and a single prose sentence left no way to say so short of
+            rejecting all six numbers.
+
+            Shown for as long as there is an estimate behind the numbers. It
+            goes when the next one replaces it, and there is no state where the
+            list belongs to numbers that are no longer on screen. */}
+        {rows.length > 0 && (
+          <div className="mt-4">
+            <p className="text-xs text-muted-foreground">
+              What it weighed. Fix one and the numbers follow.
+            </p>
+            <ItemGroup className="mt-1 gap-1">
+              {rows.map((row, index) => (
+                <Item key={`${row.base.item}-${index}`} size="xs" variant="muted">
+                  <ItemContent className="min-w-0">
+                    <ItemTitle className="truncate">{row.base.item}</ItemTitle>
+                    <ItemDescription className="tabular-nums">
+                      {Math.round(row.base.kcal * scaleOf(row))} kcal
+                    </ItemDescription>
+                  </ItemContent>
+                  <ItemActions>
+                    {row.base.grams === null ? (
+                      /* No mass was guessed, so there is nothing to correct --
+                         an egg is an egg. Said plainly rather than shown as an
+                         empty box the user would try to type into. */
+                      <span className="text-xs text-muted-foreground">as served</span>
+                    ) : (
+                      <InputGroup className="w-24">
+                        <InputGroupInput
+                          type="number"
+                          inputMode="numeric"
+                          value={row.grams}
+                          onChange={(e) => reweigh(index, e.target.value)}
+                          // Selected on focus so the first digit replaces the
+                          // guess, matching the weight field on progress.
+                          onFocus={(e) => e.currentTarget.select()}
+                          aria-label={`Grams of ${row.base.item}`}
+                          className="tabular-nums"
+                        />
+                        <InputGroupAddon align="inline-end">
+                          <InputGroupText>g</InputGroupText>
+                        </InputGroupAddon>
+                      </InputGroup>
+                    )}
+                  </ItemActions>
+                </Item>
+              ))}
+            </ItemGroup>
+          </div>
+        )}
 
         <FieldGroup className="mt-4 grid grid-cols-2 gap-3">
           {fields.map(([key, label]) => (
@@ -487,7 +831,10 @@ function CustomStep({
                 type="number"
                 inputMode="decimal"
                 value={f[key]}
-                onChange={(e) => setF({ ...f, [key]: e.target.value })}
+                onChange={(e) => {
+                  corrected.current.add(key);
+                  setF({ ...f, [key]: e.target.value });
+                }}
                 className="h-11 text-base tabular-nums"
                 placeholder="0"
               />
@@ -500,9 +847,9 @@ function CustomStep({
         <Button
           className="h-11 w-full text-base"
           onClick={save}
-          disabled={pending || f.name.trim() === "" || f.kcal === ""}
+          disabled={saving || f.name.trim() === "" || f.kcal === ""}
         >
-          {pending ? "Adding" : "Add"}
+          {saving ? "Adding" : "Add"}
         </Button>
       </div>
     </div>

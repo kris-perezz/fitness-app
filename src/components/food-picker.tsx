@@ -8,12 +8,21 @@ import {
   ImageUp,
   Leaf,
   Plus,
+  Barcode,
   ScanBarcode,
   Search,
 } from "lucide-react";
 import { searchFoods, show, basisLabel, type Food } from "@/lib/food";
-import { readLabel, saveLabelFood, searchCnfFoods, addCnfFood } from "@/app/actions";
+import {
+  readLabel,
+  saveLabelFood,
+  searchCnfFoods,
+  addCnfFood,
+  searchOffFoods,
+  lookupBarcode,
+} from "@/app/actions";
 import { CNF_ATTRIBUTION, CNF_LICENCE_URL, type CnfHit } from "@/lib/cnf";
+import type { OffHit } from "@/lib/off";
 import { downscaleToDataUrl } from "@/lib/image";
 import type { LabelDraft } from "@/lib/label";
 import { BarcodeScanner } from "@/components/barcode-scanner";
@@ -101,7 +110,7 @@ export function FoodPicker({
   return (
     <SearchStep
       foods={foods}
-      onPick={(food) => onPick(food, false)}
+      onPick={onPick}
       onScan={() => onStep({ kind: "scan" })}
       onLabel={() => onStep({ kind: "label", barcode: null })}
       onCustom={onCustom}
@@ -117,7 +126,13 @@ function SearchStep({
   onCustom,
 }: {
   foods: Food[];
-  onPick: (food: Food) => void;
+  /**
+   * `scanned` is threaded through rather than fixed at false: a local result
+   * and a Health Canada row are both already in the catalog, but S96's Open
+   * Food Facts row is assembled in memory and has to be written before an
+   * entry can reference it.
+   */
+  onPick: (food: Food, scanned: boolean) => void;
   onScan: () => void;
   onLabel: () => void;
   onCustom?: () => void;
@@ -191,7 +206,8 @@ function SearchStep({
             <EmptyHeader>
               <EmptyTitle>No match for &ldquo;{query}&rdquo;</EmptyTitle>
               <EmptyDescription>
-                Look it up in Health Canada below, scan its barcode, or photograph its label.
+                Look it up in Health Canada or Open Food Facts below, scan its barcode, or
+                photograph its label.
               </EmptyDescription>
             </EmptyHeader>
           </Empty>
@@ -207,7 +223,7 @@ function SearchStep({
                   <button
                     onClick={() => {
                       setPicked(f.id);
-                      onPick(f);
+                      onPick(f, false);
                     }}
                     disabled={picked !== null}
                     className="text-left disabled:opacity-60"
@@ -236,7 +252,15 @@ function SearchStep({
             resetting four pieces of state in an effect. Editing the search
             after a lookup must not leave results for a word no longer on
             screen. */}
-        {query !== "" && <CnfSection key={query} query={query} onPick={onPick} />}
+        {query !== "" && (
+          <CnfSection key={query} query={query} onPick={(food) => onPick(food, false)} />
+        )}
+
+        {/* S96. Below Health Canada, matching the ranks 0022 settled: CNF is
+            laboratory data about a reference food, OFF is crowd-entered and
+            says itself that it offers no assurance of accuracy. Keyed on the
+            query for the same remount reason as above. */}
+        {query !== "" && <OffSection key={`off-${query}`} query={query} onPick={onPick} />}
       </div>
     </div>
   );
@@ -349,6 +373,124 @@ function CnfSection({ query, onPick }: { query: string; onPick: (food: Food) => 
                   </ItemTitle>
                 </ItemContent>
                 {picking === hit.code && <Spinner />}
+              </button>
+            </Item>
+          </li>
+        ))}
+      </ul>
+    </div>
+  );
+}
+
+/**
+ * S96. Open Food Facts by name, for the packaged food whose barcode is not to
+ * hand -- eaten out of someone else's cupboard, already in the bin, remembered
+ * rather than held.
+ *
+ * ON DEMAND, and here that is not only a UI judgement. Open Food Facts rate-limit
+ * text search to TEN REQUESTS A MINUTE PER IP and say in as many words not to
+ * wire it to a keystroke. The limit is per IP, so it is this server's budget
+ * shared by everyone signed in, not each user's own.
+ *
+ * A hit is a barcode and a name, not a food. Choosing one runs the ordinary
+ * barcode lookup, so your own corrected row wins if you have one (S7), the
+ * catalog is checked before the network, and `toFood` stays the single mapping.
+ */
+function OffSection({
+  query,
+  onPick,
+}: {
+  query: string;
+  onPick: (food: Food, scanned: boolean) => void;
+}) {
+  const [hits, setHits] = useState<OffHit[] | null>(null);
+  const [error, setError] = useState<string | null>(null);
+  const [picking, setPicking] = useState<string | null>(null);
+  const [pending, startTransition] = useTransition();
+
+  const search = () => {
+    startTransition(async () => {
+      const res = await searchOffFoods(query);
+      if (res.status === "error") {
+        setError(res.message);
+        setHits([]);
+        return;
+      }
+      setError(null);
+      setHits(res.hits);
+    });
+  };
+
+  const choose = (hit: OffHit) => {
+    setPicking(hit.barcode);
+    startTransition(async () => {
+      const res = await lookupBarcode(hit.barcode);
+      setPicking(null);
+      if (res.source === "error") {
+        toast.error(res.error ?? "Could not add that food.");
+        return;
+      }
+      // The search index knew this product and the product endpoint does not,
+      // or it carries no usable nutrition after all. Nothing the user can act
+      // on, so say what happened rather than opening an empty form.
+      if (res.source === "miss" || !res.food) {
+        toast.error("Open Food Facts has no nutrition for that product.");
+        return;
+      }
+      // `scanned` for a remote row, which has never been written -- the same
+      // contract the barcode scanner hands back. A catalog row is already
+      // there and must not be re-saved.
+      onPick(res.food, res.source === "remote");
+    });
+  };
+
+  if (hits === null) {
+    return (
+      <div className="border-t border-border px-5 py-4">
+        <Button variant="outline" className="h-11 w-full" onClick={search} disabled={pending}>
+          {pending ? <Spinner /> : <Barcode className="size-4" />}
+          Search Open Food Facts
+        </Button>
+      </div>
+    );
+  }
+
+  return (
+    <div className="border-t border-border">
+      <p className="px-5 pt-4 text-xs text-muted-foreground">
+        Open Food Facts · crowd-entered, unconfirmed, often the US version of a product sold
+        here
+      </p>
+
+      {error && <p className="px-5 py-3 text-sm text-muted-foreground">{error}</p>}
+
+      {!error && hits.length === 0 && (
+        <p className="px-5 py-3 text-sm text-muted-foreground">
+          Nothing in Open Food Facts matches &ldquo;{query}&rdquo;.
+        </p>
+      )}
+
+      <ul className="divide-y divide-border">
+        {hits.map((hit) => (
+          <li key={hit.barcode}>
+            <Item asChild size="sm" className="rounded-none px-5 py-3 active:bg-accent">
+              <button
+                onClick={() => choose(hit)}
+                disabled={picking !== null}
+                className="text-left disabled:opacity-60"
+              >
+                <ItemContent className="min-w-0">
+                  <ItemTitle className="font-normal whitespace-normal">{hit.name}</ItemTitle>
+                  {/* The same line the local results carry, for the same
+                      reason: a search for "oreo" returns eleven products whose
+                      names are near-identical, and the calorie figure is what
+                      tells the biscuit from the yoghurt. The barcode used to be
+                      here and told nobody anything. */}
+                  <ItemDescription className="tabular-nums">
+                    {show(hit.kcal)} cal per {hit.unit === "ml" ? "100 ml" : "100 g"}
+                  </ItemDescription>
+                </ItemContent>
+                {picking === hit.barcode && <Spinner />}
               </button>
             </Item>
           </li>

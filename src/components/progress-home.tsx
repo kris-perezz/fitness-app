@@ -27,7 +27,6 @@ import {
   type ChartWindowKey,
   type WeighIn,
 } from "@/lib/weight";
-import { MIN_LOGGED_DAYS, type Adherence, type EnergyWeek } from "@/lib/energy";
 import type { LiftPoint } from "@/lib/training";
 import { LiftChart, enoughSessions } from "@/components/lift-chart";
 import { deleteWeighIn, loadWeighInWindow, saveWeighIn } from "@/app/progress-actions";
@@ -68,14 +67,13 @@ import { Item, ItemActions, ItemContent, ItemTitle } from "@/components/ui/item"
 /** S60. Either half may be absent; a rate of 0 is "maintain", not "no goal". */
 export type WeightGoal = { weightLb: number | null; rateLbPerWeek: number | null };
 
+
 export function ProgressHome({
   today,
   loadedFrom,
   earliest,
   entries: initialEntries,
   goal,
-  weeks,
-  adherence,
   unit,
   pinned,
 }: {
@@ -85,10 +83,6 @@ export function ProgressHome({
   earliest: string | null;
   entries: WeighIn[];
   goal: WeightGoal;
-  /** S63. Computed on the server: it needs the food log, which this tab does not otherwise hold. */
-  weeks: EnergyWeek[];
-  /** S65. Effort, so a flat trend is not read as a metabolism story. */
-  adherence: Adherence;
   /**
    * S69. The unit on SCREEN. Storage is always pounds, so this is applied at
    * every edge -- the field, the list, the headline, the rate and the axis. All
@@ -208,11 +202,10 @@ export function ProgressHome({
 
         {/* S67. EVERY BLOCK DEGRADES ON ITS OWN, and the first weigh-in is the
             case where that matters most: with no readings at all, the chart,
-            the calendar, the month list, the adherence line and the weekly
-            table are six pieces of furniture around an empty room. One
-            sentence and the action above it is the honest version of this
-            screen -- and the action is already at the top, so the Empty does
-            not need to repeat it. */}
+            the calendar and the month list are pieces of furniture around an
+            empty room. One sentence and the action above it is the honest
+            version of this screen -- and the action is already at the top, so
+            the Empty does not need to repeat it. */}
         {entries.length === 0 ? (
           <Empty className="py-14">
             <EmptyHeader>
@@ -221,8 +214,8 @@ export function ProgressHome({
               </EmptyMedia>
               <EmptyTitle>No weigh-ins yet</EmptyTitle>
               <EmptyDescription>
-                Weigh in above and this tab starts answering whether it is working — the trend,
-                the rate, and what your calories did against it.
+                Weigh in above and this tab starts answering whether it is working — the trend
+                and the rate.
               </EmptyDescription>
             </EmptyHeader>
           </Empty>
@@ -240,10 +233,6 @@ export function ProgressHome({
         />
 
         <PinnedLiftBlock pinned={pinned} />
-
-        <ShowedUp adherence={adherence} />
-
-        <EnergyBalance weeks={weeks} unit={unit} />
 
         <div className="flex justify-center border-b border-border px-2 py-3">
           <Calendar
@@ -413,7 +402,9 @@ function Headline({
           alone would be a number the user cannot find on their own scale. */}
       <p className="mt-1 text-xs text-muted-foreground">
         Last reading{" "}
-        <span className="tabular-nums">{head.latest.weightLb.toFixed(1)} lb</span>
+        <span className="tabular-nums">
+          {toDisplay(head.latest.weightLb, unit).toFixed(1)} {unit}
+        </span>
         {" · "}
         {shortDate(head.latest.date)}
       </p>
@@ -478,7 +469,11 @@ function WeighInSheet({
 }) {
   const [value, setValue] = useState("");
   const [openedFor, setOpenedFor] = useState<string | null>(date);
-  const [pending, startTransition] = useTransition();
+  // One transition per action, not one for the sheet: a shared flag makes the
+  // Save button announce "Saving" while a delete is what is actually running.
+  const [saving, startSave] = useTransition();
+  const [deleting, startDelete] = useTransition();
+  const pending = saving || deleting;
 
   // Reset on every OPEN, and on opening a different day. Adjusted during render
   // rather than in an effect, the same call add-sheet.tsx made and for the same
@@ -510,7 +505,7 @@ function WeighInSheet({
     // Straight back to pounds, UNROUNDED. Storage is always lb (S69); rounding
     // here would make 82 kg read back as 81.99 the next time the sheet opened.
     const lb = fromDisplay(typed, unit);
-    startTransition(async () => {
+    startSave(async () => {
       const res = await saveWeighIn(date, lb, existing?.note ?? null);
       if (res.error) {
         toast.error(res.error);
@@ -523,7 +518,7 @@ function WeighInSheet({
 
   function remove() {
     if (date === null) return;
-    startTransition(async () => {
+    startDelete(async () => {
       const res = await deleteWeighIn(date);
       if (res.error) {
         toast.error(res.error);
@@ -583,7 +578,7 @@ function WeighInSheet({
             />
           )}
           <Button className="h-11 flex-1 text-base" onClick={save} disabled={pending || !value}>
-            {pending ? "Saving" : existing ? "Save" : "Log it"}
+            {saving ? "Saving" : existing ? "Save" : "Log it"}
           </Button>
         </div>
       </DrawerContent>
@@ -591,22 +586,6 @@ function WeighInSheet({
   );
 }
 
-/**
- * What the calories actually did (S63).
- *
- * Average intake for a week beside what the trend weight did across it. The
- * only thing in this app that a single-purpose tracker cannot do, and the
- * argument for the food log and the scale living together.
- *
- * A TABLE, not a chart. Two numbers a week for eight weeks is a table; drawing
- * it would be decoration, and the comparison is read across a row rather than
- * along an axis.
- *
- * It reports and never prescribes: nothing here writes back to the calorie goal
- * (progress open decision 4). And it does not compute a TDEE figure -- the two
- * observations ARE the answer, and a single derived number would hide which
- * half of it was thin.
- */
 export type PinnedLift = { id: string; name: string; points: LiftPoint[] };
 
 /**
@@ -646,104 +625,9 @@ function PinnedLiftBlock({ pinned }: { pinned: PinnedLift | null }) {
   );
 }
 
-/**
- * Effort, stated next to outcome (S65).
- *
- * TWO LINES, NOT A CHART. A bar chart of two numbers is decoration, and these
- * are read once and acted on -- "I logged 8 of the last 14 days" is the whole
- * finding.
- *
- * Placed ABOVE the calories-against-the-scale table on purpose: it is the
- * context that decides how much of that table to believe, and context after the
- * conclusion is a footnote nobody reads.
- *
- * No colour, no target, no praise. Adherence is a fact about the log, not a
- * grade (S70).
- */
-function ShowedUp({ adherence }: { adherence: Adherence }) {
-  return (
-    <section className="flex items-baseline justify-between gap-3 border-b border-border px-5 py-4">
-      <span className="text-sm">
-        <span className="tabular-nums">
-          {adherence.loggedDays} of {adherence.windowDays}
-        </span>{" "}
-        <span className="text-muted-foreground">days logged</span>
-      </span>
-      <span className="text-sm">
-        <span className="tabular-nums">{adherence.sessionsThisWeek}</span>{" "}
-        <span className="text-muted-foreground">
-          {adherence.sessionsThisWeek === 1 ? "session" : "sessions"} this week
-        </span>
-      </span>
-    </section>
-  );
-}
-
 /** One decimal, for a value already converted to the display unit. */
 function round1(n: number): number {
   return Math.round(n * 10) / 10;
-}
-
-/** A signed change in pounds. `deltaLabel` takes two readings; this takes the difference. */
-function signedWeight(change: number, unit: DisplayUnit): string {
-  const shown = toDisplay(change, unit);
-  if (Math.abs(shown) < 0.05) return `0.0 ${unit}`;
-  return `${shown > 0 ? "+" : "−"}${Math.abs(shown).toFixed(1)} ${unit}`;
-}
-
-function EnergyBalance({ weeks, unit }: { weeks: EnergyWeek[]; unit: DisplayUnit }) {
-  // BOTH halves, not just the food half. A week with five logged days but no
-  // pair of weigh-ins has an intake average and no change to set it against,
-  // and a column of dashes is not an answer -- it is the shape of one.
-  const usable = weeks.filter((w) => w.included && w.changeLb !== null);
-  // Nothing to say yet. Rendered as a sentence rather than an empty table,
-  // because a table of dashes looks like a fault rather than a beginning.
-  if (usable.length === 0) {
-    return (
-      <section className="border-b border-border px-5 py-4">
-        <h2 className="text-sm font-medium">Calories against the scale</h2>
-        <p className="mt-2 text-xs text-muted-foreground">
-          Needs a week with at least {MIN_LOGGED_DAYS} days of food logged and two weigh-ins to
-          set it against. An average built on fewer would read as a deficit you did not run.
-        </p>
-      </section>
-    );
-  }
-
-  return (
-    <section className="border-b border-border px-5 py-4">
-      <h2 className="text-sm font-medium">Calories against the scale</h2>
-      <p className="mt-1 text-xs text-muted-foreground">
-        What you ate, and what the trend did that week. Nothing here changes your goal.
-      </p>
-
-      <ul className="mt-3 divide-y divide-border">
-        {weeks.map((week) => (
-          <li key={week.weekStart} className="flex items-baseline justify-between gap-3 py-2">
-            <span className="text-xs text-muted-foreground">{shortDate(week.weekStart)}</span>
-
-            {week.included ? (
-              <span className="flex items-baseline gap-3 text-sm tabular-nums">
-                <span>{week.avgKcal?.toLocaleString()} cal/day</span>
-                <span className="text-muted-foreground">
-                  {/* Signed, and never coloured. A pound down is not a win and a
-                      pound up is not a failure -- the row states what happened
-                      and the reader owns what it means (S70). */}
-                  {week.changeLb === null ? "—" : signedWeight(week.changeLb, unit)}
-                </span>
-              </span>
-            ) : (
-              /* EXCLUDED, and said so rather than silently skipped. A week that
-                 vanished would read as a week that did not happen. */
-              <span className="text-xs text-muted-foreground">
-                {week.loggedDays} of {MIN_LOGGED_DAYS} days logged
-              </span>
-            )}
-          </li>
-        ))}
-      </ul>
-    </section>
-  );
 }
 
 /**

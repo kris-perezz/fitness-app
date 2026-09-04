@@ -128,8 +128,9 @@ export function TrendsScreen({
                 {share.estimates === 1 ? "was an estimate" : "were estimates"}.
               </p>
               <p className="mt-1 text-xs text-muted-foreground">
-                An estimate is a portion you eyeballed rather than weighed. It says how hard to
-                lean on the numbers above, not that anything is wrong with them.
+                An estimate is something you typed in yourself, with no food from the catalog
+                behind it. It says how hard to lean on the numbers above, not that anything is
+                wrong with them.
               </p>
             </section>
           )}
