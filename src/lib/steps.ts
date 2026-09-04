@@ -1,5 +1,5 @@
 /**
- * Health Auto Export's payload, reduced to one total per day.
+ * Health Auto Export's payload, read two ways.
  *
  * The app posts a shape of its own choosing -- `data.metrics[]`, each metric a
  * name, a unit and an array of points -- and it aggregates by hour at coarsest,
@@ -15,6 +15,18 @@
  */
 
 export type StepTotal = { date: string; steps: number };
+
+/** One reading, at whatever grain the phone was asked to group by. */
+export type HealthSample = {
+  metric: string;
+  /** ISO 8601, offset preserved, so the instant survives the round trip. */
+  measured_at: string;
+  /** The phone's own day. See the note above on why it is carried separately. */
+  log_date: string;
+  units: string | null;
+  /** The point minus its date: `{ qty }` for most, richer for a few. */
+  value: Record<string, unknown>;
+};
 
 /** What the app calls the metric. Matched loosely; the rest are ignored. */
 const STEP_METRIC = "step_count";
@@ -80,4 +92,59 @@ function qtyOf(point: unknown): number | null {
   const qty = (point as { qty?: unknown }).qty;
   if (typeof qty !== "number" || !Number.isFinite(qty) || qty < 0) return null;
   return qty;
+}
+
+/**
+ * Every reading in the payload, flattened and left at its own grain.
+ *
+ * Deliberately does not aggregate. Steps sum over a day, a resting heart rate
+ * averages, and no single rule is right for both -- so the rule is chosen by
+ * whoever asks the question, not here.
+ */
+export function healthSamples(payload: unknown): HealthSample[] {
+  const out: HealthSample[] = [];
+
+  for (const metric of metricsOf(payload)) {
+    const name = nameOf(metric);
+    if (name === null) continue;
+    const units = unitsOf(metric);
+
+    for (const point of pointsOf(metric)) {
+      const day = dayOf(point);
+      const at = instantOf(point);
+      if (day === null || at === null) continue;
+
+      // The date is lifted into its own columns, so keeping it in the blob
+      // would be the same fact stored twice and free to disagree with itself.
+      const value = { ...(point as Record<string, unknown>) };
+      delete value.date;
+
+      out.push({ metric: name, measured_at: at, log_date: day, units, value });
+    }
+  }
+
+  return out;
+}
+
+function unitsOf(metric: unknown): string | null {
+  const units = (metric as { units?: unknown }).units;
+  return typeof units === "string" && units !== "" ? units : null;
+}
+
+/**
+ * "2026-09-03 14:30:00 -0600" is not a format `Date` parses reliably across
+ * engines, and guessing wrong moves a reading by hours. Rewritten into ISO 8601
+ * by hand -- the offset is already in the string, so nothing has to be inferred.
+ */
+const STAMP = /^(\d{4}-\d{2}-\d{2}) (\d{2}:\d{2}:\d{2}) ([+-])(\d{2}):?(\d{2})$/;
+
+function instantOf(point: unknown): string | null {
+  if (typeof point !== "object" || point === null) return null;
+  const date = (point as { date?: unknown }).date;
+  if (typeof date !== "string") return null;
+
+  const match = STAMP.exec(date.trim());
+  if (!match) return null;
+  const [, day, time, sign, hours, minutes] = match;
+  return `${day}T${time}${sign}${hours}:${minutes}`;
 }

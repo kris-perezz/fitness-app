@@ -1,7 +1,7 @@
 import { createClient } from "@supabase/supabase-js";
 import { NextResponse, type NextRequest } from "next/server";
 import { SUPABASE_ANON_KEY, SUPABASE_URL } from "@/lib/env";
-import { dailyStepTotals } from "@/lib/steps";
+import { dailyStepTotals, healthSamples } from "@/lib/steps";
 
 /**
  * Where Apple Health steps arrive (see 0029).
@@ -10,6 +10,11 @@ import { dailyStepTotals } from "@/lib/steps";
  * nothing here can pull. What posts is Health Auto Export, running a REST
  * automation on the phone; this endpoint exists because that app sends ITS
  * payload shape rather than one this app chose.
+ *
+ * TWO WRITES, ON PURPOSE. Everything posted is kept as it arrived, at its own
+ * grain, so a question nobody has asked yet is still answerable. Steps ALSO
+ * roll up to a daily total, because that series predates the automation by
+ * eight years and the progress screen reads one number from one place.
  *
  * NO SESSION, AND NO SERVICE ROLE KEY. The caller is an app on a phone with no
  * cookie to send, so the token in the header is the identity -- and it is only
@@ -21,6 +26,9 @@ export const dynamic = "force-dynamic";
 
 /** Chosen over `Authorization: Bearer` so nothing mistakes it for a session. */
 const TOKEN_HEADER = "x-ingest-token";
+
+/** Matches the ceiling in `record_samples`, which drops an oversized array. */
+const SAMPLE_CHUNK = 2000;
 
 export async function POST(request: NextRequest) {
   const token = request.headers.get(TOKEN_HEADER)?.trim();
@@ -39,10 +47,11 @@ export async function POST(request: NextRequest) {
     return NextResponse.json({ error: "Body was not JSON" }, { status: 400 });
   }
 
+  const samples = healthSamples(body);
   const days = dailyStepTotals(body);
-  if (days.length === 0) {
-    // Not an error. An automation set to a period with no steps in it posts a
-    // payload with nothing to record, and it does that legitimately every run
+  if (samples.length === 0 && days.length === 0) {
+    // Not an error. An automation set to a period with nothing in it posts a
+    // payload with nothing to record, and does so legitimately on every run
     // that catches an empty window.
     return new NextResponse(null, { status: 204 });
   }
@@ -51,8 +60,22 @@ export async function POST(request: NextRequest) {
     auth: { persistSession: false },
   });
 
-  // In sequence rather than in parallel: a run carries at most a week of days,
-  // and one upsert at a time keeps a partial failure legible.
+  // Chunked to stay under the ceiling `record_samples` enforces, and sent whole
+  // rather than a row at a time: a week of hourly buckets across five metrics is
+  // hundreds of readings, and a round trip each would make one automation a
+  // denial of service against its own database.
+  for (let at = 0; at < samples.length; at += SAMPLE_CHUNK) {
+    const { error } = await supabase.rpc("record_samples", {
+      token,
+      samples: samples.slice(at, at + SAMPLE_CHUNK),
+    });
+    if (error) {
+      return NextResponse.json({ error: "Could not record samples" }, { status: 502 });
+    }
+  }
+
+  // In sequence: a run carries at most a week of days, and one upsert at a time
+  // keeps a partial failure legible.
   for (const day of days) {
     const { error } = await supabase.rpc("record_steps", {
       token,

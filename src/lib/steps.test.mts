@@ -1,7 +1,7 @@
 import test from "node:test";
 import assert from "node:assert/strict";
 
-import { dailyStepTotals } from "./steps.ts";
+import { dailyStepTotals, healthSamples } from "./steps.ts";
 
 /** The shape Health Auto Export documents, hourly buckets and all. */
 const payload = {
@@ -84,4 +84,56 @@ test("anything that is not the documented shape yields nothing", () => {
   for (const junk of [null, undefined, 42, "steps", [], {}, { data: {} }, { data: { metrics: 7 } }]) {
     assert.deepEqual(dailyStepTotals(junk), []);
   }
+});
+
+test("every metric is kept, at the grain it arrived", () => {
+  // The step roll-up is one reading of the payload; this is the other. A heart
+  // rate is dropped from the daily total and MUST survive here, or turning a
+  // metric on in the app records nothing anywhere.
+  const samples = healthSamples(payload);
+  assert.equal(samples.length, 4);
+  assert.deepEqual(
+    samples.map((s) => s.metric),
+    ["step_count", "step_count", "step_count", "heart_rate"],
+  );
+});
+
+test("a timestamp becomes an instant without losing its offset", () => {
+  const [first] = healthSamples(payload);
+  assert.equal(first.measured_at, "2026-09-03T08:00:00-06:00");
+  assert.equal(first.log_date, "2026-09-03");
+  assert.equal(new Date(first.measured_at).toISOString(), "2026-09-03T14:00:00.000Z");
+});
+
+test("the point's own fields survive, minus the date", () => {
+  const [first] = healthSamples(payload);
+  assert.deepEqual(first.value, { qty: 1200 });
+  assert.equal(first.units, "count");
+  assert.ok(!("date" in first.value), "the date has columns of its own");
+});
+
+test("a richer point keeps every field it came with", () => {
+  // Not every metric is a single quantity: a heart rate can arrive as three
+  // numbers, and a schema that assumed `qty` would silently drop two of them.
+  const rich = {
+    data: {
+      metrics: [
+        {
+          name: "heart_rate",
+          units: "count/min",
+          data: [{ Min: 48, Avg: 62, Max: 140, date: "2026-09-03 08:00:00 -0600" }],
+        },
+      ],
+    },
+  };
+  assert.deepEqual(healthSamples(rich)[0].value, { Min: 48, Avg: 62, Max: 140 });
+});
+
+test("an unparseable timestamp drops the reading rather than guessing", () => {
+  const bad = {
+    data: {
+      metrics: [{ name: "step_count", units: "count", data: [{ qty: 10, date: "yesterday" }] }],
+    },
+  };
+  assert.deepEqual(healthSamples(bad), []);
 });
