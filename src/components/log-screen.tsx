@@ -123,13 +123,19 @@ export function LogScreen({
     const fetchTo = back ? shiftDate(from, -1) : nextTo;
 
     loading.current = true;
-    void loadIntakeWindow(fetchFrom, fetchTo).then((res) => {
-      loading.current = false;
-      if (res.error) return; // Silent: nothing is broken, there is just less history on screen.
-      setEntries((prev) => [...prev, ...res.entries]);
-      setFrom(nextFrom);
-      setTo(nextTo);
-    });
+    void loadIntakeWindow(fetchFrom, fetchTo)
+      .then((res) => {
+        if (res.error) return; // Silent: nothing is broken, there is just less history on screen.
+        setEntries((prev) => [...prev, ...res.entries]);
+        setFrom(nextFrom);
+        setTo(nextTo);
+      })
+      // In `finally` so a rejected call releases the guard too. Clearing it
+      // only on success latches it for the session and every later extension
+      // is skipped.
+      .finally(() => {
+        loading.current = false;
+      });
   }, [date, from, to, today]);
 
   const dayEntries = useMemo(() => entries.filter((e) => e.log_date === date), [entries, date]);
