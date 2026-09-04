@@ -401,7 +401,9 @@ function Headline({
           alone would be a number the user cannot find on their own scale. */}
       <p className="mt-1 text-xs text-muted-foreground">
         Last reading{" "}
-        <span className="tabular-nums">{head.latest.weightLb.toFixed(1)} lb</span>
+        <span className="tabular-nums">
+          {toDisplay(head.latest.weightLb, unit).toFixed(1)} {unit}
+        </span>
         {" · "}
         {shortDate(head.latest.date)}
       </p>
