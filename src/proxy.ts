@@ -27,13 +27,15 @@ export async function proxy(request: NextRequest) {
   } = await supabase.auth.getUser();
 
   const { pathname } = request.nextUrl;
-  // `/api` is public HERE and authenticated by the route itself. The phone
-  // posting its step count has no cookie to send, so without this the POST is
-  // answered with a redirect to /login and the day is silently lost.
+  // `/api/health` is public HERE and authenticated by the route itself, which
+  // checks `x-ingest-token`. The phone posting its step count has no cookie to
+  // send, so without this the POST is answered with a redirect to /login and
+  // the day is silently lost. Scoped to that one path so anything else added
+  // under /api stays behind the redirect by default.
   const isPublic =
     pathname.startsWith("/login") ||
     pathname.startsWith("/auth") ||
-    pathname.startsWith("/api");
+    pathname.startsWith("/api/health");
 
   if (!user && !isPublic) {
     const url = request.nextUrl.clone();
