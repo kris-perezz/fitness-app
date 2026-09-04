@@ -35,7 +35,7 @@ export default async function ProgressPage() {
 
   // Together rather than in sequence: the goal row is tiny and independent of
   // the weigh-ins, so chaining them would spend a round trip to learn nothing.
-  const [{ data }, { data: settings }, { data: first }] = await Promise.all([
+  const [{ data }, { data: settings }, { data: first }, { data: steps }] = await Promise.all([
     supabase
       .from("weigh_ins")
       .select("log_date, weight_lb, note")
@@ -56,6 +56,15 @@ export default async function ProgressPage() {
       .order("log_date", { ascending: true })
       .limit(1)
       .maybeSingle(),
+    // The most recent day Apple Health posted, not today's. A daily automation
+    // reports a day once it is over, so today is usually absent -- and an
+    // absent day must read as absent rather than as a day nobody walked.
+    supabase
+      .from("daily_steps")
+      .select("log_date, steps")
+      .order("log_date", { ascending: false })
+      .limit(1)
+      .maybeSingle(),
   ]);
 
   const weighIns = (data ?? []).map(toWeighIn);
@@ -73,6 +82,7 @@ export default async function ProgressPage() {
       today={today}
       loadedFrom={from.slice(0, 7)}
       earliest={first?.log_date ?? null}
+      steps={steps ? { date: steps.log_date as string, count: Number(steps.steps) } : null}
       entries={weighIns}
       // S69. Defaults to lb when the column is missing, which is what the app
       // stores anyway -- so a preview running ahead of 0024 reads correctly.

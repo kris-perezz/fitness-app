@@ -67,6 +67,9 @@ import { Item, ItemActions, ItemContent, ItemTitle } from "@/components/ui/item"
 /** S60. Either half may be absent; a rate of 0 is "maintain", not "no goal". */
 export type WeightGoal = { weightLb: number | null; rateLbPerWeek: number | null };
 
+/** The most recent day Apple Health posted a count for. See 0029. */
+export type StepDay = { date: string; count: number };
+
 export function ProgressHome({
   today,
   loadedFrom,
@@ -75,6 +78,7 @@ export function ProgressHome({
   goal,
   unit,
   pinned,
+  steps,
 }: {
   today: string;
   loadedFrom: string;
@@ -91,6 +95,8 @@ export function ProgressHome({
   unit: DisplayUnit;
   /** S81. Exactly one lift, or none -- which is a normal state, not an empty one. */
   pinned: PinnedLift | null;
+  /** Null until the phone has posted a day, which is most of every day. */
+  steps: StepDay | null;
 }) {
   const [entries, setEntries] = useState(initialEntries);
   const [from, setFrom] = useState(loadedFrom);
@@ -198,6 +204,26 @@ export function ProgressHome({
             <Scale className="size-4" /> Weigh in
           </Button>
         </div>
+
+        {/* One line, and OUTSIDE the empty state below: steps arrive from the
+            phone whether or not anyone has stood on a scale, and a tab with a
+            step count and no weigh-ins is a real state rather than an empty one.
+
+            Absent renders nothing at all. A dash or a zero would be this screen
+            claiming a day nobody walked, which is the same rule the micros
+            follow -- absent stays absent. */}
+        {steps && (
+          <div className="flex items-baseline justify-between gap-2 border-b border-border px-5 py-3">
+            <span className="text-sm text-muted-foreground">Steps</span>
+            <span className="text-sm text-muted-foreground">
+              <span className="tabular-nums text-foreground">
+                {steps.count.toLocaleString()}
+              </span>
+              {" · "}
+              {shortDate(steps.date)}
+            </span>
+          </div>
+        )}
 
         {/* S67. EVERY BLOCK DEGRADES ON ITS OWN, and the first weigh-in is the
             case where that matters most: with no readings at all, the chart,
