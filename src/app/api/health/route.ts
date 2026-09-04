@@ -4,7 +4,7 @@ import { SUPABASE_ANON_KEY, SUPABASE_URL } from "@/lib/env";
 import { dailyStepTotals, healthSamples } from "@/lib/steps";
 
 /**
- * Where Apple Health steps arrive (see 0029).
+ * Where Apple Health steps arrive (schema in supabase/personal/daily-steps.sql).
  *
  * HealthKit has no web API and cannot be read while the phone is locked, so
  * nothing here can pull. What posts is Health Auto Export, running a REST
