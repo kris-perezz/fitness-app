@@ -543,14 +543,21 @@ function CustomStep({
   function boxesFrom(next: Row[]) {
     const sums = totals(next);
     return Object.fromEntries(
-      MACROS.map((field) => [
+      MACROS.filter((field) => !corrected.current.has(field)).map((field) => [
         field,
         String(field === "kcal" || field === "sodium_mg" ? Math.round(sums[field]) : round1(sums[field])),
       ]),
-    ) as Record<(typeof MACROS)[number], string>;
+    ) as Partial<Record<(typeof MACROS)[number], string>>;
   }
 
-  /** A corrected mass re-derives all six totals, with no second API call. */
+  /**
+   * Macro boxes the user has retyped since the estimate landed. A re-derived
+   * total must not overwrite a figure somebody corrected on purpose -- they
+   * know the plate and the model does not.
+   */
+  const corrected = useRef(new Set<string>());
+
+  /** A corrected mass re-derives the totals, with no second API call. */
   function reweigh(index: number, grams: string) {
     const next = rows.map((row, n) => (n === index ? { ...row, grams } : row));
     setRows(next);
@@ -583,6 +590,9 @@ function CustomStep({
 
       const e = res.estimate;
       const next = rowsFrom(e.components);
+      // A fresh estimate is a fresh set of numbers, so nothing is being
+      // protected from it any more.
+      corrected.current.clear();
       setRows(next);
       // The assumptions go into the NAME, which is where this user already
       // writes them by hand and where the day list will keep showing them. A
@@ -821,7 +831,10 @@ function CustomStep({
                 type="number"
                 inputMode="decimal"
                 value={f[key]}
-                onChange={(e) => setF({ ...f, [key]: e.target.value })}
+                onChange={(e) => {
+                  corrected.current.add(key);
+                  setF({ ...f, [key]: e.target.value });
+                }}
                 className="h-11 text-base tabular-nums"
                 placeholder="0"
               />
