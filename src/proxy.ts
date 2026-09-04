@@ -27,7 +27,13 @@ export async function proxy(request: NextRequest) {
   } = await supabase.auth.getUser();
 
   const { pathname } = request.nextUrl;
-  const isPublic = pathname.startsWith("/login") || pathname.startsWith("/auth");
+  // `/api` is public HERE and authenticated by the route itself. The phone
+  // posting its step count has no cookie to send, so without this the POST is
+  // answered with a redirect to /login and the day is silently lost.
+  const isPublic =
+    pathname.startsWith("/login") ||
+    pathname.startsWith("/auth") ||
+    pathname.startsWith("/api");
 
   if (!user && !isPublic) {
     const url = request.nextUrl.clone();
