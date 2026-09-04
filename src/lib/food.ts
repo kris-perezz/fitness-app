@@ -319,14 +319,19 @@ export type IntakeEntry = Macros & {
 
 /**
  * The log's window, in DAYS rather than the months the train and progress tabs
- * count in, because a day arrow moves a day and nobody steps back six months
- * one tap at a time. Sixty days is a season of eating, and the screen fetches
- * the next sixty while you are still two weeks from needing them.
+ * count in, because a day arrow moves one day and nobody steps back six months
+ * one tap at a time.
+ *
+ * A month is already generous for a control that moves a day at a time: at this
+ * log's density it is around 250 rows, and the window ships inside the page --
+ * on the one route the bottom nav prefetches from every other tab. The buffer
+ * is what actually has to be big enough, and a week of arrows is far longer
+ * than the query behind it takes.
  */
-export const LOG_WINDOW_DAYS = 60;
+export const LOG_WINDOW_DAYS = 30;
 
 /** Extend once you are this close to either edge of the window held. */
-export const LOG_BUFFER_DAYS = 14;
+export const LOG_BUFFER_DAYS = 7;
 
 /** Shift a YYYY-MM-DD date string by whole days. */
 export function shiftDate(date: string, days: number): string {
