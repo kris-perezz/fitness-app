@@ -335,7 +335,7 @@ function QtyStep({
             the Open Government Licence requires the acknowledgement to travel
             with the information, and this is the last screen before a CNF
             number becomes an entry. */}
-        {(food.source === "off" || food.source === "cnf") && (
+        {(food.source === "off" || food.source === "cnf" || food.derived_from === "cnf") && (
           <p className="mt-1 text-xs text-muted-foreground">{sourceHint(food.source, food.derived_from)}</p>
         )}
         <p className="mt-1 text-xs text-muted-foreground">
