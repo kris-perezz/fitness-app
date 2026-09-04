@@ -480,6 +480,16 @@ function CustomStep({
   const uploadRef = useRef<HTMLInputElement>(null);
   /** S102. The itemised plate behind the six numbers. See lib/portion.ts. */
   const [rows, setRows] = useState<Row[]>([]);
+  /**
+   * Exactly what the last estimate appended to the description, so the next one
+   * can take it back off before asking again.
+   *
+   * Without this, estimating twice sends the model its own assumptions as part
+   * of the question and the field grows a tail of them. If the user has since
+   * edited the end of the description, the suffix no longer matches and the
+   * whole field is used -- which is right, because then it is theirs again.
+   */
+  const [appended, setAppended] = useState<string | null>(null);
   const num = (v: string) => (v === "" ? 0 : Number(v));
 
   const fields: [keyof typeof f, string][] = [
@@ -492,14 +502,14 @@ function CustomStep({
   ];
 
   /**
-   * S100. Only while every number is still blank.
+   * S100. Estimating OVERWRITES, and asking again is one tap.
    *
-   * This is the whole of the overwrite design. A returned value can never land
-   * on top of something typed, re-estimating is a deliberate gesture that costs
-   * clearing the fields, and there is no confirm-before-overwrite screen to
-   * build because the situation it would guard cannot arise.
+   * The first design let an estimate land only on a blank form, so a second
+   * opinion cost clearing six boxes by hand -- and missing one of them left the
+   * button dead with nothing on screen saying which. The guard protected typed
+   * numbers from a machine that was asked to replace them, which is not a
+   * danger: pressing estimate IS the request to replace them.
    */
-  const untouched = fields.every(([key]) => f[key] === "");
 
   /** One decimal, matching what every other macro field in the app shows. */
   const round1 = (n: number) => Math.round((n + Number.EPSILON) * 10) / 10;
@@ -550,8 +560,10 @@ function CustomStep({
   function estimate() {
     const id = (attempt.current += 1);
     setEstimating(true);
+    const described =
+      appended && f.name.endsWith(appended) ? f.name.slice(0, -appended.length) : f.name;
     startEstimating(async () => {
-      const res = await estimateEntry(f.name, photo);
+      const res = await estimateEntry(described, photo);
       // Stopped, or the photo changed while this was in the air. The request
       // was still paid for; what is avoided is six numbers appearing for a
       // question the user has already moved on from. Nothing is reset here --
@@ -572,12 +584,14 @@ function CustomStep({
       const e = res.estimate;
       const next = rowsFrom(e.components);
       setRows(next);
+      // The assumptions go into the NAME, which is where this user already
+      // writes them by hand and where the day list will keep showing them. A
+      // separate panel would be a second place to look for the same thing.
+      const suffix = e.assumptions ? ` — ${e.assumptions}` : null;
+      setAppended(suffix);
       setF((prev) => ({
         ...prev,
-        // The assumptions go into the NAME, which is where this user already
-        // writes them by hand and where the day list will keep showing them.
-        // A separate panel would be a second place to look for the same thing.
-        name: e.assumptions ? `${prev.name.trim()} — ${e.assumptions}` : prev.name,
+        name: `${described.trim()}${suffix ?? ""}`,
         // Re-summed locally rather than read off `e`, even though nothing has
         // been corrected yet and the two agree to the digit. One path means a
         // first estimate and a re-weighed one cannot round differently.
@@ -714,9 +728,10 @@ function CustomStep({
           />
         )}
 
-        {/* Offered only when there is something to estimate FROM and nothing to
-            overwrite. Disabled rather than hidden: it disappearing the moment a
-            digit is typed would read as a bug.
+        {/* Dead only when there is nothing to estimate FROM -- no description
+            and no photo. Whatever is already in the boxes is not a reason to
+            refuse: a second answer to the same plate is the common request, and
+            it costs one tap.
 
             WHILE A CALL IS IN FLIGHT THIS BECOMES STOP, rather than a disabled
             spinner. A disabled control cannot be focused, so disabling the one
@@ -729,10 +744,10 @@ function CustomStep({
           variant="outline"
           className="mt-2 h-11 w-full"
           onClick={estimating ? discardInFlight : estimate}
-          disabled={!estimating && ((f.name.trim() === "" && photo === null) || !untouched)}
+          disabled={!estimating && f.name.trim() === "" && photo === null}
         >
           {estimating ? <Spinner /> : <Sparkles className="size-4" />}
-          {estimating ? "Stop" : untouched ? "Estimate these" : "Clear the numbers to re-estimate"}
+          {estimating ? "Stop" : rows.length > 0 ? "Estimate again" : "Estimate these"}
         </Button>
 
         {/* Announced rather than only drawn, so the state of a call that can
@@ -747,9 +762,10 @@ function CustomStep({
             too big, and a single prose sentence left no way to say so short of
             rejecting all six numbers.
 
-            Hidden once every field is blank, which is the "clear to re-estimate"
-            gesture -- a weight list with nothing to weigh would be a leftover. */}
-        {rows.length > 0 && !untouched && (
+            Shown for as long as there is an estimate behind the numbers. It
+            goes when the next one replaces it, and there is no state where the
+            list belongs to numbers that are no longer on screen. */}
+        {rows.length > 0 && (
           <div className="mt-4">
             <p className="text-xs text-muted-foreground">
               What it weighed. Fix one and the numbers follow.
