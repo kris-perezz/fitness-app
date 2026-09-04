@@ -363,7 +363,11 @@ function EntryDetail({
   onEditFood: (food: Food) => void;
   onSavedAsFood: () => void;
 }) {
-  const [pending, startTransition] = useTransition();
+  // One transition per action, not one for the sheet: a shared flag makes the
+  // Delete button announce "Deleting" while a save is what is actually running.
+  const [saving, startSave] = useTransition();
+  const [deleting, startDelete] = useTransition();
+  const pending = saving || deleting;
 
   return (
     <Drawer open={entry !== null} onOpenChange={(o) => !o && onClose()}>
@@ -432,7 +436,7 @@ function EntryDetail({
                     className="h-11 flex-1"
                     disabled={pending}
                     onClick={() =>
-                      startTransition(async () => {
+                      startSave(async () => {
                         const res = await saveEntryAsFood(entry.id);
                         if (res.error || !res.food) {
                           toast.error(res.error ?? "Could not save that as a food.");
@@ -453,7 +457,7 @@ function EntryDetail({
                   title={`Delete ${entry.name}?`}
                   description={`${round(entry.kcal)} calories come off ${entry.meal}. This cannot be undone.`}
                   onConfirm={() =>
-                    startTransition(async () => {
+                    startDelete(async () => {
                       const res = await deleteEntry(entry.id);
                       if (res.error) {
                         toast.error(res.error);
@@ -468,7 +472,7 @@ function EntryDetail({
                       className="h-11 flex-1 text-destructive"
                       disabled={pending}
                     >
-                      {pending ? "Deleting" : "Delete"}
+                      {deleting ? "Deleting" : "Delete"}
                     </Button>
                   }
                 />

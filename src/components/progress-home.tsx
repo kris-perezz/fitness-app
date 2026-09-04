@@ -466,7 +466,11 @@ function WeighInSheet({
 }) {
   const [value, setValue] = useState("");
   const [openedFor, setOpenedFor] = useState<string | null>(date);
-  const [pending, startTransition] = useTransition();
+  // One transition per action, not one for the sheet: a shared flag makes the
+  // Save button announce "Saving" while a delete is what is actually running.
+  const [saving, startSave] = useTransition();
+  const [deleting, startDelete] = useTransition();
+  const pending = saving || deleting;
 
   // Reset on every OPEN, and on opening a different day. Adjusted during render
   // rather than in an effect, the same call add-sheet.tsx made and for the same
@@ -498,7 +502,7 @@ function WeighInSheet({
     // Straight back to pounds, UNROUNDED. Storage is always lb (S69); rounding
     // here would make 82 kg read back as 81.99 the next time the sheet opened.
     const lb = fromDisplay(typed, unit);
-    startTransition(async () => {
+    startSave(async () => {
       const res = await saveWeighIn(date, lb, existing?.note ?? null);
       if (res.error) {
         toast.error(res.error);
@@ -511,7 +515,7 @@ function WeighInSheet({
 
   function remove() {
     if (date === null) return;
-    startTransition(async () => {
+    startDelete(async () => {
       const res = await deleteWeighIn(date);
       if (res.error) {
         toast.error(res.error);
@@ -571,7 +575,7 @@ function WeighInSheet({
             />
           )}
           <Button className="h-11 flex-1 text-base" onClick={save} disabled={pending || !value}>
-            {pending ? "Saving" : existing ? "Save" : "Log it"}
+            {saving ? "Saving" : existing ? "Save" : "Log it"}
           </Button>
         </div>
       </DrawerContent>
