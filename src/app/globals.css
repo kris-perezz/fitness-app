@@ -50,6 +50,11 @@
 }
 
 :root {
+  /* iOS paints the strip above and below the page with `theme-color`, so it has
+     to be a plain colour a meta tag can carry -- oklch() and a translucent
+     value are both dropped, and dropped means white. components/theme-color.tsx
+     copies whichever of these the active theme holds. */
+  --theme-color: #f5f5f5;
   --background: oklch(0.97 0 0);
   --foreground: oklch(0.145 0 0);
   --card: oklch(1 0 0);
@@ -85,6 +90,7 @@
 }
 
 .dark {
+  --theme-color: #0a0a0a;
   --background: oklch(0.145 0 0);
   --foreground: oklch(0.985 0 0);
   --card: oklch(0.205 0 0);
@@ -136,6 +142,8 @@
   /* Native controls and scrollbars have no CSS variables to read; without this
      they paint themselves dark on a system set to dark. */
   color-scheme: light;
+
+  --theme-color: #fbf5ef;
 
   /* Translucent, and the only theme where it is. Anything painted with
      `bg-background` -- the calendar, an outline button -- would otherwise be an

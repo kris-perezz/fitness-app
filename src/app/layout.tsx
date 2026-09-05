@@ -2,6 +2,7 @@ import type { Metadata, Viewport } from "next";
 import { Geist, Geist_Mono } from "next/font/google";
 import { BottomNav } from "@/components/bottom-nav";
 import { StrawberryOrbs } from "@/components/strawberry-orbs";
+import { ThemeColor } from "@/components/theme-color";
 import { ThemeProvider } from "@/components/theme-provider";
 import { Toaster } from "@/components/ui/sonner";
 import "./globals.css";
@@ -30,6 +31,13 @@ export const viewport: Viewport = {
   // anchored to the bottom of the screen must inset itself with
   // env(safe-area-inset-bottom), or it lands under the gesture bar.
   viewportFit: "cover",
+  // Without this iOS paints the strip above and below the page white, whatever
+  // the app is doing. These answer the SYSTEM preference; components/theme-color.tsx
+  // takes over once a theme is chosen by hand.
+  themeColor: [
+    { media: "(prefers-color-scheme: light)", color: "#f5f5f5" },
+    { media: "(prefers-color-scheme: dark)", color: "#0a0a0a" },
+  ],
   // Shrink the layout viewport when the keyboard opens instead of covering the
   // page, so dvh-sized sheets keep their action row reachable while typing.
   interactiveWidget: "resizes-content",
@@ -43,6 +51,7 @@ export default function RootLayout({ children }: LayoutProps<"/">) {
     <html lang="en" suppressHydrationWarning className={`${geistSans.variable} ${geistMono.variable} h-full antialiased`}>
       <body className="flex min-h-full flex-col">
         <ThemeProvider>
+          <ThemeColor />
           <StrawberryOrbs />
           {children}
           <BottomNav />
