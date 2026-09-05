@@ -31,6 +31,7 @@ import type { LiftPoint } from "@/lib/training";
 import { LiftChart, enoughSessions } from "@/components/lift-chart";
 import { deleteWeighIn, loadWeighInWindow, saveWeighIn } from "@/app/progress-actions";
 import { Button } from "@/components/ui/button";
+import { Card } from "@/components/ui/card";
 import { ToggleGroup, ToggleGroupItem } from "@/components/ui/toggle-group";
 import { Calendar } from "@/components/ui/calendar";
 import { ChartContainer, type ChartConfig } from "@/components/ui/chart";
@@ -196,8 +197,7 @@ export function ProgressHome({
             have already done. A pill in the title row rather than a filled bar:
             a slab across the screen outranked the trend weight, which is the one
             number this tab exists to show. */}
-        <header className="flex items-center justify-between gap-3 px-1 pt-1">
-          <h1 className="text-[28px] font-semibold leading-none tracking-[-0.02em]">Progress</h1>
+        <header className="flex items-center justify-end px-1 pt-1">
           <Button size="sm" className="h-9 rounded-full px-4" onClick={() => setEditing(today)}>
             <Scale className="size-4" /> Weigh in
           </Button>
@@ -237,7 +237,7 @@ export function ProgressHome({
 
         <PinnedLiftBlock pinned={pinned} />
 
-        <div className="card-surface flex justify-center px-2 py-3">
+        <Card className="gap-0 border border-border/60 py-0 shadow-[var(--shadow-card)] ring-0 backdrop-blur-xl flex justify-center px-2 py-3">
           <Calendar
             month={toDate(`${month}-01`)}
             onMonthChange={(next) => setMonth(monthKey(next))}
@@ -257,7 +257,7 @@ export function ProgressHome({
             mode="single"
             className="bg-transparent p-0"
           />
-        </div>
+        </Card>
 
         {monthEntries.length === 0 ? (
           <Empty className="py-12">
@@ -371,7 +371,7 @@ function Headline({
   if (head.trendLb === null) {
     const need = MIN_TREND_ENTRIES - head.entryCount;
     return (
-      <section className="card-surface px-5 py-4">
+      <Card className="gap-0 border border-border/60 py-0 shadow-[var(--shadow-card)] ring-0 backdrop-blur-xl px-5 py-4">
         {/* Labelled for the same reason the trend is, and labelled DIFFERENTLY:
             below the floor this is the scale, not a trend, and the two states
             must not look like the same number changing its mind. */}
@@ -386,12 +386,12 @@ function Headline({
           {shortDate(head.latest.date)} · {need} more {need === 1 ? "weigh-in" : "weigh-ins"} and
           this becomes a trend
         </p>
-      </section>
+      </Card>
     );
   }
 
   return (
-    <section className="card-surface px-5 py-4">
+    <Card className="gap-0 border border-border/60 py-0 shadow-[var(--shadow-card)] ring-0 backdrop-blur-xl px-5 py-4">
       {/* The big number is the trend, so it SAYS "trend". Unlabelled, a 163.0
           sitting beside a 161.8 reads as two scale readings and invites the one
           question this tab exists to answer -- which of these am I? The word
@@ -450,7 +450,7 @@ function Headline({
           )}
         </p>
       )}
-    </section>
+    </Card>
   );
 }
 
@@ -618,7 +618,7 @@ function PinnedLiftBlock({ pinned }: { pinned: PinnedLift | null }) {
   if (!pinned) return null;
 
   return (
-    <section className="card-surface px-5 py-4">
+    <Card className="gap-0 border border-border/60 py-0 shadow-[var(--shadow-card)] ring-0 backdrop-blur-xl px-5 py-4">
       <div className="flex items-baseline justify-between gap-2">
         <h2 className="text-[17px] font-semibold tracking-[-0.01em]">
           <Link href={`/exercise/${pinned.id}`} className="underline-offset-4 hover:underline">
@@ -637,7 +637,7 @@ function PinnedLiftBlock({ pinned }: { pinned: PinnedLift | null }) {
           Not enough sessions yet to draw a trend.
         </p>
       )}
-    </section>
+    </Card>
   );
 }
 
@@ -709,7 +709,7 @@ function WeightChart({
   if (entries.length < MIN_TREND_ENTRIES) return null;
 
   return (
-    <section className="card-surface px-5 py-4">
+    <Card className="gap-0 border border-border/60 py-0 shadow-[var(--shadow-card)] ring-0 backdrop-blur-xl px-5 py-4">
       <div className="flex items-center justify-between gap-3">
         <h2 className="text-[11px] font-semibold uppercase tracking-[0.08em] text-muted-foreground">
           {chartWindow(windowKey).title}
@@ -792,7 +792,7 @@ function WeightChart({
         </LineChart>
       </ChartContainer>
       </div>
-    </section>
+    </Card>
   );
 }
 

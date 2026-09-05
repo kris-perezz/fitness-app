@@ -21,6 +21,7 @@ import {
 } from "@/components/ui/chart";
 import { closeStaleWorkouts, loadTrainingWindow, openWorkoutOn } from "@/app/training-actions";
 import { Button } from "@/components/ui/button";
+import { Card } from "@/components/ui/card";
 import { Calendar } from "@/components/ui/calendar";
 import { Item, ItemActions, ItemContent, ItemDescription, ItemTitle } from "@/components/ui/item";
 import {
@@ -211,8 +212,7 @@ export function TrainHome({
             screen: a full-width slab under the notch is the loudest thing on a
             tab whose subject is the month below it, and it left the tab with no
             title at all. */}
-        <header className="flex items-center justify-between gap-3 px-1 pt-1">
-          <h1 className="text-[28px] font-semibold leading-none tracking-[-0.02em]">Train</h1>
+        <header className="flex items-center justify-end px-1 pt-1">
           {openSession ? (
             <Button size="sm" className="h-9 rounded-full px-4" asChild>
               {/* Full prefetch, not the default. A dynamic route prefetched
@@ -231,7 +231,7 @@ export function TrainHome({
           )}
         </header>
 
-        <div className="card-surface flex justify-center px-2 py-3">
+        <Card className="gap-0 border border-border/60 py-0 shadow-[var(--shadow-card)] ring-0 backdrop-blur-xl flex justify-center px-2 py-3">
           <Calendar
             month={toDate(`${month}-01`)}
             // Straight to state. There is nothing to fetch, so there is
@@ -277,7 +277,7 @@ export function TrainHome({
             mode="single"
             className="bg-transparent p-0"
           />
-        </div>
+        </Card>
 
         <MonthVolume volume={monthVolume} month={month} scale={volumeScale} />
 
@@ -460,15 +460,12 @@ function MonthVolume({
   const total = volume.reduce((t, v) => t + v.sets, 0);
 
   return (
-    <section className="card-surface px-5 py-4">
+    <Card className="gap-0 border border-border/60 py-0 shadow-[var(--shadow-card)] ring-0 backdrop-blur-xl px-5 py-4">
       <div className="flex items-baseline justify-between gap-2">
         <h2 className="text-[11px] font-semibold uppercase tracking-[0.08em] text-muted-foreground">
           Sets per muscle
         </h2>
-        <span className="text-2xl font-semibold leading-none tabular-nums">
-          {trim(total)}
-          <span className="ml-1 text-xs font-normal text-muted-foreground">total</span>
-        </span>
+        <span className="text-xs tabular-nums text-muted-foreground">{trim(total)} total</span>
       </div>
 
       {total === 0 ? (
@@ -527,12 +524,6 @@ function MonthVolume({
               // and its code did not.
               radius={[0, 6, 6, 0]}
               barSize={13}
-              // A RAIL BEHIND EVERY BAR. Thirteen of seventeen muscles are on
-              // zero in a normal month, and a zero drawn as nothing left
-              // thirteen labels pointing at blank space -- which reads as a
-              // chart that failed to load rather than as a muscle you did not
-              // train. An empty meter is still a meter.
-              background={{ fill: "var(--muted)", radius: 6 }}
               // Recharts animates a bar from its previous value to its new one,
               // so switching months slides the bars across rather than cutting.
               // That only works because the chart STAYS MOUNTED -- keying it on
@@ -557,7 +548,7 @@ function MonthVolume({
           </BarChart>
         </ChartContainer>
       )}
-    </section>
+    </Card>
   );
 }
 

@@ -24,6 +24,7 @@ import {
 } from "@/lib/food";
 import { deleteEntry, loadIntakeWindow, saveEntryAsFood } from "@/app/actions";
 import { Button } from "@/components/ui/button";
+import { Card } from "@/components/ui/card";
 import { Progress } from "@/components/ui/progress";
 import { ButtonGroup } from "@/components/ui/button-group";
 import {
@@ -214,7 +215,7 @@ export function LogScreen({
           </div>
         </header>
 
-        <section className="card-surface px-5 py-6">
+        <Card className="gap-0 border border-border/60 py-0 shadow-[var(--shadow-card)] ring-0 backdrop-blur-xl px-5 py-6">
           <CalorieRing consumed={totals.kcal} goal={calorieGoal} tone={tone} />
 
           <div className="mt-6 grid grid-cols-3 gap-2">
@@ -243,14 +244,14 @@ export function LogScreen({
               tone={tone}
             />
           </div>
-        </section>
+        </Card>
 
         {MEALS.map((meal) => {
           const items = dayEntries.filter((e) => e.meal === meal);
           const mealKcal = items.reduce((sum, e) => sum + e.kcal, 0);
 
           return (
-            <section key={meal} className="card-surface overflow-hidden">
+            <Card key={meal} className="gap-0 border border-border/60 py-0 shadow-[var(--shadow-card)] ring-0 backdrop-blur-xl">
               <div className="flex items-baseline justify-between px-5 pb-2 pt-4">
                 <h2 className="text-[17px] font-semibold tracking-[-0.01em]">{meal}</h2>
                 <span className="text-[15px] tabular-nums text-muted-foreground">
@@ -295,7 +296,7 @@ export function LogScreen({
               >
                 <Plus className="size-4" /> Add food
               </button>
-            </section>
+            </Card>
           );
         })}
       </main>

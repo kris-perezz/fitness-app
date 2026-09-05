@@ -3,6 +3,7 @@
 import { useState, useTransition } from "react";
 import { saveGoals, signOut } from "@/app/actions";
 import { Button } from "@/components/ui/button";
+import { Card } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
 import { Field, FieldGroup, FieldLabel } from "@/components/ui/field";
 import {
@@ -136,10 +137,7 @@ export function GoalsForm({ goals }: { goals: Goals }) {
       goal_rate_lb_per_week: showGoal(goals?.goal_rate_lb_per_week, startUnit),
     };
   });
-  // The pending flag is dropped with the Save button: nothing on this screen
-  // waits on a write any more, and a spinner on a field you have already left
-  // is a state nobody is looking at.
-  const [, startTransition] = useTransition();
+  const [pending, startTransition] = useTransition();
 
   const numbers = () => ({
     calorie_goal: Number(form.calorie_goal) || 0,
@@ -211,16 +209,7 @@ export function GoalsForm({ goals }: { goals: Goals }) {
     return { calorie_goal: Math.max(0, Math.round(values.calorie_goal)), ...fixed };
   }
 
-  /**
-   * Written as it is changed, with no Save button.
-   *
-   * A preferences screen with two rows on it does not need a commit step, and
-   * the button was the loudest object on the tab -- a filled bar sitting between
-   * the settings and the account rows, belonging to neither. Failure is the only
-   * thing that has to be said out loud: a toast on every keystroke's blur is
-   * noise, and a value already on screen does not need confirming.
-   */
-  function save(announce = false) {
+  function save() {
     // Blur usually reconciles first; a commit on an unbalanced form should not
     // slip a mismatched split into the database.
     const values = isBalanced(current.calorie_goal, current) ? current : reconcile("calorie_goal");
@@ -231,17 +220,13 @@ export function GoalsForm({ goals }: { goals: Goals }) {
         toast.error(res.error);
         return;
       }
-      if (announce) toast.success("Goals saved");
+      toast.success("Goals saved");
     });
   }
 
   return (
     <main className="mx-auto w-full max-w-md flex-1 space-y-3 px-4 pb-[calc(6rem+env(safe-area-inset-bottom))] pt-2">
-      <header className="px-1 pt-1">
-        <h1 className="text-[28px] font-semibold leading-none tracking-[-0.02em]">Profile</h1>
-      </header>
-
-      <div className="card-surface space-y-6 px-5 py-5">
+      <Card className="gap-0 border border-border/60 py-0 shadow-[var(--shadow-card)] ring-0 backdrop-blur-xl space-y-6 px-5 py-5">
         {/* S75/S79. FIRST ON THE SCREEN, because it now decides what the rest
             of the screen is for: with it off there are no macro targets to set,
             so a form full of them would be asking for numbers nothing reads.
@@ -265,14 +250,7 @@ export function GoalsForm({ goals }: { goals: Goals }) {
                 this off.
               </FieldHint>
             </div>
-            <Switch
-              id="strict_mode"
-              checked={strict}
-              onCheckedChange={(next) => {
-                setStrict(next);
-                save();
-              }}
-            />
+            <Switch id="strict_mode" checked={strict} onCheckedChange={setStrict} />
           </Field>
         </FieldGroup>
 
@@ -299,10 +277,7 @@ export function GoalsForm({ goals }: { goals: Goals }) {
                 inputMode="decimal"
                 value={form.calorie_goal}
                 onChange={(e) => setForm({ ...form, calorie_goal: e.target.value })}
-                onBlur={() => {
-                  reconcile("calorie_goal");
-                  save();
-                }}
+                onBlur={() => reconcile("calorie_goal")}
                 className="h-12 text-base tabular-nums"
               />
             </Field>
@@ -341,10 +316,7 @@ export function GoalsForm({ goals }: { goals: Goals }) {
                       inputMode="decimal"
                       value={form[key]}
                       onChange={(e) => setForm({ ...form, [key]: e.target.value })}
-                      onBlur={() => {
-                        reconcile(key);
-                        save();
-                      }}
+                      onBlur={() => reconcile(key)}
                       className="h-12 text-base tabular-nums"
                     />
                   </Field>
@@ -388,7 +360,6 @@ export function GoalsForm({ goals }: { goals: Goals }) {
                   inputMode="decimal"
                   value={form.goal_weight_lb}
                   onChange={(e) => setForm({ ...form, goal_weight_lb: e.target.value })}
-                  onBlur={() => save()}
                   placeholder="None"
                   className="h-12 text-base tabular-nums"
                 />
@@ -406,7 +377,6 @@ export function GoalsForm({ goals }: { goals: Goals }) {
                   inputMode="decimal"
                   value={form.goal_rate_lb_per_week}
                   onChange={(e) => setForm({ ...form, goal_rate_lb_per_week: e.target.value })}
-                  onBlur={() => save()}
                   placeholder="None"
                   className="h-12 text-base tabular-nums"
                 />
@@ -435,11 +405,7 @@ export function GoalsForm({ goals }: { goals: Goals }) {
               size="sm"
               className="gap-0 rounded-full bg-muted/60 p-0.5"
               value={unit}
-              onValueChange={(next) => {
-                if (!next) return;
-                switchUnit(next as DisplayUnit);
-                save();
-              }}
+              onValueChange={(next) => next && switchUnit(next as DisplayUnit)}
               aria-label="Weight unit"
             >
               <ToggleGroupItem
@@ -458,12 +424,15 @@ export function GoalsForm({ goals }: { goals: Goals }) {
           </div>
         </FieldGroup>
 
-      </div>
+        <Button className="h-11 w-full text-base" onClick={save} disabled={pending}>
+          {pending ? "Saving" : "Save"}
+        </Button>
+      </Card>
 
       {/* Account, in its own card. Three full-width controls of three different
           weights stacked down the middle was the shape of an unstyled form; two
           list rows with a divider is what a settings screen looks like. */}
-      <div className="card-surface divide-y divide-border/60 overflow-hidden">
+      <Card className="gap-0 border border-border/60 py-0 shadow-[var(--shadow-card)] ring-0 backdrop-blur-xl divide-y divide-border/60">
         <ThemeToggle />
         <form action={signOut}>
           <Button
@@ -474,11 +443,8 @@ export function GoalsForm({ goals }: { goals: Goals }) {
             <LogOut className="size-4" /> Sign out
           </Button>
         </form>
-      </div>
+      </Card>
 
-      <p className="px-1 pb-2 text-center text-[11px] text-muted-foreground">
-        Saved as you change it.
-      </p>
     </main>
   );
 }

@@ -335,20 +335,6 @@
  * last of a scrolling list -- has to clear it. max() keeps a sane minimum on
  * hardware that has no inset at all.
  */
-/*
- * The one card shell, so every section on every tab is the same object. A
- * translucent surface is a MATERIAL, and a material needs an edge and a shadow
- * to read as one -- frosted glass lying flat on the page reads as a rendering
- * bug rather than as a pane above it.
- */
-@utility card-surface {
-  border-radius: var(--radius-xl);
-  border: 1px solid color-mix(in oklch, var(--border) 60%, transparent);
-  background-color: var(--card);
-  box-shadow: var(--shadow-card);
-  backdrop-filter: blur(16px);
-}
-
 @utility pb-safe {
   padding-bottom: max(1rem, env(safe-area-inset-bottom));
 }
