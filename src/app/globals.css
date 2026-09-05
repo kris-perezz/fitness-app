@@ -187,14 +187,19 @@
 /*
  * The drifting strawberry field behind the matcha theme (components/strawberry-orbs.tsx).
  *
- * Each orb is smaller than the viewport and holds a solid core out to about 40%
- * of its radius before falling off, so it reads as a shape rather than as haze.
- * The blur is what softens the edge; the gradient alone just makes fog.
+ * Ellipses rather than circles, on a slow turn: a blurred circle looks the same
+ * from every angle, so moving one only ever reads as a blob crossing the screen.
+ * A turning ellipse changes its own outline, which reads as light instead.
  *
- * The track moves left and right, the orb inside it moves up and down and
- * breathes, and the two periods do not divide into each other -- that is what
- * turns two straight loops into a wander. Durations are all coprime for the same
- * reason: four orbs on tidy multiples resynchronise in front of you.
+ * The core is soft here and hard in an earlier version of this file for a
+ * reason: a defined edge is what a shape needs, and a shape is what a BACKGROUND
+ * must not be. The size does the separating now -- each orb is well under the
+ * viewport, so the overlaps stay legible without any of them having a rim.
+ *
+ * The track carries the sway and the rotation, the orb inside carries the rise
+ * and the breathing, and the two periods do not divide into each other -- that
+ * is what turns two loops into a wander. Durations are coprime for the same
+ * reason: three orbs on tidy multiples resynchronise in front of you.
  *
  * ONLY `transform` is animated. Blur is expensive to paint and cheap to reuse,
  * so each orb is painted once and then moved by the compositor; animating the
@@ -210,9 +215,9 @@
 
 .orb {
   width: 100%;
-  height: 100%;
-  border-radius: 9999px;
-  filter: blur(34px);
+  height: 76%;
+  border-radius: 50%;
+  filter: blur(56px);
   will-change: transform;
   animation: orb-rise 17s ease-in-out infinite;
 }
@@ -231,34 +236,49 @@
   animation-delay: -7s;
 }
 
-
+/* Three tones of one colour rather than three colours. The hue walks from rose
+   to coral across the set, which is what keeps the overlaps from going grey. */
 .orb-a {
-  background: radial-gradient(closest-side, oklch(0.805 0.094 5.9 / 42%) 42%, transparent);
+  background: radial-gradient(closest-side, oklch(0.8 0.1 8 / 40%), transparent);
   animation-duration: 17s;
 }
 
 .orb-b {
-  background: radial-gradient(closest-side, oklch(0.86 0.07 3 / 40%) 44%, transparent);
+  background: radial-gradient(closest-side, oklch(0.85 0.075 18 / 34%), transparent);
   animation-duration: 13s;
   animation-delay: -5s;
 }
 
-/* Palest of the three, so the overlaps still build up rather than flatten. */
 .orb-c {
-  background: radial-gradient(closest-side, oklch(0.88 0.055 4 / 34%) 40%, transparent);
+  background: radial-gradient(closest-side, oklch(0.83 0.085 355 / 32%), transparent);
   animation-duration: 26s;
   animation-delay: -9s;
   animation-direction: reverse;
 }
 
+/*
+ * Grain. A wide soft gradient is the one case 8-bit colour cannot describe: the
+ * steps between neighbouring tones sit far enough apart to draw visible rings,
+ * and phone panels show it worst. Scattering the boundary is the whole fix.
+ *
+ * Static, and deliberately so -- animated noise is a full-screen repaint every
+ * frame, and it reads as a broken screen rather than as texture.
+ */
+.orb-grain {
+  position: absolute;
+  inset: 0;
+  opacity: 0.4;
+  mix-blend-mode: soft-light;
+  background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='140' height='140'%3E%3Cfilter id='n'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='0.85' numOctaves='3' stitchTiles='stitch'/%3E%3C/filter%3E%3Crect width='140' height='140' filter='url(%23n)'/%3E%3C/svg%3E");
+}
 
 @keyframes orb-sway {
   0%,
   100% {
-    transform: translate3d(-11vw, 0, 0);
+    transform: translate3d(-11vw, 0, 0) rotate(-14deg);
   }
   50% {
-    transform: translate3d(15vw, 0, 0);
+    transform: translate3d(15vw, 0, 0) rotate(16deg);
   }
 }
 
@@ -274,139 +294,12 @@
   }
 }
 
-/*
- * Boba and sago in the strawberry field (components/strawberry-orbs.tsx).
- *
- * They SINK. Tapioca is denser than the drink around it, so the resting state is
- * a heap on the floor and the only pearls moving are the ones still falling. The
- * floor sits on top of the nav bar, which is where the glass ends -- below that
- * is the phone, not the drink.
- *
- * A pearl is a real sphere and not a flat dot: the highlight sits off-centre,
- * which is the only thing that stops a small circle reading as a bullet point.
- */
-.pearl-bed {
-  position: absolute;
-  inset-inline: 0;
-  bottom: calc(3.6rem + env(safe-area-inset-bottom));
-  height: 2rem;
-}
-
-.pearl-bed .pearl {
-  position: absolute;
-  aspect-ratio: 1;
-}
-
-.pearl-fall {
-  position: absolute;
-  top: 0;
-  aspect-ratio: 1;
-  will-change: transform;
-  animation-name: pearl-sink;
-  animation-timing-function: linear;
-  animation-iteration-count: infinite;
-}
-
-.pearl {
-  width: 100%;
-  height: 100%;
-  border-radius: 9999px;
-  will-change: transform;
-}
-
-.pearl-boba {
-  background: radial-gradient(
-    circle at 34% 30%,
-    oklch(0.42 0.05 45 / 48%),
-    oklch(0.24 0.035 40 / 46%) 60%
-  );
-}
-
-.pearl-sago {
-  background: radial-gradient(
-    circle at 34% 30%,
-    oklch(0.99 0.01 5 / 58%),
-    oklch(0.9 0.045 5 / 45%) 65%
-  );
-}
-
-/* Settled, not frozen. A pearl in a glass is nudged by everything around it --
-   a couple of pixels, slowly, and no two on the same beat. */
-.bob-a {
-  animation: pearl-bob 11s ease-in-out infinite;
-}
-
-.bob-b {
-  animation: pearl-bob 14s ease-in-out infinite reverse;
-}
-
-.bob-c {
-  animation: pearl-bob 9s ease-in-out -4s infinite;
-}
-
-.drift-a {
-  animation: pearl-drift 6s ease-in-out infinite;
-}
-
-.drift-b {
-  animation: pearl-drift 8s ease-in-out infinite reverse;
-}
-
-/* Ends where the bed begins. `100vh` would carry a pearl through the floor and
-   out the bottom of the glass; this stops it in the heap and hands the last of
-   the descent to a fade, so nothing pops out of existence mid-screen. */
-@keyframes pearl-sink {
-  0% {
-    transform: translate3d(0, -8vh, 0);
-    opacity: 0;
-  }
-  12% {
-    opacity: 1;
-  }
-  88% {
-    opacity: 1;
-  }
-  100% {
-    transform: translate3d(0, calc(100vh - 5rem), 0);
-    opacity: 0;
-  }
-}
-
-/* Falling pearls wander sideways on the way down; settled ones only breathe. */
-@keyframes pearl-drift {
-  0%,
-  100% {
-    transform: translate3d(-1.6vw, 0, 0);
-  }
-  50% {
-    transform: translate3d(1.6vw, 0, 0);
-  }
-}
-
-@keyframes pearl-bob {
-  0%,
-  100% {
-    transform: translate3d(-1px, 0, 0);
-  }
-  50% {
-    transform: translate3d(1px, -2px, 0);
-  }
-}
-
 /* The colour stays, the movement goes -- the tint is the point and it is not
    what anybody asked to be spared. */
 @media (prefers-reduced-motion: reduce) {
   .orb,
-  .orb-track,
-  .pearl,
-  .pearl-fall {
+  .orb-track {
     animation: none;
-  }
-  /* The falling ones are mid-air with nothing to hold them up, and a pearl
-     hanging in a drink is wrong in a way stillness is not. They go; the heap on
-     the floor is the resting state anyway. */
-  .pearl-fall {
-    display: none;
   }
 }
 
