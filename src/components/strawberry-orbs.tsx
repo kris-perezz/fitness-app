@@ -26,6 +26,12 @@
  * A little noise scatters the boundary between two bands so neither one has an
  * edge. It is a static layer -- painted once, never animated.
  *
+ * THE FIELD FADES OUT AT BOTH EDGES. iOS paints the strip above and below the
+ * viewport with `theme-color`, which is one flat value and cannot know an orb is
+ * currently sitting against the top of the page. Tinted page against untinted
+ * strip is a seam at the notch. Fading the field to nothing over the first and
+ * last few rem means the page meets those strips on exactly the colour they are.
+ *
  * Rendered in every theme and REVEALED BY CSS rather than by reading the active
  * theme in React. next-themes only knows which theme is on after hydration, so
  * a conditional render would blank the background for a frame on every load.
@@ -45,7 +51,7 @@ export function StrawberryOrbs() {
       aria-hidden
       // Fixed and clipped: the orbs hang off every edge by design, and without
       // the clip they would give the page a horizontal scrollbar.
-      className="pointer-events-none fixed inset-0 -z-10 hidden overflow-hidden matcha:block"
+      className="orb-field pointer-events-none fixed inset-0 -z-10 hidden overflow-hidden matcha:block"
     >
       {ORBS.map(({ track, orb, style }) => (
         <div key={orb} className={`orb-track ${track}`} style={style}>

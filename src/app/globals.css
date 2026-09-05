@@ -206,6 +206,26 @@
  * filter, the opacity or the gradient instead would repaint a full-screen blur
  * every frame and cost the scroll its smoothness.
  */
+/* The page has to reach `--theme-color` at the top and bottom edges, because
+   that is the flat colour iOS paints the strips outside the viewport with and it
+   cannot follow a moving orb. Anything short of a fade is a visible seam. */
+.orb-field {
+  -webkit-mask-image: linear-gradient(
+    to bottom,
+    transparent 0,
+    black 5rem,
+    black calc(100% - 5rem),
+    transparent 100%
+  );
+  mask-image: linear-gradient(
+    to bottom,
+    transparent 0,
+    black 5rem,
+    black calc(100% - 5rem),
+    transparent 100%
+  );
+}
+
 .orb-track {
   position: absolute;
   aspect-ratio: 1;
