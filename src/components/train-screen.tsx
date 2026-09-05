@@ -157,7 +157,7 @@ export function TrainScreen({
     <>
       <main className="mx-auto w-full max-w-md flex-1 pb-[calc(6rem+env(safe-area-inset-bottom))]">
         <header className="flex items-center gap-1 border-b border-border px-2 py-2">
-          <Button size="icon" variant="ghost" aria-label="All sessions" asChild>
+          <Button size="icon-xl" variant="ghost" aria-label="All sessions" asChild>
             {/* ?browse=1, because /train sends you back into an open session on
                 sight (S26). Without it this chevron would bounce straight here
                 again and the calendar would be unreachable mid-workout. */}
@@ -259,9 +259,8 @@ export function TrainScreen({
               onConfirm={() => run(() => discardWorkout(workout.id), () => router.push("/train"))}
               trigger={
                 <Button
-                  variant="outline"
-                  size="icon"
-                  className="h-11 text-destructive"
+                  size="icon-xl"
+                  variant="destructive"
                   aria-label={allSets === 0 ? "Discard session" : "Delete session"}
                   disabled={pending}
                 >
@@ -395,7 +394,7 @@ function SlotSection({
           }
           trigger={
             <Button
-              size="icon"
+              size="icon-xl"
               variant="ghost"
               className="shrink-0 text-muted-foreground"
               aria-label={`Remove ${slot.name}`}
@@ -453,9 +452,9 @@ function SlotSection({
                   {/* 44px, not the 28px an icon-sm gives: this is the app's own
                       floor, stated in bottom-nav.tsx, and it sits on every set. */}
                   <Button
-                    size="icon"
+                    size="icon-xl"
                     variant="ghost"
-                    className="size-11 text-muted-foreground"
+                    className="text-muted-foreground"
                     aria-label={`Edit set ${set.set_index + 1}`}
                     onClick={() => setEditing(set)}
                   >
@@ -751,7 +750,7 @@ function SetForm({
           onPressedChange={setWarmup}
           variant="outline"
           aria-label="Log this as a warm-up set"
-          className="h-10 gap-1.5 px-3 data-[state=on]:border-primary data-[state=on]:bg-primary data-[state=on]:text-primary-foreground data-[state=on]:hover:bg-primary"
+          className="h-10 gap-1.5 px-3"
         >
           {warmup ? <Check /> : <Flame />}
           Warm-up
@@ -760,9 +759,8 @@ function SetForm({
         <ButtonGroup className="ml-auto">
           {onDelete && (
             <Button
-              variant="outline"
-              size="icon"
-              className="h-10 text-destructive"
+              size="icon-xl"
+              variant="destructive"
               aria-label="Delete this set"
               onClick={onDelete}
             >

@@ -68,7 +68,7 @@ export function TrendsScreen({
   return (
     <main className="mx-auto w-full max-w-md flex-1 pb-[calc(6rem+env(safe-area-inset-bottom))]">
       <header className="flex items-center gap-1 border-b border-border px-2 py-2">
-        <Button size="icon" variant="ghost" aria-label="Back to the log" asChild>
+        <Button size="icon-xl" variant="ghost" aria-label="Back to the log" asChild>
           <Link href="/log">
             <ChevronLeft className="size-5" />
           </Link>

@@ -201,7 +201,7 @@ export function TrainHome({
 
   return (
     <>
-      <main className="mx-auto w-full max-w-md flex-1 space-y-2 px-3 pb-[calc(6rem+env(safe-area-inset-bottom))] pt-2">
+      <main className="mx-auto w-full max-w-md flex-1 space-y-3 px-4 pb-[calc(6rem+env(safe-area-inset-bottom))] pt-2">
         {/* The primary action sits ABOVE the calendar and the list. It was under
             the list until a month with thirty sessions made the point: the one
             thing you came here to do should not be reachable only by scrolling
@@ -275,7 +275,7 @@ export function TrainHome({
             }}
             onSelect={(day) => day && open(dateKey(day))}
             mode="single"
-            className="bg-transparent p-0"
+            className="bg-transparent p-0 [--cell-size:--spacing(11)]"
           />
         </Card>
 
@@ -383,7 +383,7 @@ function PickDay({
             // is not offered in the first place.
             disabled={{ after: toDate(today) }}
             defaultMonth={toDate(today)}
-            className="bg-transparent p-0"
+            className="bg-transparent p-0 [--cell-size:--spacing(11)]"
           />
         </div>
 
@@ -482,7 +482,7 @@ function MonthVolume({
             // Room on the right for the value labels, which sit outside the
             // bar end rather than inside it -- inside, a short bar has nowhere
             // to put its number and a zero has no bar at all.
-            margin={{ left: 0, right: 22, top: 2, bottom: 2 }}
+            margin={{ left: 0, right: 24 }}
           >
             {/* Hidden because every bar is labelled with its own figure. An
                 axis AND a number on each bar would be the same information
@@ -505,7 +505,7 @@ function MonthVolume({
               interval={0}
               // Wide enough for "Upper back" on ONE line: at 78 it wrapped to
               // two and stopped lining up with its own bar.
-              width={84}
+              width={92}
               // Set on the tick rather than by className: recharts renders SVG
               // <text>, which a Tailwind font-size class does not reach.
               tick={AXIS_TICK}
@@ -523,7 +523,7 @@ function MonthVolume({
               // longer than they are; the earlier version's comment said this
               // and its code did not.
               radius={[0, 6, 6, 0]}
-              barSize={10}
+              barSize={13}
               // Recharts animates a bar from its previous value to its new one,
               // so switching months slides the bars across rather than cutting.
               // That only works because the chart STAYS MOUNTED -- keying it on

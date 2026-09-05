@@ -191,7 +191,7 @@ export function ProgressHome({
 
   return (
     <>
-      <main className="mx-auto w-full max-w-md flex-1 space-y-2 px-3 pb-[calc(6rem+env(safe-area-inset-bottom))] pt-2">
+      <main className="mx-auto w-full max-w-md flex-1 space-y-3 px-4 pb-[calc(6rem+env(safe-area-inset-bottom))] pt-2">
         {/* The primary action sits above everything, same as the train tab: the
             thing you came to do is not reachable only by scrolling past what you
             have already done. A pill in the title row rather than a filled bar:
@@ -255,7 +255,7 @@ export function ProgressHome({
             }}
             onSelect={(day) => day && setEditing(dateKey(day))}
             mode="single"
-            className="bg-transparent p-0"
+            className="bg-transparent p-0 [--cell-size:--spacing(11)]"
           />
         </Card>
 
@@ -582,7 +582,7 @@ function WeighInSheet({
           {existing && (
             <ConfirmAction
               trigger={
-                <Button variant="ghost" size="icon" className="size-11 shrink-0" aria-label="Delete">
+                <Button variant="ghost" size="icon-xl" className="size-11 shrink-0" aria-label="Delete">
                   <Trash2 className="size-4" />
                 </Button>
               }
@@ -732,7 +732,7 @@ function WeightChart({
             <ToggleGroupItem
               key={w.key}
               value={w.key}
-              className="rounded-full border-0 px-3 text-xs data-[state=on]:bg-card data-[state=on]:shadow-sm"
+              className="rounded-full border-0 px-3 text-xs"
             >
               {w.label}
             </ToggleGroupItem>

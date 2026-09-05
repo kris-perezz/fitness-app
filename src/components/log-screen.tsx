@@ -25,7 +25,6 @@ import {
 import { deleteEntry, loadIntakeWindow, saveEntryAsFood } from "@/app/actions";
 import { Button } from "@/components/ui/button";
 import { Card } from "@/components/ui/card";
-import { Progress } from "@/components/ui/progress";
 import { ButtonGroup } from "@/components/ui/button-group";
 import {
   Drawer,
@@ -42,7 +41,7 @@ import {
   ItemTitle,
 } from "@/components/ui/item";
 import { cn } from "@/lib/utils";
-import { fillPercent, isAlarming, statusOf, type Metric, type Tone } from "@/lib/tone";
+import { statusOf, toneOf, type Metric, type Paint, type Tone } from "@/lib/tone";
 import { AddSheet } from "@/components/add-sheet";
 import { ConfirmAction } from "@/components/confirm-action";
 import { EditFoodSheet } from "@/components/edit-food-sheet";
@@ -172,10 +171,10 @@ export function LogScreen({
 
   return (
     <>
-      <main className="mx-auto w-full max-w-md flex-1 space-y-2 px-3 pb-[calc(6rem+env(safe-area-inset-bottom))] pt-2">
+      <main className="mx-auto w-full max-w-md flex-1 space-y-3 px-4 pb-[calc(6rem+env(safe-area-inset-bottom))] pt-2">
         <header className="flex items-center gap-1 px-1 py-1">
           <Button
-            size="icon"
+            size="icon-xl"
             variant="ghost"
             aria-label="Previous day"
             onClick={() => setDate(shiftDate(date, -1))}
@@ -189,7 +188,7 @@ export function LogScreen({
 
           <div className="flex items-center gap-0.5">
             <Button
-              size="icon"
+              size="icon-xl"
               variant="ghost"
               aria-label="Next day"
               disabled={date >= today}
@@ -202,12 +201,12 @@ export function LogScreen({
                 They sit after the day arrows because they are not part of them
                 -- and Trends sits last because it is the one that leaves
                 today behind entirely. */}
-            <Button size="icon" variant="ghost" aria-label="Recipes" asChild>
+            <Button size="icon-xl" variant="ghost" aria-label="Recipes" asChild>
               <Link href="/recipes">
                 <CookingPot className="size-5" />
               </Link>
             </Button>
-            <Button size="icon" variant="ghost" aria-label="Trends" asChild>
+            <Button size="icon-xl" variant="ghost" aria-label="Trends" asChild>
               <Link href="/trends">
                 <ChartNoAxesColumn className="size-5" />
               </Link>
@@ -216,7 +215,7 @@ export function LogScreen({
         </header>
 
         <Card className="gap-0 border border-border/60 py-0 shadow-[var(--shadow-card)] ring-0 backdrop-blur-xl px-4 py-4">
-          <CalorieRing consumed={totals.kcal} goal={calorieGoal} tone={tone} />
+          <CalorieRing consumed={totals.kcal} goal={calorieGoal} finished={finished} tone={tone} />
 
           <div className="mt-4 grid grid-cols-3 gap-2">
             <MacroMeter
@@ -353,6 +352,18 @@ export function LogScreen({
  * still exist, still drive the calorie split, and still come back the moment
  * strict is on; the calm screen just does not grade you against them.
  */
+/**
+ * What each status looks like and, more importantly, what it SAYS. Colour is
+ * never the only carrier (S76): the ring has said its overshoot in words since
+ * it was written, and the macros under it did not.
+ */
+const PAINT: Record<Paint, { text: string; word: string }> = {
+  none: { text: "", word: "" },
+  good: { text: "text-success", word: "met" },
+  warn: { text: "text-warning", word: "short" },
+  bad: { text: "text-destructive", word: "over" },
+};
+
 function MacroMeter({
   label,
   metric,
@@ -372,18 +383,19 @@ function MacroMeter({
   // S79. The goal is a strict-mode idea. Resolved HERE rather than at the three
   // call sites so there is one place that can ever decide to grade a macro.
   const against = tone === "strict" ? goal : null;
-  const alarming = isAlarming(metric, statusOf(metric, value, against, finished), tone);
+  const paint = toneOf(metric, statusOf(metric, value, against, finished), tone);
+  const said = PAINT[paint];
 
   return (
     // A TILE, not a line. Label-left value-right across a third of the width put
     // two 12px words at opposite ends of a cell with nothing between them, so
     // the three of them read across as one run-on string rather than as three
     // separate figures. Bounds and a stack are what separate them.
-    <div className="rounded-lg bg-muted/40 px-2 py-2 text-center">
+    <div className="py-1 text-center">
       <div className="text-[11px] uppercase tracking-[0.06em] text-muted-foreground">
         {label}
       </div>
-      <div className="mt-1 text-xl font-semibold leading-none tabular-nums">
+      <div className={cn("mt-1 text-xl font-semibold leading-none tabular-nums", said.text)}>
         {round(value)}
         {against === null ? (
           <span className="text-xs font-normal text-muted-foreground">g</span>
@@ -391,22 +403,12 @@ function MacroMeter({
           <span className="text-xs font-normal text-muted-foreground">/{round(against)}g</span>
         )}
       </div>
-      {/* The registry's Progress, not a hand-built bar. It carries the
-          progressbar role and its aria-valuenow, which two divs and an inline
-          width never did.
-
-          Absent entirely without a goal, rather than sitting there at zero: a
-          bar with nothing to fill against is a progressbar whose aria-valuenow
-          is a lie, and visually it reads as a day you have not started. */}
-      {against !== null && (
-        <Progress
-          value={fillPercent(value, against)}
-          aria-label={`${label}: ${round(value)} of ${round(against)} grams`}
-          className={cn(
-            "mt-2 h-1",
-            alarming && "[&>[data-slot=progress-indicator]]:bg-destructive",
-          )}
-        />
+      {/* S76 IN THE MACROS, WHICH ONLY THE RING WAS HONOURING. A 1px bar was
+          the whole of the signal, its track sat at 1.1:1 against the tile, and
+          the colour said nothing to anybody reading in greyscale or listening.
+          The word carries it now, and the number carries the hue. */}
+      {said.word && (
+        <div className={cn("mt-0.5 text-[10px] font-medium", said.text)}>{said.word}</div>
       )}
     </div>
   );

@@ -38,7 +38,7 @@ export function ThemeToggle() {
           <ChevronRight className="ml-auto size-4 text-muted-foreground" />
         </Button>
       </DropdownMenuTrigger>
-      <DropdownMenuContent align="start" className="w-[--radix-dropdown-menu-trigger-width]">
+      <DropdownMenuContent align="start" className="w-(--radix-dropdown-menu-trigger-width)">
         {OPTIONS.map(({ value, label, icon: Icon }) => (
           <DropdownMenuItem
             key={value}

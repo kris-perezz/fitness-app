@@ -23,7 +23,7 @@
 export type Direction =
   /** Missable in both directions. Calories. */
   | "target"
-  /** More is fine, forever. Protein, fat, fibre. */
+  /** More is fine, forever. Protein and fibre. */
   | "floor"
   /** Less is better and past it is a real warning. Sodium, and only sodium. */
   | "ceiling";
@@ -42,7 +42,12 @@ export const DIRECTION: Record<Metric, Direction> = {
   calories: "target",
   protein: "floor",
   carbs: "target",
-  fat: "floor",
+  // FAT IS A TARGET, for the same reason carbs are and against what S72 says.
+  // goals.ts splits one calorie number three ways and refuses to save a split
+  // that does not add up, so grams of fat are a share rather than a minimum --
+  // 131 g against a 54 g share is 693 kcal, a third of the day, and calling it
+  // a floor was what made carbs the only macro that could ever turn red.
+  fat: "target",
   fibre: "floor",
   // The one genuine health limit in the app (S73), and keeping the exception to
   // exactly one is what preserves the meaning of red.
@@ -94,17 +99,45 @@ export function statusOf(
 }
 
 /**
- * Does this status get painted `destructive`?
+ * What a status is painted, for every metric and both tones.
  *
- * In calm mode: only a ceiling, ever (S70 and its single exception S73). A
- * second exception is how a calm app becomes a strict one by accretion, so the
- * ceiling check is on the METRIC rather than on the status -- an `over` from a
- * calorie target cannot reach this branch by accident.
+ * `met` and `short` were computed by `statusOf` and read by nothing, so strict
+ * mode could only ever say that something went wrong. A mode that has no way to
+ * say "that landed" is a mode that only punishes, which is not what S79 asked
+ * for -- the ask was that strict STATES the numbers, and one of the things the
+ * numbers say is that you hit it.
+ *
+ * In calm mode: still only a ceiling, ever (S70 and its single exception S73).
+ * A second exception is how a calm app becomes a strict one by accretion, so
+ * the ceiling check is on the METRIC rather than on the status -- an `over`
+ * from a calorie target cannot reach this branch by accident. Calm's behaviour
+ * is unchanged by any of this.
  */
+export type Paint = "none" | "good" | "warn" | "bad";
+
+export function toneOf(metric: Metric, status: Status, tone: Tone = "calm"): Paint {
+  if (DIRECTION[metric] === "ceiling") return status === "over" ? "bad" : "none";
+  if (tone !== "strict") return "none";
+
+  switch (status) {
+    case "met":
+      return "good";
+    // A floor cannot return `over` (see statusOf), so this only ever fires for
+    // a target -- where past it IS the wrong direction.
+    case "over":
+      return "bad";
+    // AMBER, NOT RED. A protein floor missed on a finished day is worth saying
+    // and is not a health event; red stays with the ceiling and with the
+    // actions that destroy data.
+    case "short":
+      return "warn";
+    default:
+      return "none";
+  }
+}
+
 export function isAlarming(metric: Metric, status: Status, tone: Tone = "calm"): boolean {
-  if (status !== "over") return false;
-  if (DIRECTION[metric] === "ceiling") return true;
-  return tone === "strict";
+  return toneOf(metric, status, tone) === "bad";
 }
 
 /**

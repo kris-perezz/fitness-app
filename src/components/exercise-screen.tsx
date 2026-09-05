@@ -68,7 +68,7 @@ export function ExerciseScreen({
   return (
     <main className="mx-auto w-full max-w-md flex-1 pb-[calc(6rem+env(safe-area-inset-bottom))]">
       <header className="flex items-center gap-1 border-b border-border px-2 py-2">
-        <Button size="icon" variant="ghost" aria-label="Back to training" asChild>
+        <Button size="icon-xl" variant="ghost" aria-label="Back to training" asChild>
           <Link href="/train">
             <ChevronLeft className="size-5" />
           </Link>
@@ -77,7 +77,7 @@ export function ExerciseScreen({
         {/* Pushed to the right so it does not sit against the back arrow: it is
             a setting, not part of navigation. */}
         <Button
-          size="icon"
+          size="icon-xl"
           variant="ghost"
           className="ml-auto"
           onClick={togglePin}
