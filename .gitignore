@@ -50,3 +50,5 @@ CLAUDE.md
 # Personal, one-time data imports. One person's history, run by hand in the
 # Supabase SQL Editor -- never schema, never replayed on another database.
 supabase/personal/
+
+.vercel

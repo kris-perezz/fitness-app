@@ -434,7 +434,18 @@ function LabelStep({
       return;
     }
 
-    const res = await readLabel(image);
+    // The action returns its failures as values, but the call itself can still
+    // reject -- a dropped connection mid-upload, or a body the server refuses.
+    // Unhandled, that rejection has no boundary above it and replaces the whole
+    // app with the server error page, losing the meal being logged.
+    let res: Awaited<ReturnType<typeof readLabel>>;
+    try {
+      res = await readLabel(image);
+    } catch {
+      setPhase({ kind: "failed", message: "That photo could not be sent. Try again." });
+      return;
+    }
+
     if (res.status === "found") loadDraft(res.draft, res.warning);
     else setPhase({ kind: "failed", message: res.message });
   }
