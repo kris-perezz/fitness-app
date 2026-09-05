@@ -137,7 +137,12 @@
      they paint themselves dark on a system set to dark. */
   color-scheme: light;
 
-  --background: oklch(0.973 0.01 67.7);
+  /* Translucent, and the only theme where it is. Anything painted with
+     `bg-background` -- the calendar, an outline button -- would otherwise be an
+     opaque cream block sitting on top of the orbs, which is the shape you
+     notice instead of the drift. The page's own ground is `--page` below. */
+  --background: oklch(0.973 0.01 67.7 / 72%);
+  --page: oklch(0.973 0.01 67.7);
   --foreground: oklch(0.239 0 90);
   --card: oklch(0.994 0.006 84.6);
   --card-foreground: oklch(0.239 0 90);
@@ -261,7 +266,12 @@
      that paint sits ON TOP of a negative z-index child. So this theme colours
      <html> instead, which is what leaves room underneath for the orbs. */
   .strawberry-matcha {
-    background-color: var(--background);
+    background-color: var(--page);
+  }
+  /* The nav covers content on purpose (see bottom-nav.tsx), so it takes the
+     opaque ground rather than the translucent surface everything else uses. */
+  .strawberry-matcha [data-slot="nav-bar"] {
+    background-color: color-mix(in oklch, var(--page) 88%, transparent);
   }
   .strawberry-matcha body {
     background-color: transparent;
