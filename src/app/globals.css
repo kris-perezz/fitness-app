@@ -267,22 +267,34 @@
 }
 
 /*
- * Boba and sago rising through the field (components/strawberry-orbs.tsx).
+ * Boba and sago in the strawberry field (components/strawberry-orbs.tsx).
  *
- * The column carries the rise and the pearl inside it carries the sway, for the
- * same reason the orbs are split: one track is a straight line, two is a drift.
- * Negative delays start every pearl mid-flight, so nothing waits below the fold
- * for its first pass.
+ * They SINK. Tapioca is denser than the drink around it, so the resting state is
+ * a heap on the floor and the only pearls moving are the ones still falling. The
+ * floor sits on top of the nav bar, which is where the glass ends -- below that
+ * is the phone, not the drink.
  *
  * A pearl is a real sphere and not a flat dot: the highlight sits off-centre,
  * which is the only thing that stops a small circle reading as a bullet point.
  */
-.pearl-column {
+.pearl-bed {
   position: absolute;
-  bottom: -12vh;
+  inset-inline: 0;
+  bottom: calc(3.6rem + env(safe-area-inset-bottom));
+  height: 2rem;
+}
+
+.pearl-bed .pearl {
+  position: absolute;
+  aspect-ratio: 1;
+}
+
+.pearl-fall {
+  position: absolute;
+  top: 0;
   aspect-ratio: 1;
   will-change: transform;
-  animation-name: pearl-rise;
+  animation-name: pearl-sink;
   animation-timing-function: linear;
   animation-iteration-count: infinite;
 }
@@ -292,57 +304,84 @@
   height: 100%;
   border-radius: 9999px;
   will-change: transform;
-  animation: pearl-sway 9s ease-in-out infinite;
 }
 
 .pearl-boba {
   background: radial-gradient(
     circle at 34% 30%,
-    oklch(0.42 0.05 45 / 42%),
-    oklch(0.24 0.035 40 / 40%) 60%
+    oklch(0.42 0.05 45 / 48%),
+    oklch(0.24 0.035 40 / 46%) 60%
   );
 }
 
 .pearl-sago {
   background: radial-gradient(
     circle at 34% 30%,
-    oklch(0.99 0.01 5 / 55%),
-    oklch(0.9 0.045 5 / 42%) 65%
+    oklch(0.99 0.01 5 / 58%),
+    oklch(0.9 0.045 5 / 45%) 65%
   );
 }
 
-.sway-a {
-  animation-duration: 9s;
+/* Settled, not frozen. A pearl in a glass is nudged by everything around it --
+   a couple of pixels, slowly, and no two on the same beat. */
+.bob-a {
+  animation: pearl-bob 11s ease-in-out infinite;
 }
 
-.sway-b {
-  animation-duration: 13s;
-  animation-direction: reverse;
+.bob-b {
+  animation: pearl-bob 14s ease-in-out infinite reverse;
 }
 
-.sway-c {
-  animation-duration: 7s;
-  animation-delay: -3s;
+.bob-c {
+  animation: pearl-bob 9s ease-in-out -4s infinite;
 }
 
-/* Past the top edge, not to it: a pearl that stops at 0 pops out of existence
-   in view. 124vh clears the tallest pearl before the loop restarts. */
-@keyframes pearl-rise {
-  from {
-    transform: translate3d(0, 0, 0);
+.drift-a {
+  animation: pearl-drift 6s ease-in-out infinite;
+}
+
+.drift-b {
+  animation: pearl-drift 8s ease-in-out infinite reverse;
+}
+
+/* Ends where the bed begins. `100vh` would carry a pearl through the floor and
+   out the bottom of the glass; this stops it in the heap and hands the last of
+   the descent to a fade, so nothing pops out of existence mid-screen. */
+@keyframes pearl-sink {
+  0% {
+    transform: translate3d(0, -8vh, 0);
+    opacity: 0;
   }
-  to {
-    transform: translate3d(0, -124vh, 0);
+  12% {
+    opacity: 1;
+  }
+  88% {
+    opacity: 1;
+  }
+  100% {
+    transform: translate3d(0, calc(100vh - 5rem), 0);
+    opacity: 0;
   }
 }
 
-@keyframes pearl-sway {
+/* Falling pearls wander sideways on the way down; settled ones only breathe. */
+@keyframes pearl-drift {
   0%,
   100% {
-    transform: translate3d(-2.5vw, 0, 0);
+    transform: translate3d(-1.6vw, 0, 0);
   }
   50% {
-    transform: translate3d(2.5vw, 0, 0);
+    transform: translate3d(1.6vw, 0, 0);
+  }
+}
+
+@keyframes pearl-bob {
+  0%,
+  100% {
+    transform: translate3d(-1px, 0, 0);
+  }
+  50% {
+    transform: translate3d(1px, -2px, 0);
   }
 }
 
@@ -352,13 +391,14 @@
   .orb,
   .orb-track,
   .pearl,
-  .pearl-column {
+  .pearl-fall {
     animation: none;
   }
-  /* Parked mid-screen rather than left at their start, which is below the fold
-     -- stopping the rise must not delete the pearls. */
-  .pearl-column {
-    transform: translate3d(0, -62vh, 0);
+  /* The falling ones are mid-air with nothing to hold them up, and a pearl
+     hanging in a drink is wrong in a way stillness is not. They go; the heap on
+     the floor is the resting state anyway. */
+  .pearl-fall {
+    display: none;
   }
 }
 
