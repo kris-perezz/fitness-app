@@ -223,11 +223,6 @@
   animation-delay: -7s;
 }
 
-.orb-track-d {
-  animation-duration: 29s;
-  animation-delay: -11s;
-  animation-direction: reverse;
-}
 
 .orb-a {
   background: radial-gradient(closest-side, oklch(0.805 0.094 5.9 / 42%) 42%, transparent);
@@ -240,20 +235,14 @@
   animation-delay: -5s;
 }
 
-/* The caramel from the same palette, faint. Two pinks alone read flat where
-   they overlap; a third hue is what makes the overlap look like depth. */
+/* Palest of the three, so the overlaps still build up rather than flatten. */
 .orb-c {
-  background: radial-gradient(closest-side, oklch(0.73 0.091 56.2 / 26%) 40%, transparent);
+  background: radial-gradient(closest-side, oklch(0.88 0.055 4 / 34%) 40%, transparent);
   animation-duration: 26s;
   animation-delay: -9s;
   animation-direction: reverse;
 }
 
-.orb-d {
-  background: radial-gradient(closest-side, oklch(0.805 0.094 5.9 / 36%) 40%, transparent);
-  animation-duration: 11s;
-  animation-direction: reverse;
-}
 
 @keyframes orb-sway {
   0%,
@@ -277,12 +266,99 @@
   }
 }
 
+/*
+ * Boba and sago rising through the field (components/strawberry-orbs.tsx).
+ *
+ * The column carries the rise and the pearl inside it carries the sway, for the
+ * same reason the orbs are split: one track is a straight line, two is a drift.
+ * Negative delays start every pearl mid-flight, so nothing waits below the fold
+ * for its first pass.
+ *
+ * A pearl is a real sphere and not a flat dot: the highlight sits off-centre,
+ * which is the only thing that stops a small circle reading as a bullet point.
+ */
+.pearl-column {
+  position: absolute;
+  bottom: -12vh;
+  aspect-ratio: 1;
+  will-change: transform;
+  animation-name: pearl-rise;
+  animation-timing-function: linear;
+  animation-iteration-count: infinite;
+}
+
+.pearl {
+  width: 100%;
+  height: 100%;
+  border-radius: 9999px;
+  will-change: transform;
+  animation: pearl-sway 9s ease-in-out infinite;
+}
+
+.pearl-boba {
+  background: radial-gradient(
+    circle at 34% 30%,
+    oklch(0.42 0.05 45 / 42%),
+    oklch(0.24 0.035 40 / 40%) 60%
+  );
+}
+
+.pearl-sago {
+  background: radial-gradient(
+    circle at 34% 30%,
+    oklch(0.99 0.01 5 / 55%),
+    oklch(0.9 0.045 5 / 42%) 65%
+  );
+}
+
+.sway-a {
+  animation-duration: 9s;
+}
+
+.sway-b {
+  animation-duration: 13s;
+  animation-direction: reverse;
+}
+
+.sway-c {
+  animation-duration: 7s;
+  animation-delay: -3s;
+}
+
+/* Past the top edge, not to it: a pearl that stops at 0 pops out of existence
+   in view. 124vh clears the tallest pearl before the loop restarts. */
+@keyframes pearl-rise {
+  from {
+    transform: translate3d(0, 0, 0);
+  }
+  to {
+    transform: translate3d(0, -124vh, 0);
+  }
+}
+
+@keyframes pearl-sway {
+  0%,
+  100% {
+    transform: translate3d(-2.5vw, 0, 0);
+  }
+  50% {
+    transform: translate3d(2.5vw, 0, 0);
+  }
+}
+
 /* The colour stays, the movement goes -- the tint is the point and it is not
    what anybody asked to be spared. */
 @media (prefers-reduced-motion: reduce) {
   .orb,
-  .orb-track {
+  .orb-track,
+  .pearl,
+  .pearl-column {
     animation: none;
+  }
+  /* Parked mid-screen rather than left at their start, which is below the fold
+     -- stopping the rise must not delete the pearls. */
+  .pearl-column {
+    transform: translate3d(0, -62vh, 0);
   }
 }
 
