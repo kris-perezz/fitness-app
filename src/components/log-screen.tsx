@@ -171,8 +171,8 @@ export function LogScreen({
 
   return (
     <>
-      <main className="mx-auto w-full max-w-md flex-1 pb-[calc(6rem+env(safe-area-inset-bottom))]">
-        <header className="flex items-center justify-between border-b border-border px-2 py-2">
+      <main className="mx-auto w-full max-w-md flex-1 space-y-3 px-4 pb-[calc(6rem+env(safe-area-inset-bottom))] pt-2">
+        <header className="flex items-center gap-1 px-1 py-1">
           <Button
             size="icon"
             variant="ghost"
@@ -182,9 +182,11 @@ export function LogScreen({
             <ChevronLeft className="size-5" />
           </Button>
 
-          <span className="text-sm font-medium">{label}</span>
+          <h1 className="flex-1 text-center text-[17px] font-semibold tracking-[-0.01em]">
+            {label}
+          </h1>
 
-          <div className="flex items-center">
+          <div className="flex items-center gap-0.5">
             <Button
               size="icon"
               variant="ghost"
@@ -212,10 +214,10 @@ export function LogScreen({
           </div>
         </header>
 
-        <section className="border-b border-border px-5 py-6">
+        <section className="card-surface px-5 py-6">
           <CalorieRing consumed={totals.kcal} goal={calorieGoal} tone={tone} />
 
-          <div className="mt-6 grid grid-cols-3 gap-4">
+          <div className="mt-6 grid grid-cols-3 gap-2">
             <MacroMeter
               label="Protein"
               metric="protein"
@@ -248,10 +250,10 @@ export function LogScreen({
           const mealKcal = items.reduce((sum, e) => sum + e.kcal, 0);
 
           return (
-            <section key={meal} className="border-b border-border">
-              <div className="flex items-center justify-between px-5 pb-2 pt-4">
-                <h2 className="text-sm font-semibold">{meal}</h2>
-                <span className="text-sm tabular-nums text-muted-foreground">
+            <section key={meal} className="card-surface overflow-hidden">
+              <div className="flex items-baseline justify-between px-5 pb-2 pt-4">
+                <h2 className="text-[17px] font-semibold tracking-[-0.01em]">{meal}</h2>
+                <span className="text-[15px] tabular-nums text-muted-foreground">
                   {withCommas(mealKcal)}
                 </span>
               </div>
@@ -283,18 +285,16 @@ export function LogScreen({
                 </ul>
               )}
 
-              {/* A button, not a full-bleed strip. The strip read as another
-                  row of the meal's list, which is a thing you open rather than
-                  a thing you do. */}
-              <div className="px-5 pb-4 pt-1">
-                <Button
-                  variant="outline"
-                  className="h-11 w-full"
-                  onClick={() => setAddingTo(meal)}
-                >
-                  <Plus className="size-4" /> Add food
-                </Button>
-              </div>
+              {/* Quiet and left-aligned. Four outlined full-width buttons on one
+                  screen is four calls to action of equal weight, which leaves the
+                  meal headings with no rank of their own -- and an empty day read
+                  as a form rather than as a day. */}
+              <button
+                onClick={() => setAddingTo(meal)}
+                className="flex w-full items-center gap-2 px-5 pb-4 pt-1 text-sm text-muted-foreground active:text-foreground"
+              >
+                <Plus className="size-4" /> Add food
+              </button>
             </section>
           );
         })}
@@ -374,17 +374,21 @@ function MacroMeter({
   const alarming = isAlarming(metric, statusOf(metric, value, against, finished), tone);
 
   return (
-    <div>
-      <div className="flex items-baseline justify-between text-xs">
-        <span className="text-muted-foreground">{label}</span>
-        <span className="tabular-nums">
-          {round(value)}
-          {against === null ? (
-            <span className="text-muted-foreground">g</span>
-          ) : (
-            <span className="text-muted-foreground"> / {round(against)}g</span>
-          )}
-        </span>
+    // A TILE, not a line. Label-left value-right across a third of the width put
+    // two 12px words at opposite ends of a cell with nothing between them, so
+    // the three of them read across as one run-on string rather than as three
+    // separate figures. Bounds and a stack are what separate them.
+    <div className="rounded-lg bg-muted/40 px-2 py-2.5 text-center">
+      <div className="text-[11px] uppercase tracking-[0.06em] text-muted-foreground">
+        {label}
+      </div>
+      <div className="mt-1 text-xl font-semibold leading-none tabular-nums">
+        {round(value)}
+        {against === null ? (
+          <span className="text-xs font-normal text-muted-foreground">g</span>
+        ) : (
+          <span className="text-xs font-normal text-muted-foreground">/{round(against)}g</span>
+        )}
       </div>
       {/* The registry's Progress, not a hand-built bar. It carries the
           progressbar role and its aria-valuenow, which two divs and an inline
@@ -398,7 +402,7 @@ function MacroMeter({
           value={fillPercent(value, against)}
           aria-label={`${label}: ${round(value)} of ${round(against)} grams`}
           className={cn(
-            "mt-1.5 h-1",
+            "mt-2 h-1",
             alarming && "[&>[data-slot=progress-indicator]]:bg-destructive",
           )}
         />

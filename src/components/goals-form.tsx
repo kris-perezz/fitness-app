@@ -11,7 +11,7 @@ import {
   PopoverDescription,
   PopoverTrigger,
 } from "@/components/ui/popover";
-import { Info } from "lucide-react";
+import { Info, LogOut } from "lucide-react";
 import {
   MACRO_KEYS,
   balance,
@@ -136,7 +136,10 @@ export function GoalsForm({ goals }: { goals: Goals }) {
       goal_rate_lb_per_week: showGoal(goals?.goal_rate_lb_per_week, startUnit),
     };
   });
-  const [pending, startTransition] = useTransition();
+  // The pending flag is dropped with the Save button: nothing on this screen
+  // waits on a write any more, and a spinner on a field you have already left
+  // is a state nobody is looking at.
+  const [, startTransition] = useTransition();
 
   const numbers = () => ({
     calorie_goal: Number(form.calorie_goal) || 0,
@@ -208,9 +211,18 @@ export function GoalsForm({ goals }: { goals: Goals }) {
     return { calorie_goal: Math.max(0, Math.round(values.calorie_goal)), ...fixed };
   }
 
-  function save() {
-    // Blur usually reconciles first; a keyboard Save on an unbalanced form
-    // should not slip a mismatched split into the database.
+  /**
+   * Written as it is changed, with no Save button.
+   *
+   * A preferences screen with two rows on it does not need a commit step, and
+   * the button was the loudest object on the tab -- a filled bar sitting between
+   * the settings and the account rows, belonging to neither. Failure is the only
+   * thing that has to be said out loud: a toast on every keystroke's blur is
+   * noise, and a value already on screen does not need confirming.
+   */
+  function save(announce = false) {
+    // Blur usually reconciles first; a commit on an unbalanced form should not
+    // slip a mismatched split into the database.
     const values = isBalanced(current.calorie_goal, current) ? current : reconcile("calorie_goal");
 
     startTransition(async () => {
@@ -219,17 +231,17 @@ export function GoalsForm({ goals }: { goals: Goals }) {
         toast.error(res.error);
         return;
       }
-      toast.success("Goals saved");
+      if (announce) toast.success("Goals saved");
     });
   }
 
   return (
-    <main className="mx-auto w-full max-w-md flex-1 pb-[calc(6rem+env(safe-area-inset-bottom))]">
-      <header className="flex items-center border-b border-border px-5 py-3">
-        <span className="text-sm font-medium">Goals</span>
+    <main className="mx-auto w-full max-w-md flex-1 space-y-3 px-4 pb-[calc(6rem+env(safe-area-inset-bottom))] pt-2">
+      <header className="px-1 pt-1">
+        <h1 className="text-[28px] font-semibold leading-none tracking-[-0.02em]">Profile</h1>
       </header>
 
-      <div className="space-y-6 px-5 py-6">
+      <div className="card-surface space-y-6 px-5 py-5">
         {/* S75/S79. FIRST ON THE SCREEN, because it now decides what the rest
             of the screen is for: with it off there are no macro targets to set,
             so a form full of them would be asking for numbers nothing reads.
@@ -253,7 +265,14 @@ export function GoalsForm({ goals }: { goals: Goals }) {
                 this off.
               </FieldHint>
             </div>
-            <Switch id="strict_mode" checked={strict} onCheckedChange={setStrict} />
+            <Switch
+              id="strict_mode"
+              checked={strict}
+              onCheckedChange={(next) => {
+                setStrict(next);
+                save();
+              }}
+            />
           </Field>
         </FieldGroup>
 
@@ -280,7 +299,10 @@ export function GoalsForm({ goals }: { goals: Goals }) {
                 inputMode="decimal"
                 value={form.calorie_goal}
                 onChange={(e) => setForm({ ...form, calorie_goal: e.target.value })}
-                onBlur={() => reconcile("calorie_goal")}
+                onBlur={() => {
+                  reconcile("calorie_goal");
+                  save();
+                }}
                 className="h-12 text-base tabular-nums"
               />
             </Field>
@@ -319,7 +341,10 @@ export function GoalsForm({ goals }: { goals: Goals }) {
                       inputMode="decimal"
                       value={form[key]}
                       onChange={(e) => setForm({ ...form, [key]: e.target.value })}
-                      onBlur={() => reconcile(key)}
+                      onBlur={() => {
+                        reconcile(key);
+                        save();
+                      }}
                       className="h-12 text-base tabular-nums"
                     />
                   </Field>
@@ -363,6 +388,7 @@ export function GoalsForm({ goals }: { goals: Goals }) {
                   inputMode="decimal"
                   value={form.goal_weight_lb}
                   onChange={(e) => setForm({ ...form, goal_weight_lb: e.target.value })}
+                  onBlur={() => save()}
                   placeholder="None"
                   className="h-12 text-base tabular-nums"
                 />
@@ -380,6 +406,7 @@ export function GoalsForm({ goals }: { goals: Goals }) {
                   inputMode="decimal"
                   value={form.goal_rate_lb_per_week}
                   onChange={(e) => setForm({ ...form, goal_rate_lb_per_week: e.target.value })}
+                  onBlur={() => save()}
                   placeholder="None"
                   className="h-12 text-base tabular-nums"
                 />
@@ -406,33 +433,52 @@ export function GoalsForm({ goals }: { goals: Goals }) {
             <ToggleGroup
               type="single"
               size="sm"
-              variant="outline"
+              className="gap-0 rounded-full bg-muted/60 p-0.5"
               value={unit}
-              onValueChange={(next) => next && switchUnit(next as DisplayUnit)}
+              onValueChange={(next) => {
+                if (!next) return;
+                switchUnit(next as DisplayUnit);
+                save();
+              }}
               aria-label="Weight unit"
             >
-              <ToggleGroupItem value="lb" className="px-3 text-xs">
+              <ToggleGroupItem
+                value="lb"
+                className="rounded-full border-0 px-3 text-xs data-[state=on]:bg-card data-[state=on]:shadow-sm"
+              >
                 lb
               </ToggleGroupItem>
-              <ToggleGroupItem value="kg" className="px-3 text-xs">
+              <ToggleGroupItem
+                value="kg"
+                className="rounded-full border-0 px-3 text-xs data-[state=on]:bg-card data-[state=on]:shadow-sm"
+              >
                 kg
               </ToggleGroupItem>
             </ToggleGroup>
           </div>
         </FieldGroup>
 
-        <Button className="h-11 w-full text-base" onClick={save} disabled={pending}>
-          {pending ? "Saving" : "Save"}
-        </Button>
+      </div>
 
+      {/* Account, in its own card. Three full-width controls of three different
+          weights stacked down the middle was the shape of an unstyled form; two
+          list rows with a divider is what a settings screen looks like. */}
+      <div className="card-surface divide-y divide-border/60 overflow-hidden">
         <ThemeToggle />
-
         <form action={signOut}>
-          <Button type="submit" variant="ghost" className="w-full text-muted-foreground">
-            Sign out
+          <Button
+            type="submit"
+            variant="ghost"
+            className="h-12 w-full justify-start rounded-none px-4 text-[15px] font-normal text-destructive hover:text-destructive"
+          >
+            <LogOut className="size-4" /> Sign out
           </Button>
         </form>
       </div>
+
+      <p className="px-1 pb-2 text-center text-[11px] text-muted-foreground">
+        Saved as you change it.
+      </p>
     </main>
   );
 }

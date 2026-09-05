@@ -200,32 +200,38 @@ export function TrainHome({
 
   return (
     <>
-      <main className="mx-auto w-full max-w-md flex-1 pb-[calc(6rem+env(safe-area-inset-bottom))]">
+      <main className="mx-auto w-full max-w-md flex-1 space-y-3 px-4 pb-[calc(6rem+env(safe-area-inset-bottom))] pt-2">
         {/* The primary action sits ABOVE the calendar and the list. It was under
             the list until a month with thirty sessions made the point: the one
             thing you came here to do should not be reachable only by scrolling
             past everything you have already done. Resuming beats browsing, so an
-            open session takes the slot when there is one. */}
-        <div className="border-b border-border px-5 py-4">
+            open session takes the slot when there is one.
+            
+            It is a pill in the title row rather than a filled bar across the
+            screen: a full-width slab under the notch is the loudest thing on a
+            tab whose subject is the month below it, and it left the tab with no
+            title at all. */}
+        <header className="flex items-center justify-between gap-3 px-1 pt-1">
+          <h1 className="text-[28px] font-semibold leading-none tracking-[-0.02em]">Train</h1>
           {openSession ? (
-            <Button className="h-12 w-full text-base" asChild>
+            <Button size="sm" className="h-9 rounded-full px-4" asChild>
               {/* Full prefetch, not the default. A dynamic route prefetched
                   the ordinary way only fetches as far as its loading boundary,
                   so the skeleton arrives instantly and the DATA still lands on
                   tap -- the same wait, better dressed. prefetch={true} pulls the
                   whole thing and holds it under the static stale time. */}
               <Link href={`/train/${openSession.id}`} prefetch>
-                <Play className="size-4" /> Resume session
+                <Play className="size-4" /> Resume
               </Link>
             </Button>
           ) : (
-            <Button className="h-12 w-full text-base" onClick={() => setAdding(true)}>
+            <Button size="sm" className="h-9 rounded-full px-4" onClick={() => setAdding(true)}>
               <CalendarPlus className="size-4" /> Add session
             </Button>
           )}
-        </div>
+        </header>
 
-        <div className="flex justify-center border-b border-border px-2 py-3">
+        <div className="card-surface flex justify-center px-2 py-3">
           <Calendar
             month={toDate(`${month}-01`)}
             // Straight to state. There is nothing to fetch, so there is
@@ -256,11 +262,16 @@ export function TrainHome({
               // Marked important because the calendar paints `today` with
               // bg-muted on this same element, and a trained today must read as
               // trained. Class order alone would not settle that reliably.
-              trained: "bg-primary! text-primary-foreground! rounded-md font-medium",
+              // The transparent border plus bg-clip-padding is what keeps two
+              // consecutive days from touching. Square fills sat edge to edge and
+              // six sessions in a row fused into one bar that read as a selected
+              // RANGE rather than as six separate days.
+              trained:
+                "bg-primary! text-primary-foreground! rounded-full border-2 border-transparent bg-clip-padding font-medium",
               // Today keeps a ring rather than a background, so it stays
               // identifiable whether or not it is also filled -- the two facts
               // are independent and must not compete for one channel.
-              today: "rounded-md ring-2 ring-ring ring-inset",
+              today: "rounded-full ring-2 ring-ring ring-inset",
             }}
             onSelect={(day) => day && open(dateKey(day))}
             mode="single"
@@ -449,11 +460,14 @@ function MonthVolume({
   const total = volume.reduce((t, v) => t + v.sets, 0);
 
   return (
-    <section className="border-b border-border px-5 py-4">
+    <section className="card-surface px-5 py-4">
       <div className="flex items-baseline justify-between gap-2">
-        <h2 className="text-sm font-medium">Sets per muscle</h2>
-        <span className="text-xs tabular-nums text-muted-foreground">
-          {trim(total)} total
+        <h2 className="text-[11px] font-semibold uppercase tracking-[0.08em] text-muted-foreground">
+          Sets per muscle
+        </h2>
+        <span className="text-2xl font-semibold leading-none tabular-nums">
+          {trim(total)}
+          <span className="ml-1 text-xs font-normal text-muted-foreground">total</span>
         </span>
       </div>
 
@@ -463,7 +477,7 @@ function MonthVolume({
           directly, and half for each one it helps.
         </p>
       ) : (
-        <ChartContainer config={volumeConfig} className="mt-3 h-[340px] w-full">
+        <ChartContainer config={volumeConfig} className="mt-3 h-[380px] w-full">
           <BarChart
             accessibilityLayer
             data={volume}
@@ -511,8 +525,14 @@ function MonthVolume({
               // from the baseline it is measured from and makes short ones look
               // longer than they are; the earlier version's comment said this
               // and its code did not.
-              radius={[0, 5, 5, 0]}
-              barSize={11}
+              radius={[0, 6, 6, 0]}
+              barSize={13}
+              // A RAIL BEHIND EVERY BAR. Thirteen of seventeen muscles are on
+              // zero in a normal month, and a zero drawn as nothing left
+              // thirteen labels pointing at blank space -- which reads as a
+              // chart that failed to load rather than as a muscle you did not
+              // train. An empty meter is still a meter.
+              background={{ fill: "var(--muted)", radius: 6 }}
               // Recharts animates a bar from its previous value to its new one,
               // so switching months slides the bars across rather than cutting.
               // That only works because the chart STAYS MOUNTED -- keying it on

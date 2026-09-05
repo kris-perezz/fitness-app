@@ -190,15 +190,18 @@ export function ProgressHome({
 
   return (
     <>
-      <main className="mx-auto w-full max-w-md flex-1 pb-[calc(6rem+env(safe-area-inset-bottom))]">
+      <main className="mx-auto w-full max-w-md flex-1 space-y-3 px-4 pb-[calc(6rem+env(safe-area-inset-bottom))] pt-2">
         {/* The primary action sits above everything, same as the train tab: the
             thing you came to do is not reachable only by scrolling past what you
-            have already done. */}
-        <div className="border-b border-border px-5 py-4">
-          <Button className="h-12 w-full text-base" onClick={() => setEditing(today)}>
+            have already done. A pill in the title row rather than a filled bar:
+            a slab across the screen outranked the trend weight, which is the one
+            number this tab exists to show. */}
+        <header className="flex items-center justify-between gap-3 px-1 pt-1">
+          <h1 className="text-[28px] font-semibold leading-none tracking-[-0.02em]">Progress</h1>
+          <Button size="sm" className="h-9 rounded-full px-4" onClick={() => setEditing(today)}>
             <Scale className="size-4" /> Weigh in
           </Button>
-        </div>
+        </header>
 
         {/* S67. EVERY BLOCK DEGRADES ON ITS OWN, and the first weigh-in is the
             case where that matters most: with no readings at all, the chart,
@@ -234,7 +237,7 @@ export function ProgressHome({
 
         <PinnedLiftBlock pinned={pinned} />
 
-        <div className="flex justify-center border-b border-border px-2 py-3">
+        <div className="card-surface flex justify-center px-2 py-3">
           <Calendar
             month={toDate(`${month}-01`)}
             onMonthChange={(next) => setMonth(monthKey(next))}
@@ -242,8 +245,13 @@ export function ProgressHome({
             disabled={{ after: toDate(today) }}
             modifiers={{ weighed: weighedDays }}
             modifiersClassNames={{
-              weighed: "bg-primary! text-primary-foreground! rounded-md font-medium",
-              today: "rounded-md ring-2 ring-ring ring-inset",
+              // The transparent border plus bg-clip-padding is what keeps two
+              // consecutive days from touching. Square fills sat edge to edge and
+              // six sessions in a row fused into one bar that read as a selected
+              // RANGE rather than as six separate days.
+              weighed:
+                "bg-primary! text-primary-foreground! rounded-full border-2 border-transparent bg-clip-padding font-medium",
+              today: "rounded-full ring-2 ring-ring ring-inset",
             }}
             onSelect={(day) => day && setEditing(dateKey(day))}
             mode="single"
@@ -363,13 +371,16 @@ function Headline({
   if (head.trendLb === null) {
     const need = MIN_TREND_ENTRIES - head.entryCount;
     return (
-      <section className="border-b border-border px-5 py-4">
+      <section className="card-surface px-5 py-4">
         {/* Labelled for the same reason the trend is, and labelled DIFFERENTLY:
             below the floor this is the scale, not a trend, and the two states
             must not look like the same number changing its mind. */}
-        <p className="text-xs text-muted-foreground">Last reading</p>
-        <p className="text-3xl font-semibold tabular-nums">
-          {toDisplay(head.latest.weightLb, unit).toFixed(1)} {unit}
+        <p className="text-[11px] font-semibold uppercase tracking-[0.08em] text-muted-foreground">
+          Last reading
+        </p>
+        <p className="mt-1 text-[40px] font-semibold leading-none tracking-[-0.03em] tabular-nums">
+          {toDisplay(head.latest.weightLb, unit).toFixed(1)}
+          <span className="ml-1 text-lg font-medium text-muted-foreground">{unit}</span>
         </p>
         <p className="mt-1 text-xs text-muted-foreground">
           {shortDate(head.latest.date)} · {need} more {need === 1 ? "weigh-in" : "weigh-ins"} and
@@ -380,18 +391,21 @@ function Headline({
   }
 
   return (
-    <section className="border-b border-border px-5 py-4">
+    <section className="card-surface px-5 py-4">
       {/* The big number is the trend, so it SAYS "trend". Unlabelled, a 163.0
           sitting beside a 161.8 reads as two scale readings and invites the one
           question this tab exists to answer -- which of these am I? The word
           used to be on the third line, attached to the rate, where it labelled
           the wrong number. */}
-      <p className="text-xs text-muted-foreground">Trend weight</p>
+      <p className="text-[11px] font-semibold uppercase tracking-[0.08em] text-muted-foreground">
+        Trend weight
+      </p>
       {/* Both weights to one decimal. `trim` drops a trailing .0, which printed
           the trend as "163" next to a reading of "161.8" and made two
           measurements of one quantity look like two kinds of number. */}
-      <p className="text-3xl font-semibold tabular-nums">
-        {toDisplay(head.trendLb, unit).toFixed(1)} {unit}
+      <p className="mt-1 text-[40px] font-semibold leading-none tracking-[-0.03em] tabular-nums">
+        {toDisplay(head.trendLb, unit).toFixed(1)}
+        <span className="ml-1 text-lg font-medium text-muted-foreground">{unit}</span>
       </p>
       {rate ? (
         <p className="mt-1 text-sm text-muted-foreground">
@@ -604,14 +618,16 @@ function PinnedLiftBlock({ pinned }: { pinned: PinnedLift | null }) {
   if (!pinned) return null;
 
   return (
-    <section className="border-b border-border px-5 py-4">
+    <section className="card-surface px-5 py-4">
       <div className="flex items-baseline justify-between gap-2">
-        <h2 className="text-sm font-medium">
+        <h2 className="text-[17px] font-semibold tracking-[-0.01em]">
           <Link href={`/exercise/${pinned.id}`} className="underline-offset-4 hover:underline">
             {pinned.name}
           </Link>
         </h2>
-        <span className="text-xs text-muted-foreground">Estimated 1RM</span>
+        <span className="text-[11px] font-semibold uppercase tracking-[0.08em] text-muted-foreground">
+          Estimated 1RM
+        </span>
       </div>
 
       {enoughSessions(pinned.points) ? (
@@ -649,7 +665,10 @@ function round1(n: number): number {
  */
 const weightConfig = {
   trendLb: { label: "Trend", color: "var(--primary)" },
-  weightLb: { label: "Weighed", color: "var(--muted-foreground)" },
+  // Strawberry, where the theme has one. The raw readings are the noise the
+  // trend is drawn through, and grey noise under a green line left the pink in
+  // this app doing nothing but tinting the page behind the chart.
+  weightLb: { label: "Weighed", color: "var(--chart-2)" },
 } satisfies ChartConfig;
 
 function WeightChart({
@@ -690,13 +709,18 @@ function WeightChart({
   if (entries.length < MIN_TREND_ENTRIES) return null;
 
   return (
-    <section className="border-b border-border px-5 py-4">
+    <section className="card-surface px-5 py-4">
       <div className="flex items-center justify-between gap-3">
-        <h2 className="text-sm font-medium">{chartWindow(windowKey).title}</h2>
+        <h2 className="text-[11px] font-semibold uppercase tracking-[0.08em] text-muted-foreground">
+          {chartWindow(windowKey).title}
+        </h2>
+        {/* One container with a moving selection, not five outlined chips in a
+            row -- a chip row makes five equal objects out of one control, and
+            the chosen one is then a fill you have to hunt for. */}
         <ToggleGroup
           type="single"
           size="sm"
-          variant="outline"
+          className="gap-0 rounded-full bg-muted/60 p-0.5"
           value={windowKey}
           // A single ToggleGroup deselects when its active item is pressed
           // again, which would leave the chart with no window at all; ignore
@@ -705,7 +729,11 @@ function WeightChart({
           aria-label="Chart window"
         >
           {CHART_WINDOWS.map((w) => (
-            <ToggleGroupItem key={w.key} value={w.key} className="px-2 text-xs">
+            <ToggleGroupItem
+              key={w.key}
+              value={w.key}
+              className="rounded-full border-0 px-3 text-xs data-[state=on]:bg-card data-[state=on]:shadow-sm"
+            >
               {w.label}
             </ToggleGroupItem>
           ))}
@@ -748,7 +776,7 @@ function WeightChart({
             stroke="none"
             // The one place a series overrides the contract's `dot: false`, and
             // it is the point of this series: the readings ARE the dots.
-            dot={{ r: 1.6, fill: "var(--color-weightLb)", fillOpacity: 0.45, strokeWidth: 0 }}
+            dot={{ r: 1.9, fill: "var(--color-weightLb)", fillOpacity: 0.75, strokeWidth: 0 }}
           />
           <Line
             {...SERIES}
