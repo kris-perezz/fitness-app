@@ -7,8 +7,9 @@ import { Field, FieldLabel } from "@/components/ui/field";
 import { Input } from "@/components/ui/input";
 import { InputOTP, InputOTPGroup, InputOTPSlot } from "@/components/ui/input-otp";
 import { REGEXP_ONLY_DIGITS } from "input-otp";
+import type { EmailOtpType } from "@supabase/supabase-js";
 
-type Mode = "password" | "email";
+type Mode = "password" | "email" | "signup";
 type Status = "idle" | "working" | "sent";
 
 const fieldLabel = "text-xs font-normal text-muted-foreground";
@@ -20,6 +21,12 @@ export default function LoginPage() {
   const [code, setCode] = useState("");
   const [status, setStatus] = useState<Status>("idle");
   const [error, setError] = useState("");
+  /**
+   * Which email is waiting to be confirmed. Supabase types the two separately
+   * and rejects a code checked under the wrong one, so the flow that sent it
+   * has to say which it was.
+   */
+  const [sent, setSent] = useState<EmailOtpType>("email");
 
   // Supabase reports link failures in the fragment, which never reaches the
   // server. Read it here, then strip it so a refresh does not re-show it.
@@ -72,6 +79,36 @@ export default function LoginPage() {
       options: { emailRedirectTo: `${location.origin}/auth/confirm` },
     });
     if (error) return fail(error.message);
+    setSent("email");
+    setStatus("sent");
+  }
+
+  /**
+   * Creating an account was previously only a SIDE EFFECT of asking for a link
+   * -- signInWithOtp creates an unknown email by default -- so the one screen
+   * that had to work for somebody who has never been here said "Sign in" and
+   * offered no way in. This is that way.
+   */
+  async function signUp(e: React.FormEvent) {
+    e.preventDefault();
+    setStatus("working");
+    setError("");
+
+    const { data, error } = await createClient().auth.signUp({
+      email,
+      password,
+      options: { emailRedirectTo: `${location.origin}/auth/confirm` },
+    });
+    if (error) return fail(error.message);
+
+    // A session here means the project confirms addresses on sight, so there is
+    // nothing to wait for. Otherwise the address has to be confirmed first.
+    if (data.session) {
+      // eslint-disable-next-line @next/next/no-location-assign-relative-destination
+      location.assign("/log");
+      return;
+    }
+    setSent("signup");
     setStatus("sent");
   }
 
@@ -83,7 +120,7 @@ export default function LoginPage() {
     const { error } = await createClient().auth.verifyOtp({
       email,
       token: code,
-      type: "email",
+      type: sent,
     });
     if (error) {
       setError(error.message);
@@ -100,13 +137,16 @@ export default function LoginPage() {
 
   return (
     <main className="mx-auto flex min-h-dvh w-full max-w-sm flex-col justify-center px-6">
-      <h1 className="text-xl font-semibold tracking-tight">Sign in</h1>
+      <h1 className="text-xl font-semibold tracking-tight">
+        {mode === "signup" ? "Create an account" : "Sign in"}
+      </h1>
 
       {status === "sent" ? (
         <form onSubmit={verifyCode} className="mt-4 space-y-5">
           <p className="text-sm text-muted-foreground">
-            Sent to <span className="text-foreground">{email}</span>. Open the link, or type the
-            six-digit code from the same email.
+            {sent === "signup" ? "Confirm " : "Sent to "}
+            <span className="text-foreground">{email}</span>. Open the link, or type the six-digit
+            code from the same email.
           </p>
 
           <Field>
@@ -161,7 +201,7 @@ export default function LoginPage() {
         </form>
       ) : (
         <form
-          onSubmit={mode === "password" ? signInWithPassword : sendLink}
+          onSubmit={mode === "password" ? signInWithPassword : mode === "signup" ? signUp : sendLink}
           className="mt-4 space-y-5"
         >
           <Field>
@@ -180,7 +220,7 @@ export default function LoginPage() {
             />
           </Field>
 
-          {mode === "password" && (
+          {mode !== "email" && (
             <Field>
               <FieldLabel htmlFor="password" className={fieldLabel}>
                 Password
@@ -188,7 +228,10 @@ export default function LoginPage() {
               <Input
                 id="password"
                 type="password"
-                autoComplete="current-password"
+                autoComplete={mode === "signup" ? "new-password" : "current-password"}
+                // Supabase's own floor. Stated by the browser before the
+                // round trip rather than as an error after it.
+                minLength={mode === "signup" ? 6 : undefined}
                 required
                 value={password}
                 onChange={(e) => setPassword(e.target.value)}
@@ -200,20 +243,40 @@ export default function LoginPage() {
           {error && <p className="text-sm text-destructive">{error}</p>}
 
           <Button type="submit" className="h-12 w-full text-base" disabled={busy}>
-            {busy ? "Working" : mode === "password" ? "Sign in" : "Send link"}
+            {busy
+              ? "Working"
+              : mode === "password"
+                ? "Sign in"
+                : mode === "signup"
+                  ? "Create account"
+                  : "Send link"}
           </Button>
 
-          <Button
-            type="button"
-            variant="ghost"
-            className="w-full text-muted-foreground"
-            onClick={() => {
-              setMode(mode === "password" ? "email" : "password");
-              setError("");
-            }}
-          >
-            {mode === "password" ? "Email me a link instead" : "Use a password instead"}
-          </Button>
+          <div className="space-y-1">
+            <Button
+              type="button"
+              variant="ghost"
+              className="w-full text-muted-foreground"
+              onClick={() => {
+                setMode(mode === "email" ? "password" : "email");
+                setError("");
+              }}
+            >
+              {mode === "email" ? "Use a password instead" : "Email me a link instead"}
+            </Button>
+
+            <Button
+              type="button"
+              variant="ghost"
+              className="w-full text-muted-foreground"
+              onClick={() => {
+                setMode(mode === "signup" ? "password" : "signup");
+                setError("");
+              }}
+            >
+              {mode === "signup" ? "I already have an account" : "Create an account"}
+            </Button>
+          </div>
         </form>
       )}
     </main>
