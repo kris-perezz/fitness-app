@@ -183,64 +183,105 @@
  * of its radius before falling off, so it reads as a shape rather than as haze.
  * The blur is what softens the edge; the gradient alone just makes fog.
  *
+ * The track moves left and right, the orb inside it moves up and down and
+ * breathes, and the two periods do not divide into each other -- that is what
+ * turns two straight loops into a wander. Durations are all coprime for the same
+ * reason: four orbs on tidy multiples resynchronise in front of you.
+ *
  * ONLY `transform` is animated. Blur is expensive to paint and cheap to reuse,
  * so each orb is painted once and then moved by the compositor; animating the
  * filter, the opacity or the gradient instead would repaint a full-screen blur
  * every frame and cost the scroll its smoothness.
  */
-.orb {
+.orb-track {
   position: absolute;
   aspect-ratio: 1;
+  will-change: transform;
+  animation: orb-sway 23s ease-in-out infinite;
+}
+
+.orb {
+  width: 100%;
+  height: 100%;
   border-radius: 9999px;
   filter: blur(34px);
   will-change: transform;
-  animation: orb-drift 15s ease-in-out infinite;
+  animation: orb-rise 17s ease-in-out infinite;
+}
+
+.orb-track-a {
+  animation-duration: 23s;
+}
+
+.orb-track-b {
+  animation-duration: 31s;
+  animation-direction: reverse;
+}
+
+.orb-track-c {
+  animation-duration: 19s;
+  animation-delay: -7s;
+}
+
+.orb-track-d {
+  animation-duration: 29s;
+  animation-delay: -11s;
+  animation-direction: reverse;
 }
 
 .orb-a {
   background: radial-gradient(closest-side, oklch(0.805 0.094 5.9 / 42%) 42%, transparent);
+  animation-duration: 17s;
 }
 
 .orb-b {
   background: radial-gradient(closest-side, oklch(0.86 0.07 3 / 40%) 44%, transparent);
-  animation-duration: 19s;
-  animation-direction: reverse;
+  animation-duration: 13s;
+  animation-delay: -5s;
 }
 
 /* The caramel from the same palette, faint. Two pinks alone read flat where
    they overlap; a third hue is what makes the overlap look like depth. */
 .orb-c {
   background: radial-gradient(closest-side, oklch(0.73 0.091 56.2 / 26%) 40%, transparent);
-  animation-duration: 23s;
-  animation-delay: -6s;
+  animation-duration: 26s;
+  animation-delay: -9s;
+  animation-direction: reverse;
 }
 
 .orb-d {
   background: radial-gradient(closest-side, oklch(0.805 0.094 5.9 / 36%) 40%, transparent);
-  animation-duration: 13s;
-  animation-delay: -4s;
+  animation-duration: 11s;
   animation-direction: reverse;
 }
 
-/* Drift and breathe. The scale is small on purpose: past about 1.15 the edge of
-   an orb becomes something the eye can track, and then it is an animation. */
-@keyframes orb-drift {
+@keyframes orb-sway {
   0%,
   100% {
-    transform: translate3d(0, 0, 0) scale(1);
+    transform: translate3d(-11vw, 0, 0);
   }
-  33% {
-    transform: translate3d(13vw, 9vh, 0) scale(1.15);
+  50% {
+    transform: translate3d(15vw, 0, 0);
   }
-  66% {
-    transform: translate3d(-9vw, 16vh, 0) scale(0.88);
+}
+
+/* The scale stays small on purpose: past about 1.15 the edge of an orb becomes
+   something the eye can track, and then it is an animation. */
+@keyframes orb-rise {
+  0%,
+  100% {
+    transform: translate3d(0, 13vh, 0) scale(0.88);
+  }
+  50% {
+    transform: translate3d(0, -12vh, 0) scale(1.14);
   }
 }
 
 /* The colour stays, the movement goes -- the tint is the point and it is not
    what anybody asked to be spared. */
 @media (prefers-reduced-motion: reduce) {
-  .orb {
+  .orb,
+  .orb-track {
     animation: none;
   }
 }
