@@ -38,7 +38,7 @@ export function DumbbellMark({ size }: { size: number }) {
         display: "flex",
         alignItems: "center",
         justifyContent: "center",
-        background: "#0a0a0a",
+        background: "#080f0a",
       }}
     >
       <svg
@@ -46,7 +46,7 @@ export function DumbbellMark({ size }: { size: number }) {
         height={glyph}
         viewBox="0 0 24 24"
         fill="none"
-        stroke="#fafafa"
+        stroke="#e24c64"
         // Heavier than Lucide's default 2: at 32px in a browser tab a hairline
         // dumbbell reads as a smudge.
         strokeWidth={2.25}

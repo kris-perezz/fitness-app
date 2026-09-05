@@ -14,8 +14,8 @@ export default function manifest(): MetadataRoute.Manifest {
     orientation: "portrait",
     // Matches --background in globals.css for light and dark respectively, so
     // the splash and status bar do not flash a colour the app never uses.
-    background_color: "#ffffff",
-    theme_color: "#ffffff",
+    background_color: "#f9f7ee",
+    theme_color: "#f9f7ee",
     // Served by app/pwa-icon/route.tsx, NOT by app/icon.tsx. The tab icon is a
     // transparent SVG so it does not paint a dark rectangle into the browser
     // chrome; a home-screen tile has to be an opaque square, so it is its own
