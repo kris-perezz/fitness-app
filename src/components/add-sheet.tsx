@@ -570,7 +570,20 @@ function CustomStep({
     const described =
       appended && f.name.endsWith(appended) ? f.name.slice(0, -appended.length) : f.name;
     startEstimating(async () => {
-      const res = await estimateEntry(described, photo);
+      // The action returns its failures as values, but the call itself can
+      // still reject -- a dropped connection mid-upload, or a body the server
+      // refuses. Unhandled, that rejection has no boundary above it and
+      // replaces the whole app with the server error page, losing the meal.
+      let res: Awaited<ReturnType<typeof estimateEntry>>;
+      try {
+        res = await estimateEntry(described, photo);
+      } catch {
+        if (attempt.current !== id) return;
+        setEstimating(false);
+        toast.error("Could not send that. Try again.");
+        return;
+      }
+
       // Stopped, or the photo changed while this was in the air. The request
       // was still paid for; what is avoided is six numbers appearing for a
       // question the user has already moved on from. Nothing is reset here --
