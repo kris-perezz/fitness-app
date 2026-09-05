@@ -176,6 +176,12 @@ export function AddSheet({
   );
 }
 
+/** Something that summons the software keyboard, as opposed to a button or the
+ * drawer's own focus trap. */
+function isField(el: EventTarget | null): boolean {
+  return el instanceof HTMLInputElement || el instanceof HTMLTextAreaElement;
+}
+
 /** "Servings", "Cups", "Slices" -- the counting noun as a field label. */
 function countFieldLabel(food: Food): string {
   const label = countLabel(food, 2);
@@ -457,6 +463,9 @@ function CustomStep({
    */
   const [, startEstimating] = useTransition();
   const [estimating, setEstimating] = useState(false);
+  /** Whether a field on this step holds focus, which is what the keyboard is
+   * up for. Drives the footer below. */
+  const [typing, setTyping] = useState(false);
   /**
    * Which estimate is current. A result whose id is stale is dropped rather
    * than written into the form -- that is what makes Stop actually stop, and it
@@ -655,7 +664,17 @@ function CustomStep({
   }
 
   return (
-    <div className="flex min-h-0 flex-1 flex-col">
+    <div
+      className="flex min-h-0 flex-1 flex-col"
+      onFocusCapture={(e) => {
+        if (isField(e.target)) setTyping(true);
+      }}
+      // Field to field keeps the footer away rather than flashing it between
+      // the two.
+      onBlurCapture={(e) => {
+        if (!isField(e.relatedTarget)) setTyping(false);
+      }}
+    >
       <div className="min-h-0 flex-1 overflow-y-auto overscroll-contain px-5 pb-4">
         <Button
           variant="ghost"
@@ -856,15 +875,22 @@ function CustomStep({
         </FieldGroup>
       </div>
 
-      <div className="shrink-0 border-t border-border px-5 pt-3 pb-safe">
-        <Button
-          className="h-11 w-full text-base"
-          onClick={save}
-          disabled={saving || f.name.trim() === "" || f.kcal === ""}
-        >
-          {saving ? "Adding" : "Add"}
-        </Button>
-      </div>
+      {/* Gone while a field is focused. Vaul pins the drawer's bottom edge to
+          the top of the keyboard, so this bar takes the bottom band of an
+          already-short sheet and buries the estimate trigger under it. Add is
+          not what anyone reaches for mid-sentence, and it comes back the moment
+          the keyboard does. */}
+      {!typing && (
+        <div className="shrink-0 border-t border-border px-5 pt-3 pb-safe">
+          <Button
+            className="h-11 w-full text-base"
+            onClick={save}
+            disabled={saving || f.name.trim() === "" || f.kcal === ""}
+          >
+            {saving ? "Adding" : "Add"}
+          </Button>
+        </div>
+      )}
     </div>
   );
 }
