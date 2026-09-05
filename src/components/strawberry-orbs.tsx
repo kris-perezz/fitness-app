@@ -1,10 +1,11 @@
 /**
  * The strawberry half of the strawberry matcha theme.
  *
- * Four blurred pink shapes drifting behind the whole app, slowly enough that
- * nothing on screen appears to move -- the cream just changes temperature as
- * they pass under it. The matcha palette keeps every surface you actually read;
- * this is the only place the strawberry is loud, and it is under everything.
+ * Four pink shapes drifting behind the whole app. They are kept SMALLER THAN
+ * THE SCREEN and given a solid core before the falloff, because four soft
+ * full-width gradients overlapping is not four orbs -- it is one pink page. The
+ * matcha palette keeps every surface you actually read; this is the only place
+ * the strawberry is loud, and it is under everything.
  *
  * Rendered in every theme and REVEALED BY CSS rather than by reading the active
  * theme in React. next-themes only knows which theme is on after hydration, so
@@ -14,10 +15,10 @@
  * is CSS keyframes, which cost the main thread nothing once painted.
  */
 const ORBS = [
-  { className: "orb orb-a", style: { top: "-18%", left: "-22%", width: "72vmax" } },
-  { className: "orb orb-b", style: { top: "22%", right: "-28%", width: "62vmax" } },
-  { className: "orb orb-c", style: { bottom: "-24%", left: "4%", width: "66vmax" } },
-  { className: "orb orb-d", style: { top: "48%", left: "-16%", width: "48vmax" } },
+  { className: "orb orb-a", style: { top: "-12%", left: "-14%", width: "44vmax" } },
+  { className: "orb orb-b", style: { top: "24%", right: "-16%", width: "36vmax" } },
+  { className: "orb orb-c", style: { bottom: "-14%", left: "6%", width: "40vmax" } },
+  { className: "orb orb-d", style: { top: "54%", left: "-10%", width: "30vmax" } },
 ];
 
 export function StrawberryOrbs() {
