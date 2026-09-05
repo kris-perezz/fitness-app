@@ -3,6 +3,7 @@
 @import "shadcn/tailwind.css";
 
 @custom-variant dark (&:is(.dark *));
+@custom-variant matcha (&:is(.strawberry-matcha *));
 
 @theme inline {
   --color-background: var(--background);
@@ -171,6 +172,71 @@
 }
 
 /*
+ * The drifting strawberry field behind the matcha theme (components/strawberry-orbs.tsx).
+ *
+ * ONLY `transform` is animated. Blur is expensive to paint and cheap to reuse,
+ * so each orb is painted once and then moved by the compositor; animating the
+ * filter, the opacity or the gradient instead would repaint a full-screen blur
+ * every frame and cost the scroll its smoothness.
+ */
+.orb {
+  position: absolute;
+  aspect-ratio: 1;
+  border-radius: 9999px;
+  filter: blur(60px);
+  will-change: transform;
+  animation: orb-drift 34s ease-in-out infinite;
+}
+
+.orb-a {
+  background: radial-gradient(closest-side, oklch(0.805 0.094 5.9 / 55%), transparent);
+}
+
+.orb-b {
+  background: radial-gradient(closest-side, oklch(0.86 0.07 3 / 50%), transparent);
+  animation-duration: 43s;
+  animation-direction: reverse;
+}
+
+/* The caramel from the same palette, faint. Two pinks alone read flat where
+   they overlap; a third hue is what makes the overlap look like depth. */
+.orb-c {
+  background: radial-gradient(closest-side, oklch(0.73 0.091 56.2 / 30%), transparent);
+  animation-duration: 51s;
+  animation-delay: -12s;
+}
+
+.orb-d {
+  background: radial-gradient(closest-side, oklch(0.805 0.094 5.9 / 40%), transparent);
+  animation-duration: 29s;
+  animation-delay: -7s;
+  animation-direction: reverse;
+}
+
+/* Drift and breathe. The scale is small on purpose: past about 1.15 the edge of
+   an orb becomes something the eye can track, and then it is an animation. */
+@keyframes orb-drift {
+  0%,
+  100% {
+    transform: translate3d(0, 0, 0) scale(1);
+  }
+  33% {
+    transform: translate3d(7vw, 5vh, 0) scale(1.12);
+  }
+  66% {
+    transform: translate3d(-5vw, 9vh, 0) scale(0.93);
+  }
+}
+
+/* The colour stays, the movement goes -- the tint is the point and it is not
+   what anybody asked to be spared. */
+@media (prefers-reduced-motion: reduce) {
+  .orb {
+    animation: none;
+  }
+}
+
+/*
  * The viewport is viewport-fit=cover, so the page runs under the home
  * indicator. Anything that ends at the bottom edge -- a sheet's action row, the
  * last of a scrolling list -- has to clear it. max() keeps a sane minimum on
@@ -186,6 +252,15 @@
   }
   body {
     @apply bg-background text-foreground;
+  }
+  /* The page canvas takes its colour from <body> only while <html> has none, and
+     that paint sits ON TOP of a negative z-index child. So this theme colours
+     <html> instead, which is what leaves room underneath for the orbs. */
+  .strawberry-matcha {
+    background-color: var(--background);
+  }
+  .strawberry-matcha body {
+    background-color: transparent;
   }
   html {
     @apply font-sans;
