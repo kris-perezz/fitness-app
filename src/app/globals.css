@@ -48,13 +48,91 @@
   --radius-4xl: calc(var(--radius) * 2.6);
 }
 
-/*
- * Strawberry matcha. The ground is milk, the action colour is strawberry, and
- * matcha is what sits beside it -- the accent, the second chart series, the
- * quiet text. Green never takes a primary action: two saturated colours
- * competing for "press this" is how a themed app stops being readable.
- */
 :root {
+  --background: oklch(0.97 0 0);
+  --foreground: oklch(0.145 0 0);
+  --card: oklch(1 0 0);
+  --card-foreground: oklch(0.145 0 0);
+  --popover: oklch(1 0 0);
+  --popover-foreground: oklch(0.145 0 0);
+  --primary: oklch(0.205 0 0);
+  --primary-foreground: oklch(0.985 0 0);
+  --secondary: oklch(0.94 0 0);
+  --secondary-foreground: oklch(0.205 0 0);
+  --muted: oklch(0.94 0 0);
+  --muted-foreground: oklch(0.556 0 0);
+  --accent: oklch(0.94 0 0);
+  --accent-foreground: oklch(0.205 0 0);
+  --destructive: oklch(0.577 0.245 27.325);
+  --border: oklch(0.922 0 0);
+  --input: oklch(0.922 0 0);
+  --ring: oklch(0.708 0 0);
+  --chart-1: oklch(0.87 0 0);
+  --chart-2: oklch(0.556 0 0);
+  --chart-3: oklch(0.439 0 0);
+  --chart-4: oklch(0.371 0 0);
+  --chart-5: oklch(0.269 0 0);
+  --radius: 0.625rem;
+  --sidebar: oklch(0.985 0 0);
+  --sidebar-foreground: oklch(0.145 0 0);
+  --sidebar-primary: oklch(0.205 0 0);
+  --sidebar-primary-foreground: oklch(0.985 0 0);
+  --sidebar-accent: oklch(0.94 0 0);
+  --sidebar-accent-foreground: oklch(0.205 0 0);
+  --sidebar-border: oklch(0.922 0 0);
+  --sidebar-ring: oklch(0.708 0 0);
+}
+
+.dark {
+  --background: oklch(0.145 0 0);
+  --foreground: oklch(0.985 0 0);
+  --card: oklch(0.205 0 0);
+  --card-foreground: oklch(0.985 0 0);
+  --popover: oklch(0.205 0 0);
+  --popover-foreground: oklch(0.985 0 0);
+  --primary: oklch(0.922 0 0);
+  --primary-foreground: oklch(0.205 0 0);
+  --secondary: oklch(0.269 0 0);
+  --secondary-foreground: oklch(0.985 0 0);
+  --muted: oklch(0.269 0 0);
+  --muted-foreground: oklch(0.708 0 0);
+  --accent: oklch(0.269 0 0);
+  --accent-foreground: oklch(0.985 0 0);
+  --destructive: oklch(0.704 0.191 22.216);
+  --border: oklch(1 0 0 / 10%);
+  --input: oklch(1 0 0 / 15%);
+  --ring: oklch(0.556 0 0);
+  --chart-1: oklch(0.87 0 0);
+  --chart-2: oklch(0.556 0 0);
+  --chart-3: oklch(0.439 0 0);
+  --chart-4: oklch(0.371 0 0);
+  --chart-5: oklch(0.269 0 0);
+  --sidebar: oklch(0.205 0 0);
+  --sidebar-foreground: oklch(0.985 0 0);
+  --sidebar-primary: oklch(0.488 0.243 264.376);
+  --sidebar-primary-foreground: oklch(0.985 0 0);
+  --sidebar-accent: oklch(0.269 0 0);
+  --sidebar-accent-foreground: oklch(0.985 0 0);
+  --sidebar-border: oklch(1 0 0 / 10%);
+  --sidebar-ring: oklch(0.556 0 0);
+}
+
+/*
+ * Strawberry matcha: a palette in its own right, not a third mode of the other
+ * two. Milk is the ground, strawberry is anything you press, and matcha sits
+ * beside it -- accent surfaces, the second chart series, the quiet text. Green
+ * never takes a primary action, because two saturated colours competing for
+ * "press this" is how a themed app stops being readable.
+ *
+ * Every token is restated rather than inherited. `dark:` utilities are keyed to
+ * `.dark` and none of them fire here, so anything left out would fall through
+ * to whatever :root happens to hold.
+ */
+.strawberry-matcha {
+  /* Native controls and scrollbars have no CSS variables to read; without this
+     they paint themselves dark on a system set to dark. */
+  color-scheme: light;
+
   --background: oklch(0.975 0.012 95);
   --foreground: oklch(0.21 0.02 150);
   --card: oklch(0.995 0.006 95);
@@ -87,40 +165,6 @@
   --sidebar-accent-foreground: oklch(0.36 0.075 148);
   --sidebar-border: oklch(0.905 0.018 100);
   --sidebar-ring: oklch(0.63 0.185 15);
-}
-
-.dark {
-  --background: oklch(0.16 0.016 152);
-  --foreground: oklch(0.96 0.012 95);
-  --card: oklch(0.215 0.02 152);
-  --card-foreground: oklch(0.96 0.012 95);
-  --popover: oklch(0.215 0.02 152);
-  --popover-foreground: oklch(0.96 0.012 95);
-  --primary: oklch(0.72 0.16 15);
-  --primary-foreground: oklch(0.19 0.04 15);
-  --secondary: oklch(0.28 0.025 152);
-  --secondary-foreground: oklch(0.96 0.012 95);
-  --muted: oklch(0.28 0.025 152);
-  --muted-foreground: oklch(0.73 0.025 135);
-  --accent: oklch(0.32 0.055 150);
-  --accent-foreground: oklch(0.92 0.05 145);
-  --destructive: oklch(0.704 0.191 22.216);
-  --border: oklch(1 0 0 / 12%);
-  --input: oklch(1 0 0 / 16%);
-  --ring: oklch(0.66 0.14 15);
-  --chart-1: oklch(0.72 0.16 15);
-  --chart-2: oklch(0.7 0.12 148);
-  --chart-3: oklch(0.62 0.155 5);
-  --chart-4: oklch(0.56 0.09 152);
-  --chart-5: oklch(0.84 0.06 90);
-  --sidebar: oklch(0.215 0.02 152);
-  --sidebar-foreground: oklch(0.96 0.012 95);
-  --sidebar-primary: oklch(0.72 0.16 15);
-  --sidebar-primary-foreground: oklch(0.19 0.04 15);
-  --sidebar-accent: oklch(0.32 0.055 150);
-  --sidebar-accent-foreground: oklch(0.92 0.05 145);
-  --sidebar-border: oklch(1 0 0 / 12%);
-  --sidebar-ring: oklch(0.66 0.14 15);
 }
 
 /*
