@@ -287,7 +287,7 @@
 .orb-grain {
   position: absolute;
   inset: 0;
-  opacity: 0.4;
+  opacity: 0.22;
   mix-blend-mode: soft-light;
   background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='140' height='140'%3E%3Cfilter id='n'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='0.85' numOctaves='3' stitchTiles='stitch'/%3E%3C/filter%3E%3Crect width='140' height='140' filter='url(%23n)'/%3E%3C/svg%3E");
 }
@@ -333,6 +333,15 @@
   padding-bottom: max(1rem, env(safe-area-inset-bottom));
 }
 
+/* Unlayered on purpose. The nav carries `bg-background/85`, a Tailwind utility,
+   and a utility beats anything sitting in @layer base -- so inside the layer
+   this rule did nothing and the bar was 85% of an already translucent
+   background. It covers scrolling content by design (see bottom-nav.tsx), so it
+   takes the opaque ground the rest of the theme does not. */
+.strawberry-matcha [data-slot="nav-bar"] {
+  background-color: color-mix(in oklch, var(--page) 92%, transparent);
+}
+
 @layer base {
   * {
     @apply border-border outline-ring/50;
@@ -345,11 +354,6 @@
      <html> instead, which is what leaves room underneath for the orbs. */
   .strawberry-matcha {
     background-color: var(--page);
-  }
-  /* The nav covers content on purpose (see bottom-nav.tsx), so it takes the
-     opaque ground rather than the translucent surface everything else uses. */
-  .strawberry-matcha [data-slot="nav-bar"] {
-    background-color: color-mix(in oklch, var(--page) 88%, transparent);
   }
   .strawberry-matcha body {
     background-color: transparent;
