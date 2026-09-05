@@ -8,13 +8,13 @@
  * phone that renders it perfectly on a desktop.
  */
 
-export const RING_SIZE = 162;
+export const RING_SIZE = 150;
 export const RING_STROKE = 14;
 export const RING_RADIUS = (RING_SIZE - RING_STROKE) / 2;
 export const RING_CIRCUMFERENCE = 2 * Math.PI * RING_RADIUS;
 
 /** The figure at its largest, and the floor it may never shrink past. */
-export const RING_FIGURE_PX = 40;
+export const RING_FIGURE_PX = 36;
 const MIN_FIGURE_PX = 18;
 
 /** The caption under the figure: its own size, and the gap above it. */

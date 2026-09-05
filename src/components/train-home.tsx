@@ -201,7 +201,7 @@ export function TrainHome({
 
   return (
     <>
-      <main className="mx-auto w-full max-w-md flex-1 space-y-3 px-4 pb-[calc(6rem+env(safe-area-inset-bottom))] pt-2">
+      <main className="mx-auto w-full max-w-md flex-1 space-y-2 px-3 pb-[calc(6rem+env(safe-area-inset-bottom))] pt-2">
         {/* The primary action sits ABOVE the calendar and the list. It was under
             the list until a month with thirty sessions made the point: the one
             thing you came here to do should not be reachable only by scrolling
@@ -231,7 +231,7 @@ export function TrainHome({
           )}
         </header>
 
-        <Card className="gap-0 border border-border/60 py-0 shadow-[var(--shadow-card)] ring-0 backdrop-blur-xl flex justify-center px-2 py-3">
+        <Card className="gap-0 border border-border/60 py-0 shadow-[var(--shadow-card)] ring-0 backdrop-blur-xl items-center px-1 py-2">
           <Calendar
             month={toDate(`${month}-01`)}
             // Straight to state. There is nothing to fetch, so there is
@@ -460,7 +460,7 @@ function MonthVolume({
   const total = volume.reduce((t, v) => t + v.sets, 0);
 
   return (
-    <Card className="gap-0 border border-border/60 py-0 shadow-[var(--shadow-card)] ring-0 backdrop-blur-xl px-5 py-4">
+    <Card className="gap-0 border border-border/60 py-0 shadow-[var(--shadow-card)] ring-0 backdrop-blur-xl px-4 py-3.5">
       <div className="flex items-baseline justify-between gap-2">
         <h2 className="text-[11px] font-semibold uppercase tracking-[0.08em] text-muted-foreground">
           Sets per muscle
@@ -474,7 +474,7 @@ function MonthVolume({
           directly, and half for each one it helps.
         </p>
       ) : (
-        <ChartContainer config={volumeConfig} className="mt-3 h-[380px] w-full">
+        <ChartContainer config={volumeConfig} className="mt-2 h-[360px] w-full">
           <BarChart
             accessibilityLayer
             data={volume}
@@ -482,7 +482,7 @@ function MonthVolume({
             // Room on the right for the value labels, which sit outside the
             // bar end rather than inside it -- inside, a short bar has nowhere
             // to put its number and a zero has no bar at all.
-            margin={{ left: 0, right: 24 }}
+            margin={{ left: 0, right: 22, top: 2, bottom: 2 }}
           >
             {/* Hidden because every bar is labelled with its own figure. An
                 axis AND a number on each bar would be the same information
@@ -505,7 +505,7 @@ function MonthVolume({
               interval={0}
               // Wide enough for "Upper back" on ONE line: at 78 it wrapped to
               // two and stopped lining up with its own bar.
-              width={92}
+              width={84}
               // Set on the tick rather than by className: recharts renders SVG
               // <text>, which a Tailwind font-size class does not reach.
               tick={AXIS_TICK}
@@ -523,7 +523,7 @@ function MonthVolume({
               // longer than they are; the earlier version's comment said this
               // and its code did not.
               radius={[0, 6, 6, 0]}
-              barSize={13}
+              barSize={10}
               // Recharts animates a bar from its previous value to its new one,
               // so switching months slides the bars across rather than cutting.
               // That only works because the chart STAYS MOUNTED -- keying it on

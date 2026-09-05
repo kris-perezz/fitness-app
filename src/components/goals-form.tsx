@@ -225,8 +225,8 @@ export function GoalsForm({ goals }: { goals: Goals }) {
   }
 
   return (
-    <main className="mx-auto w-full max-w-md flex-1 space-y-3 px-4 pb-[calc(6rem+env(safe-area-inset-bottom))] pt-2">
-      <Card className="gap-0 border border-border/60 py-0 shadow-[var(--shadow-card)] ring-0 backdrop-blur-xl space-y-6 px-5 py-5">
+    <main className="mx-auto w-full max-w-md flex-1 space-y-2 px-3 pb-[calc(6rem+env(safe-area-inset-bottom))] pt-2">
+      <Card className="gap-0 border border-border/60 py-0 shadow-[var(--shadow-card)] ring-0 backdrop-blur-xl space-y-5 px-4 py-4">
         {/* S75/S79. FIRST ON THE SCREEN, because it now decides what the rest
             of the screen is for: with it off there are no macro targets to set,
             so a form full of them would be asking for numbers nothing reads.
@@ -429,11 +429,14 @@ export function GoalsForm({ goals }: { goals: Goals }) {
         </Button>
       </Card>
 
-      {/* Account, in its own card. Three full-width controls of three different
-          weights stacked down the middle was the shape of an unstyled form; two
-          list rows with a divider is what a settings screen looks like. */}
-      <Card className="gap-0 border border-border/60 py-0 shadow-[var(--shadow-card)] ring-0 backdrop-blur-xl divide-y divide-border/60">
+      <Card className="gap-0 border border-border/60 py-0 shadow-[var(--shadow-card)] ring-0 backdrop-blur-xl">
         <ThemeToggle />
+      </Card>
+
+      {/* Its own card, away from the settings. Sign out is not a preference, and
+          a row that ends the session should not sit in the same box as one that
+          changes a colour. */}
+      <Card className="gap-0 border border-border/60 py-0 shadow-[var(--shadow-card)] ring-0 backdrop-blur-xl">
         <form action={signOut}>
           <Button
             type="submit"

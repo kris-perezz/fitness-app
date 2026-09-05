@@ -172,7 +172,7 @@ export function LogScreen({
 
   return (
     <>
-      <main className="mx-auto w-full max-w-md flex-1 space-y-3 px-4 pb-[calc(6rem+env(safe-area-inset-bottom))] pt-2">
+      <main className="mx-auto w-full max-w-md flex-1 space-y-2 px-3 pb-[calc(6rem+env(safe-area-inset-bottom))] pt-2">
         <header className="flex items-center gap-1 px-1 py-1">
           <Button
             size="icon"
@@ -215,10 +215,10 @@ export function LogScreen({
           </div>
         </header>
 
-        <Card className="gap-0 border border-border/60 py-0 shadow-[var(--shadow-card)] ring-0 backdrop-blur-xl px-5 py-6">
+        <Card className="gap-0 border border-border/60 py-0 shadow-[var(--shadow-card)] ring-0 backdrop-blur-xl px-4 py-4">
           <CalorieRing consumed={totals.kcal} goal={calorieGoal} tone={tone} />
 
-          <div className="mt-6 grid grid-cols-3 gap-2">
+          <div className="mt-4 grid grid-cols-3 gap-2">
             <MacroMeter
               label="Protein"
               metric="protein"
@@ -266,7 +266,7 @@ export function LogScreen({
                       <Item
                         asChild
                         size="sm"
-                        className="rounded-none px-5 py-2.5 active:bg-accent"
+                        className="rounded-none px-4 py-2 active:bg-accent"
                       >
                         <button onClick={() => setDetail(e)} className="text-left">
                           <ItemContent className="min-w-0">
@@ -292,7 +292,7 @@ export function LogScreen({
                   as a form rather than as a day. */}
               <button
                 onClick={() => setAddingTo(meal)}
-                className="flex w-full items-center gap-2 px-5 pb-4 pt-1 text-sm text-muted-foreground active:text-foreground"
+                className="flex w-full items-center gap-2 px-4 pb-3 pt-1 text-sm text-muted-foreground active:text-foreground"
               >
                 <Plus className="size-4" /> Add food
               </button>
@@ -379,7 +379,7 @@ function MacroMeter({
     // two 12px words at opposite ends of a cell with nothing between them, so
     // the three of them read across as one run-on string rather than as three
     // separate figures. Bounds and a stack are what separate them.
-    <div className="rounded-lg bg-muted/40 px-2 py-2.5 text-center">
+    <div className="rounded-lg bg-muted/40 px-2 py-2 text-center">
       <div className="text-[11px] uppercase tracking-[0.06em] text-muted-foreground">
         {label}
       </div>
