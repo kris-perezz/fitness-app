@@ -14,9 +14,12 @@ import {
 } from "@/lib/chart";
 import { estimateShare, loggedDays, type IntakeDay, type TopFood, type TrendPoint } from "@/lib/trends";
 import { Button } from "@/components/ui/button";
+import { Card } from "@/components/ui/card";
 import { ChartContainer, type ChartConfig } from "@/components/ui/chart";
 import { Empty, EmptyDescription, EmptyHeader, EmptyMedia, EmptyTitle } from "@/components/ui/empty";
 import { Item, ItemContent, ItemDescription, ItemTitle } from "@/components/ui/item";
+import { cn } from "@/lib/utils";
+import { PAGE, SURFACE, SURFACE_PAD } from "@/lib/ui";
 
 /**
  * The Food tab's Trends view (S83-S86). What a month of eating looks like,
@@ -66,8 +69,8 @@ export function TrendsScreen({
   const share = estimateShare(days);
 
   return (
-    <main className="mx-auto w-full max-w-md flex-1 pb-[calc(6rem+env(safe-area-inset-bottom))]">
-      <header className="flex items-center gap-1 border-b border-border px-2 py-2">
+    <main className={PAGE}>
+      <header className="flex items-center gap-1 px-1 py-1">
         <Button size="icon-xl" variant="ghost" aria-label="Back to the log" asChild>
           <Link href="/log">
             <ChevronLeft className="size-5" />
@@ -120,7 +123,7 @@ export function TrendsScreen({
               legitimate entry (S35), and this is context for how hard to lean
               on the two charts above rather than a score. */}
           {share.entries > 0 && (
-            <section className="border-b border-border px-5 py-4">
+            <Card className={cn(SURFACE, SURFACE_PAD)}>
               <p className="text-sm">
                 <span className="font-medium tabular-nums">{share.percent}%</span> of the{" "}
                 <span className="tabular-nums">{share.entries}</span>{" "}
@@ -132,7 +135,7 @@ export function TrendsScreen({
                 behind it. It says how hard to lean on the numbers above, not that anything is
                 wrong with them.
               </p>
-            </section>
+            </Card>
           )}
         </>
       )}
@@ -159,27 +162,27 @@ function TopFoods({ foods }: { foods: TopFood[] | null }) {
   // "could not ask" are different facts and only one of them is about eating.
   if (foods === null) {
     return (
-      <section className="border-b border-border px-5 py-4">
+      <Card className={cn(SURFACE, SURFACE_PAD)}>
         <h2 className="text-sm font-medium">Where the calories went</h2>
         <p className="mt-2 text-xs text-muted-foreground">
           Not available right now.
         </p>
-      </section>
+      </Card>
     );
   }
 
   if (foods.length === 0) return null;
 
   return (
-    <section className="border-b border-border py-4">
-      <h2 className="px-5 text-sm font-medium">Where the calories went</h2>
-      <p className="px-5 pt-1 text-xs text-muted-foreground">
+    <Card className={SURFACE}>
+      <h2 className="px-3.5 pt-4 text-sm font-medium">Where the calories went</h2>
+      <p className="px-3.5 pt-1 text-xs text-muted-foreground">
         Most calories over the last 30 days, whatever the portion size.
       </p>
-      <ul className="mt-2 divide-y divide-border">
+      <ul className="mt-2">
         {foods.map((food) => (
           <li key={food.key}>
-            <Item size="sm" className="rounded-none px-5 py-3">
+            <Item size="sm" className="rounded-none px-3.5 py-3">
               <ItemContent className="min-w-0">
                 <ItemTitle className="font-normal">{food.name}</ItemTitle>
                 <ItemDescription className="text-xs tabular-nums">
@@ -194,7 +197,7 @@ function TopFoods({ foods }: { foods: TopFood[] | null }) {
           </li>
         ))}
       </ul>
-    </section>
+    </Card>
   );
 }
 
@@ -231,7 +234,7 @@ function DayChart({
   const values = points.map((p) => p[dataKey]);
 
   return (
-    <section className="border-b border-border px-5 py-4">
+    <Card className={cn(SURFACE, SURFACE_PAD)}>
       <div className="flex items-baseline justify-between gap-2">
         <h2 className="text-sm font-medium">{title}</h2>
         {caption && <span className="text-xs text-muted-foreground">{caption}</span>}
@@ -284,6 +287,6 @@ function DayChart({
           </BarChart>
         </ChartContainer>
       )}
-    </section>
+    </Card>
   );
 }

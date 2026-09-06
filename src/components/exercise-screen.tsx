@@ -16,9 +16,12 @@ import {
   type LiftSession,
 } from "@/lib/training";
 import { Button } from "@/components/ui/button";
+import { Card } from "@/components/ui/card";
 import { LiftChart, enoughSessions } from "@/components/lift-chart";
 import { Empty, EmptyDescription, EmptyHeader, EmptyMedia, EmptyTitle } from "@/components/ui/empty";
 import { Item, ItemContent, ItemDescription, ItemTitle } from "@/components/ui/item";
+import { cn } from "@/lib/utils";
+import { PAGE, SURFACE, SURFACE_PAD } from "@/lib/ui";
 
 /**
  * One lift's history (S80).
@@ -66,8 +69,8 @@ export function ExerciseScreen({
   const showRepBand = hasRepBand(points);
 
   return (
-    <main className="mx-auto w-full max-w-md flex-1 pb-[calc(6rem+env(safe-area-inset-bottom))]">
-      <header className="flex items-center gap-1 border-b border-border px-2 py-2">
+    <main className={PAGE}>
+      <header className="flex items-center gap-1 px-1 py-1">
         <Button size="icon-xl" variant="ghost" aria-label="Back to training" asChild>
           <Link href="/train">
             <ChevronLeft className="size-5" />
@@ -103,7 +106,7 @@ export function ExerciseScreen({
         </Empty>
       ) : (
         <>
-          <section className="border-b border-border px-5 py-4">
+          <Card className={cn(SURFACE, SURFACE_PAD)}>
             <div className="flex items-baseline justify-between gap-2">
               <h2 className="text-sm font-medium">Estimated 1RM</h2>
               <span className="text-xs text-muted-foreground">
@@ -129,22 +132,24 @@ export function ExerciseScreen({
                 from a long set is not comparable to one from a heavy set.
               </p>
             )}
-          </section>
+          </Card>
 
-          <ul className="divide-y divide-border">
-            {sessions.map((session) => (
-              <li key={session.date}>
-                <Item size="sm" className="rounded-none px-5 py-3">
-                  <ItemContent className="min-w-0">
-                    <ItemTitle className="font-normal">{shortDate(session.date)}</ItemTitle>
-                    <ItemDescription className="text-xs tabular-nums">
-                      {session.sets.map((set) => setSummary(set)).join(" · ")}
-                    </ItemDescription>
-                  </ItemContent>
-                </Item>
-              </li>
-            ))}
-          </ul>
+          <Card className={SURFACE}>
+            <ul>
+              {sessions.map((session) => (
+                <li key={session.date}>
+                  <Item size="sm" className="rounded-none px-3.5 py-3">
+                    <ItemContent className="min-w-0">
+                      <ItemTitle className="font-normal">{shortDate(session.date)}</ItemTitle>
+                      <ItemDescription className="text-xs tabular-nums">
+                        {session.sets.map((set) => setSummary(set)).join(" · ")}
+                      </ItemDescription>
+                    </ItemContent>
+                  </Item>
+                </li>
+              ))}
+            </ul>
+          </Card>
         </>
       )}
     </main>
