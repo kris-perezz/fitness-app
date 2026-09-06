@@ -15,7 +15,7 @@ export const SURFACE =
 
 /** The gutter, the rhythm between surfaces and the room the nav bar needs. */
 export const PAGE =
-  "mx-auto w-full max-w-md flex-1 space-y-2 px-3 pb-[calc(6rem+env(safe-area-inset-bottom))] pt-1";
+  "mx-auto w-full max-w-md flex-1 space-y-2 px-2 pb-[calc(6rem+env(safe-area-inset-bottom))] pt-1";
 
 /** Padding inside a surface that holds a block of content rather than a list. */
 export const SURFACE_PAD = "px-3.5 py-3";
