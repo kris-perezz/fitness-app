@@ -412,16 +412,6 @@ function Headline({
           <span className="tabular-nums">{rateLabel(rate, unit)}</span> {windowLabel(rate.days)}
         </p>
       ) : null}
-      {/* The reading stays on screen and stays subordinate. Showing the trend
-          alone would be a number the user cannot find on their own scale. */}
-      <p className="mt-1 text-xs text-muted-foreground">
-        Last reading{" "}
-        <span className="tabular-nums">
-          {toDisplay(head.latest.weightLb, unit).toFixed(1)} {unit}
-        </span>
-        {" · "}
-        {shortDate(head.latest.date)}
-      </p>
 
       {/* S60. The goal SITS BESIDE the rate; it does not grade it. No "on
           track", no "behind", and deliberately no projected date -- compounding
@@ -708,6 +698,49 @@ function WeightChart({
   );
   const domain = useMemo(() => axisDomain(points), [points]);
 
+  /**
+   * A swipe across the chart is a second way to reach the window toggle above
+   * it, not a replacement -- the ToggleGroup stays the keyboard/AT path and
+   * drives the same `onWindowChange`. Read on the container's own pointer
+   * events rather than a gesture library: this is one axis, one threshold and
+   * one step, which does not earn a dependency.
+   *
+   * The gesture is judged on its own displacement, not on which element it
+   * started or ended over, so the start point is all that has to be kept
+   * between pointerdown and the move that crosses the threshold.
+   */
+  const swipeStart = useRef<{ x: number; y: number } | null>(null);
+  const swiped = useRef(false);
+  const SWIPE_PX = 40;
+
+  function onSwipeStart(e: React.PointerEvent<HTMLDivElement>) {
+    swipeStart.current = { x: e.clientX, y: e.clientY };
+    swiped.current = false;
+    e.currentTarget.setPointerCapture(e.pointerId);
+  }
+
+  function onSwipeMove(e: React.PointerEvent<HTMLDivElement>) {
+    if (!swipeStart.current || swiped.current) return;
+    const dx = e.clientX - swipeStart.current.x;
+    const dy = e.clientY - swipeStart.current.y;
+    // Horizontal enough, and past the threshold -- short of both, this is a
+    // vertical scroll or a tap, and `touch-pan-y` on the container already
+    // leaves the scroll itself to the browser.
+    if (Math.abs(dx) < SWIPE_PX || Math.abs(dx) < Math.abs(dy)) return;
+    swiped.current = true;
+
+    const index = CHART_WINDOWS.findIndex((w) => w.key === windowKey);
+    // Left moves to the next LONGER window, matching the ToggleGroup's own
+    // left-to-right order (1M -> 3M -> ...). Clamped rather than wrapped: a
+    // swipe past either end has nowhere further to go, not back to the start.
+    const next = CHART_WINDOWS[index + (dx < 0 ? 1 : -1)];
+    if (next) onWindowChange(next.key);
+  }
+
+  function onSwipeEnd() {
+    swipeStart.current = null;
+  }
+
   // Thin data is a sentence, not a chart (S79). Below the trend floor there is
   // nothing to draw that would not be a two-point line dressed up as a shape,
   // and the headline above already says what is missing.
@@ -748,7 +781,16 @@ function WeightChart({
       {/* While a wider window is still being fetched the chart holds what it
           has, dimmed. Drawing a full-width axis over half the history without
           saying so would present "not loaded yet" as "you did not weigh". */}
-      <div className={extending ? "opacity-50 transition-opacity" : "transition-opacity"}>
+      <div
+        className={cn(
+          "touch-pan-y",
+          extending ? "opacity-50 transition-opacity" : "transition-opacity",
+        )}
+        onPointerDown={onSwipeStart}
+        onPointerMove={onSwipeMove}
+        onPointerUp={onSwipeEnd}
+        onPointerCancel={onSwipeEnd}
+      >
 
       <ChartContainer config={weightConfig} className={`mt-3 ${CHART_CLASS}`}>
         <LineChart accessibilityLayer data={points} margin={{ left: 0, right: 8, top: 4 }}>
