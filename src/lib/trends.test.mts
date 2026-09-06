@@ -8,6 +8,7 @@ import {
   trendsWindow,
   type IntakeDay,
 } from "./trends.ts";
+import type { DayGoal } from "./goals.ts";
 
 const day = (log_date: string, over: Partial<IntakeDay> = {}): IntakeDay => ({
   log_date,
@@ -34,7 +35,7 @@ test("the window survives a month boundary and a leap year", () => {
 test("an unlogged day is a gap, not a zero", () => {
   // The whole point of S83. A zero bar says you ate nothing; a gap says the app
   // was closed. Only one of those is a thing the log can know.
-  const series = dailySeries([day("2026-09-01"), day("2026-09-03")], "2026-09-01", "2026-09-03");
+  const series = dailySeries([day("2026-09-01"), day("2026-09-03")], [], "2026-09-01", "2026-09-03");
 
   assert.equal(series.length, 3);
   assert.equal(series[0].kcal, 2100);
@@ -44,16 +45,35 @@ test("an unlogged day is a gap, not a zero", () => {
 });
 
 test("a day whose entries were all deleted reads as unlogged", () => {
-  const series = dailySeries([day("2026-09-01", { item_count: 0, kcal: 0 })], "2026-09-01", "2026-09-01");
+  const series = dailySeries([day("2026-09-01", { item_count: 0, kcal: 0 })], [], "2026-09-01", "2026-09-01");
   assert.equal(series[0].kcal, null);
 });
 
 test("the series is built from the calendar, not from the rows", () => {
   // Iterating the rows would close every gap by omitting it -- and the gaps are
   // the shape this chart exists to show.
-  const series = dailySeries([], "2026-09-01", "2026-09-05");
+  const series = dailySeries([], [], "2026-09-01", "2026-09-05");
   assert.equal(series.length, 5);
   assert.ok(series.every((p) => p.kcal === null));
+});
+
+test("a day's goal is its own stored row, never an earlier or later day's", () => {
+  const goals: DayGoal[] = [
+    { log_date: "2026-09-01", calorie_goal: 2000, protein_goal_g: 150, carb_goal_g: 200, fat_goal_g: 65 },
+    { log_date: "2026-09-03", calorie_goal: 2200, protein_goal_g: 170, carb_goal_g: 210, fat_goal_g: 70 },
+  ];
+  const series = dailySeries(
+    [day("2026-09-01"), day("2026-09-02"), day("2026-09-03")],
+    goals,
+    "2026-09-01",
+    "2026-09-03",
+  );
+  assert.equal(series[0].calorieGoal, 2000);
+  // No stored row for the middle day -- not resolved against either neighbour.
+  assert.equal(series[1].calorieGoal, null);
+  assert.equal(series[1].proteinGoal, null);
+  assert.equal(series[2].calorieGoal, 2200);
+  assert.equal(series[2].proteinGoal, 170);
 });
 
 test("the estimate share counts entries, not days", () => {

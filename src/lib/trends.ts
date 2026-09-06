@@ -8,6 +8,8 @@
  * to keep in step.
  */
 
+import type { DayGoal } from "./goals.ts";
+
 /** One row of `intake_days`. The view's own shape, not a reshaping of it. */
 export type IntakeDay = {
   log_date: string;
@@ -25,10 +27,18 @@ export type IntakeDay = {
  * can never assert is what happened while it was closed. `item_count` already
  * tells the two apart, so nothing has to be inferred (S83).
  */
+/**
+ * S60. The goal drawn as a stepped line on the two charts, per day rather
+ * than one flat number for the window. Null on a day with no stored
+ * `day_goals` row, which draws no goal segment there -- a gap in the line,
+ * not a guess at what the number was before this feature existed.
+ */
 export type TrendPoint = {
   date: string;
   kcal: number | null;
   protein_g: number | null;
+  calorieGoal: number | null;
+  proteinGoal: number | null;
 };
 
 /** Days back from today, inclusive of today. 30 is the window (charts open decision). */
@@ -54,9 +64,20 @@ export function trendsWindow(today: string, days = TREND_DAYS): { from: string; 
  * Built from the calendar rather than from the rows, because the rows only
  * contain days that exist. Iterating the returned rows would silently close
  * every gap by omitting it, and the gaps are the shape this chart is about.
+ *
+ * `goals` is `day_goals` for the same window (S60), joined in here rather
+ * than carried on `IntakeDay` -- a day can have a goal with no food logged
+ * against it, and the two rows come from different tables for exactly that
+ * reason.
  */
-export function dailySeries(days: IntakeDay[], from: string, to: string): TrendPoint[] {
+export function dailySeries(
+  days: IntakeDay[],
+  goals: DayGoal[],
+  from: string,
+  to: string,
+): TrendPoint[] {
   const byDate = new Map(days.map((d) => [d.log_date, d]));
+  const goalByDate = new Map(goals.map((g) => [g.log_date, g]));
   const out: TrendPoint[] = [];
 
   const cursor = new Date(`${from}T12:00:00`);
@@ -64,6 +85,7 @@ export function dailySeries(days: IntakeDay[], from: string, to: string): TrendP
   while (cursor <= end) {
     const date = iso(cursor);
     const day = byDate.get(date);
+    const goal = goalByDate.get(date);
     // item_count === 0 cannot normally happen (the view groups entries, so a
     // row exists only where an entry does) but it is checked anyway: a day
     // whose entries were all deleted must read as unlogged, not as a zero.
@@ -72,6 +94,8 @@ export function dailySeries(days: IntakeDay[], from: string, to: string): TrendP
       date,
       kcal: logged ? day.kcal : null,
       protein_g: logged ? day.protein_g : null,
+      calorieGoal: goal?.calorie_goal ?? null,
+      proteinGoal: goal?.protein_goal_g ?? null,
     });
     cursor.setDate(cursor.getDate() + 1);
   }

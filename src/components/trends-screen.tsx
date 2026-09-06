@@ -2,7 +2,7 @@
 
 import Link from "next/link";
 import { ChevronLeft, ChartNoAxesColumn } from "lucide-react";
-import { Bar, BarChart, CartesianGrid, ReferenceLine, XAxis, YAxis } from "recharts";
+import { Bar, BarChart, CartesianGrid, Line, XAxis, YAxis } from "recharts";
 
 import {
   CHART_CLASS,
@@ -54,14 +54,10 @@ const proteinConfig = {
 export function TrendsScreen({
   points,
   days,
-  calorieGoal,
-  proteinGoal,
   topFoods,
 }: {
   points: TrendPoint[];
   days: IntakeDay[];
-  calorieGoal: number | null;
-  proteinGoal: number | null;
   /** Null means the query failed -- see TopFoods. Empty means nothing logged. */
   topFoods: TopFood[] | null;
 }) {
@@ -98,9 +94,8 @@ export function TrendsScreen({
             caption={`${logged} of the last 30 days logged`}
             points={points}
             dataKey="kcal"
+            goalKey="calorieGoal"
             config={calorieConfig}
-            goal={calorieGoal}
-            goalLabel="Goal"
             /* A day short of the goal is not a verdict, and the last bar is
                usually TODAY, which is unfinished rather than low (S71). */
             thin="A few more logged days and this becomes a pattern."
@@ -108,12 +103,10 @@ export function TrendsScreen({
 
           <DayChart
             title="Protein a day"
-            caption={proteinGoal ? `Floor ${Math.round(proteinGoal)} g` : undefined}
             points={points}
             dataKey="protein_g"
+            goalKey="proteinGoal"
             config={proteinConfig}
-            goal={proteinGoal}
-            goalLabel="Floor"
             thin="A few more logged days and this becomes a pattern."
           />
 
@@ -202,11 +195,18 @@ function TopFoods({ foods }: { foods: TopFood[] | null }) {
 }
 
 /**
- * A day-by-day bar chart with its goal as a dashed reference.
+ * A day-by-day bar chart with its goal drawn as a stepped line over it.
  *
- * BARS, not a line: days are discrete, and a line between Tuesday and Wednesday
- * implies eating in between, which is not a thing that happens on a chart of
- * daily totals (S83).
+ * BARS, not a line, for the DATA: days are discrete, and a line between
+ * Tuesday and Wednesday implies eating in between, which is not a thing that
+ * happens on a chart of daily totals (S83). The GOAL is the opposite case --
+ * it genuinely holds between the days it did not change, which is what a
+ * stepped line says and a bar per day would not.
+ *
+ * S60. The goal is PER DAY, not one flat number for the window: a change
+ * shows as a step where it happened rather than silently redrawing every day
+ * before it at the new number. `connectNulls={false}` so a day with no stored
+ * goal is a gap in the line, never bridged to a neighbour's value.
  *
  * The axis is zero-based because calories and grams in a day are TOTALS, where
  * zero is a real value with a meaning -- the opposite of the bodyweight rule,
@@ -217,21 +217,20 @@ function DayChart({
   caption,
   points,
   dataKey,
+  goalKey,
   config,
-  goal,
-  goalLabel,
   thin,
 }: {
   title: string;
   caption?: string;
   points: TrendPoint[];
   dataKey: "kcal" | "protein_g";
+  goalKey: "calorieGoal" | "proteinGoal";
   config: ChartConfig;
-  goal: number | null;
-  goalLabel: string;
   thin: string;
 }) {
   const values = points.map((p) => p[dataKey]);
+  const goalValues = points.map((p) => p[goalKey]);
 
   return (
     <Card className={cn(SURFACE, SURFACE_PAD)}>
@@ -250,31 +249,17 @@ function DayChart({
             <YAxis
               {...Y_AXIS}
               width={38}
-              // The goal is inside the domain on purpose: a reference line
-              // above the tallest bar would otherwise be clipped off the top,
-              // and an invisible reference is worse than none.
+              // The goal line is inside the domain on purpose: above the
+              // tallest bar it would otherwise be clipped off the top, and an
+              // invisible reference is worse than none.
               domain={countDomain(
-                [...values.filter((v): v is number => v !== null), ...(goal ? [goal] : [])],
+                [
+                  ...values.filter((v): v is number => v !== null),
+                  ...goalValues.filter((v): v is number => v !== null),
+                ],
                 dataKey === "kcal" ? 500 : 25,
               )}
             />
-            {goal !== null && (
-              /* Neutral and dashed, never red on the wrong side of it (S79
-                 rule 5 / S70). The line states where the target is; it does
-                 not grade the bars against it. */
-              <ReferenceLine
-                y={goal}
-                stroke="var(--muted-foreground)"
-                strokeDasharray="4 4"
-                strokeOpacity={0.7}
-                label={{
-                  value: goalLabel,
-                  position: "insideTopRight",
-                  fontSize: 10,
-                  fill: "var(--muted-foreground)",
-                }}
-              />
-            )}
             <Bar
               dataKey={dataKey}
               fill={`var(--color-${dataKey})`}
@@ -283,6 +268,21 @@ function DayChart({
               // window has nothing to animate between -- unlike the month
               // pager on Train, nothing here swaps underneath it.
               isAnimationActive={false}
+            />
+            {/* Neutral and dashed, never red on the wrong side of it (S79
+                rule 5 / S70). The line states where the target is; it does
+                not grade the bars against it. Drawn after the bars so it
+                sits on top of them rather than under. */}
+            <Line
+              dataKey={goalKey}
+              type="stepAfter"
+              stroke="var(--muted-foreground)"
+              strokeDasharray="4 4"
+              strokeOpacity={0.7}
+              strokeWidth={1.5}
+              dot={false}
+              isAnimationActive={false}
+              connectNulls={false}
             />
           </BarChart>
         </ChartContainer>
