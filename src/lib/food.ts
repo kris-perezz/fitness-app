@@ -311,6 +311,10 @@ export type IntakeEntry = Macros & {
    * behind it, so there is nothing to correct (S7). */
   food_id: string | null;
   name: string;
+  /** S100. The longer sentence a title was named from, shown in the entry
+   * detail rather than the list. Null for everything logged before this
+   * column existed, and for anything logged without one since. */
+  description: string | null;
   meal: Meal;
   qty: number;
   unit: string;

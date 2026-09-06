@@ -30,6 +30,9 @@ export type NewEntry = Macros & {
   meal: Meal;
   food_id: string | null;
   name: string;
+  /** S100. Required rather than optional, so every call site says explicitly
+   * whether this entry has one -- a catalog food logged by quantity has none. */
+  description: string | null;
   qty: number;
   unit: string;
   estimate: boolean;
@@ -63,7 +66,7 @@ export async function addEntry(
 
 /** What the log screen reads. `micros` and `sugar_g` are stored and not shown. */
 const ENTRY_COLUMNS =
-  "id, log_date, food_id, name, meal, qty, unit, estimate, kcal, protein_g, fat_g, carb_g, fiber_g, sodium_mg";
+  "id, log_date, food_id, name, description, meal, qty, unit, estimate, kcal, protein_g, fat_g, carb_g, fiber_g, sodium_mg";
 
 /**
  * Every entry between two days, for the window the log tab pages through.

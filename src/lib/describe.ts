@@ -131,7 +131,13 @@ than a home cook would use -- restaurant portions, deep-fried items, anything
 finished with butter or oil in a pan you did not control.
 
 Numbers are for the whole portion, in the units named: kcal, grams for protein,
-fat, carbohydrate and fibre, milligrams for sodium.`;
+fat, carbohydrate and fibre, milligrams for sodium.
+
+Give the dish a TITLE as well as the description: at most four words, naming
+the dish rather than describing it -- "chicken adobo", "protein shake", not
+"chicken thighs braised in soy sauce and vinegar" or "a high protein drink".
+For a plate of several items, title the dish they form ("poutine"), not the
+first ingredient you happened to itemise.`;
 
 type EstimatedComponent = {
   item: unknown;
@@ -146,6 +152,7 @@ type EstimatedComponent = {
 
 type Estimated = {
   too_vague: boolean;
+  title: unknown;
   components: EstimatedComponent[] | null;
   assumptions: string | null;
 };
@@ -160,6 +167,8 @@ type Estimated = {
  * a correct total without another API call.
  */
 export type Estimate = {
+  /** At most four words, naming the dish rather than describing it. */
+  title: string;
   assumptions: string;
   components: Component[];
   kcal: number;
@@ -208,6 +217,10 @@ const COMPONENT_SCHEMA = {
  * mass per item before it writes the sentence explaining itself -- the sentence
  * then describes a decision already made rather than standing in for one.
  *
+ * `title` comes first because naming the dish does not depend on having
+ * itemised it yet -- "poutine" is decided before the fries and curds are
+ * broken out, not after.
+ *
  * There are no total fields. Totals are a sum, and a sum is arithmetic this
  * codebase does not ask a language model to perform.
  */
@@ -215,10 +228,11 @@ const SCHEMA = {
   type: "object",
   properties: {
     too_vague: { type: "boolean" },
+    title: { type: ["string", "null"] },
     components: { type: "array", items: COMPONENT_SCHEMA },
     assumptions: { type: ["string", "null"] },
   },
-  required: ["too_vague", "components", "assumptions"],
+  required: ["too_vague", "title", "components", "assumptions"],
   additionalProperties: false,
 } as const;
 
@@ -290,6 +304,16 @@ function readComponents(value: unknown): Component[] {
     });
   }
   return rows;
+}
+
+/**
+ * Clamped to four words in code as well as in the prompt, so a model that
+ * ignores the instruction cannot hand the log list the same wall of prose this
+ * field exists to replace.
+ */
+function readTitle(value: unknown): string {
+  if (typeof value !== "string") return "";
+  return value.trim().split(/\s+/).slice(0, 4).join(" ");
 }
 
 /**
@@ -427,6 +451,7 @@ export async function estimateFromDescription(
   }
 
   const estimate: Estimate = {
+    title: readTitle(parsed.title),
     assumptions: typeof parsed.assumptions === "string" ? parsed.assumptions.trim() : "",
     components,
     ...summed,

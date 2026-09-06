@@ -462,6 +462,14 @@ function EntryDetail({
                 {entry.estimate && " · estimate"}
               </p>
 
+              {/* S100. The longer sentence the name was titled from, kept out
+                  of the list and shown only here, where there is room to read
+                  it. Absent for a catalog food and for anything logged before
+                  this existed. */}
+              {entry.description && (
+                <p className="mt-2 text-sm text-muted-foreground">{entry.description}</p>
+              )}
+
               {/* Hand-rolled: see ingredient-sheet.tsx -- Chart is the only
                   registry option and it would pull recharts in to render six
                   numbers. */}

@@ -299,6 +299,9 @@ function QtyStep({
         meal,
         food_id: food.id,
         name: food.name,
+        // A catalog food is logged by quantity, not described -- there is
+        // nothing here for the estimator to have said.
+        description: null,
         qty: n,
         unit: entryUnit,
         estimate: false,
@@ -448,6 +451,13 @@ function CustomStep({
     sodium_mg: "",
   });
   /**
+   * S100. What was typed or photographed, kept apart from `f.name` so the log
+   * list can show a dish and not a sentence. This is what gets sent to the
+   * estimator and what is saved to `intake_entries.description`; `f.name` is
+   * the short title the estimate suggests, and stays editable either way.
+   */
+  const [description, setDescription] = useState("");
+  /**
    * TWO TRANSITIONS, BECAUSE THERE ARE TWO ACTIONS.
    *
    * One shared `pending` meant the footer button read "Adding" for the whole of
@@ -576,8 +586,12 @@ function CustomStep({
   function estimate() {
     const id = (attempt.current += 1);
     setEstimating(true);
+    // The name stands in when nothing has been described yet: somebody who
+    // types "korean army stew" into the title and asks for an estimate has
+    // said enough, and the estimate writes the sentence back into description.
+    const source = description.trim() === "" ? f.name : description;
     const described =
-      appended && f.name.endsWith(appended) ? f.name.slice(0, -appended.length) : f.name;
+      appended && source.endsWith(appended) ? source.slice(0, -appended.length) : source;
     startEstimating(async () => {
       // The action returns its failures as values, but the call itself can
       // still reject -- a dropped connection mid-upload, or a body the server
@@ -616,14 +630,18 @@ function CustomStep({
       // protected from it any more.
       corrected.current.clear();
       setRows(next);
-      // The assumptions go into the NAME, which is where this user already
-      // writes them by hand and where the day list will keep showing them. A
-      // separate panel would be a second place to look for the same thing.
+      // The assumptions go into the DESCRIPTION, which is where this user
+      // already writes them by hand -- the name is staying short from here on.
       const suffix = e.assumptions ? ` — ${e.assumptions}` : null;
       setAppended(suffix);
+      setDescription(`${described.trim()}${suffix ?? ""}`);
       setF((prev) => ({
         ...prev,
-        name: `${described.trim()}${suffix ?? ""}`,
+        // Estimating overwrites the title exactly as it overwrites the
+        // macros (S100). Falls back to the typed description only if the
+        // model returned nothing nameable, so the field is never left blank
+        // after a successful estimate.
+        name: e.title || described.trim(),
         // Re-summed locally rather than read off `e`, even though nothing has
         // been corrected yet and the two agree to the digit. One path means a
         // first estimate and a re-weighed one cannot round differently.
@@ -639,6 +657,7 @@ function CustomStep({
         meal,
         food_id: null,
         name: f.name,
+        description: description.trim() || null,
         qty: 1,
         unit: "serving",
         estimate: true,
@@ -685,15 +704,38 @@ function CustomStep({
           <ChevronLeft className="size-4" /> Back
         </Button>
 
-        {/* S100. The field was always a description -- people type "korean army
-            stew, 3 bowls x ~1.5 cups contents" in here. The placeholder now
-            says so, because the estimate is only as good as what it is given. */}
-        <Input
-          placeholder="What you ate, and roughly how much"
-          value={f.name}
-          onChange={(e) => setF({ ...f, name: e.target.value })}
-          className="h-11 text-base"
-        />
+        {/* S100. The name is the short title the log list will show; the
+            description below is the fuller sentence the estimate reads --
+            "korean army stew, 3 bowls x ~1.5 cups contents". Estimating fills
+            the name in from the description and never the other way round. */}
+        <Field>
+          <FieldLabel htmlFor="entry_name" className="text-xs font-normal text-muted-foreground">
+            Name
+          </FieldLabel>
+          <Input
+            id="entry_name"
+            placeholder="Chicken adobo"
+            value={f.name}
+            onChange={(e) => setF({ ...f, name: e.target.value })}
+            className="h-11 text-base"
+          />
+        </Field>
+
+        <Field className="mt-3">
+          <FieldLabel
+            htmlFor="entry_description"
+            className="text-xs font-normal text-muted-foreground"
+          >
+            Description
+          </FieldLabel>
+          <Input
+            id="entry_description"
+            placeholder="What you ate, and roughly how much"
+            value={description}
+            onChange={(e) => setDescription(e.target.value)}
+            className="h-11 text-base"
+          />
+        </Field>
 
         {/* Cleared on change so picking the same file twice fires it twice. */}
         <input
@@ -786,7 +828,9 @@ function CustomStep({
           variant="outline"
           className="mt-2 h-11 w-full"
           onClick={estimating ? discardInFlight : estimate}
-          disabled={!estimating && f.name.trim() === "" && photo === null}
+          disabled={
+            !estimating && description.trim() === "" && f.name.trim() === "" && photo === null
+          }
         >
           {estimating ? <Spinner /> : <Sparkles className="size-4" />}
           {estimating ? "Stop" : rows.length > 0 ? "Estimate again" : "Estimate these"}
