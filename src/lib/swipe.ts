@@ -78,7 +78,14 @@ export function useSwipe({
     // One step per gesture: `fired` latches, so a long drag pages once rather
     // than once per frame past the threshold.
     onPointerMove(e) {
-      if (!enabled || !start.current || fired.current) return;
+      if (!enabled || !start.current) return;
+      // A claimed gesture stays claimed for the rest of the drag. Letting the
+      // later moves through would hand the same finger to an outer handler,
+      // which acts on the total displacement and runs a second time.
+      if (fired.current) {
+        e.stopPropagation();
+        return;
+      }
       const dir = swipeDirection(e.clientX - start.current.x, e.clientY - start.current.y);
       if (dir === null) return;
       fired.current = true;
