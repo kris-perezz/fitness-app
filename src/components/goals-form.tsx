@@ -27,6 +27,8 @@ import { Switch } from "@/components/ui/switch";
 import { ThemeToggle } from "@/components/theme-toggle";
 import { fromDisplay, toDisplay, type DisplayUnit } from "@/lib/weight";
 import { toast } from "sonner";
+import { cn } from "@/lib/utils";
+import { PAGE, SURFACE, SURFACE_PAD } from "@/lib/ui";
 
 type Goals =
   | ({
@@ -226,8 +228,8 @@ export function GoalsForm({ goals }: { goals: Goals }) {
   }
 
   return (
-    <main className="mx-auto w-full max-w-md flex-1 space-y-3 px-4 pb-[calc(6rem+env(safe-area-inset-bottom))] pt-2">
-      <Card className="gap-0 border border-border/60 py-0 shadow-[var(--shadow-card)] ring-0 backdrop-blur-xl space-y-5 px-4 py-4">
+    <main className={PAGE}>
+      <Card className={cn(SURFACE, SURFACE_PAD, "space-y-5")}>
         {/* S75/S79. FIRST ON THE SCREEN, because it now decides what the rest
             of the screen is for: with it off there are no macro targets to set,
             so a form full of them would be asking for numbers nothing reads.
@@ -430,19 +432,24 @@ export function GoalsForm({ goals }: { goals: Goals }) {
         </Button>
       </Card>
 
-      <Card className="gap-0 border border-border/60 py-0 shadow-[var(--shadow-card)] ring-0 backdrop-blur-xl">
+      <Card className={SURFACE}>
         <ThemeToggle />
       </Card>
 
       {/* Its own card, away from the settings. Sign out is not a preference, and
           a row that ends the session should not sit in the same box as one that
-          changes a colour. */}
-      <Card className="gap-0 border border-border/60 py-0 shadow-[var(--shadow-card)] ring-0 backdrop-blur-xl">
+          changes a colour.
+
+          A quiet list row like Appearance above, not a filled destructive
+          button -- a solid colour block inside a translucent card reads as a
+          clipped rectangle rather than a row. Destructive stays legible in the
+          colour of the label and icon instead. */}
+      <Card className={SURFACE}>
         <form action={signOut}>
           <Button
             type="submit"
-            variant="destructive"
-            className="h-12 w-full justify-start rounded-none px-4 text-[15px] font-normal"
+            variant="ghost"
+            className="h-12 w-full justify-start rounded-none px-4 text-[15px] font-normal text-destructive"
           >
             <LogOut className="size-4" /> Sign out
           </Button>
