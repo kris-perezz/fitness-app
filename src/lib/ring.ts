@@ -8,10 +8,47 @@
  * phone that renders it perfectly on a desktop.
  */
 
+/**
+ * The geometry for the Nth (0-indexed, outermost first) of `ringCount`
+ * concentric rings drawn in a `size`-px box, each `strokeWidth` thick with
+ * `gap` clear between one ring's edge and the next's.
+ *
+ * ONE FORMULA FOR EVERY RING THIS APP DRAWS (S89). The calorie ring below is
+ * the `ringCount = 1` case -- index 0, where `gap` drops out of the arithmetic
+ * because there is no second ring to leave room for -- and the month
+ * calendar's four-ring day mark is `ringCount = 4`. A second, hand-rolled
+ * geometry for the day mark would drift from this one's conventions the first
+ * time either changed; this is why there is only one.
+ */
+export function ringGeometry(
+  size: number,
+  ringIndex: number,
+  ringCount: number,
+  strokeWidth: number,
+  gap = 1,
+): { radius: number; circumference: number } {
+  const radius = (size - strokeWidth) / 2 - ringIndex * (strokeWidth + gap);
+  return { radius, circumference: 2 * Math.PI * radius };
+}
+
+/**
+ * The floor a ring's fill fraction is clamped to, so a logged-but-zero day
+ * still draws a visible sliver rather than reading as though the ring were
+ * empty of a value entirely. Shared by every ring this app draws -- the
+ * calorie ring and the day mark's four both clamp to the same floor.
+ */
+export const RING_MIN_FRACTION = 0.006;
+
 export const RING_SIZE = 150;
 export const RING_STROKE = 14;
-export const RING_RADIUS = (RING_SIZE - RING_STROKE) / 2;
-export const RING_CIRCUMFERENCE = 2 * Math.PI * RING_RADIUS;
+const { radius: SINGLE_RADIUS, circumference: SINGLE_CIRCUMFERENCE } = ringGeometry(
+  RING_SIZE,
+  0,
+  1,
+  RING_STROKE,
+);
+export const RING_RADIUS = SINGLE_RADIUS;
+export const RING_CIRCUMFERENCE = SINGLE_CIRCUMFERENCE;
 
 /** The figure at its largest, and the floor it may never shrink past. */
 export const RING_FIGURE_PX = 36;

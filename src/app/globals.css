@@ -24,6 +24,11 @@
   --color-chart-3: var(--chart-3);
   --color-chart-2: var(--chart-2);
   --color-chart-1: var(--chart-1);
+  --color-macro-calories: var(--macro-calories);
+  --color-macro-protein: var(--macro-protein);
+  --color-macro-carbs: var(--macro-carbs);
+  --color-macro-fat: var(--macro-fat);
+  --color-macro-track: var(--macro-track);
   --color-ring: var(--ring);
   --color-input: var(--input);
   --color-border: var(--border);
@@ -52,6 +57,17 @@
 }
 
 :root {
+  /* S104's four macro rings. Not the chart series: those are greyscale in
+     light and dark by design, and matcha's are pastels tuned to sit behind
+     type -- neither can carry four marks that have to be told apart at 48px.
+     Four hues, one per macro, saturated enough that a filled arc separates
+     from its track at a glance in every theme. */
+  --macro-calories: oklch(0.6 0.2 25);
+  --macro-protein: oklch(0.55 0.16 152);
+  --macro-carbs: oklch(0.55 0.17 255);
+  --macro-fat: oklch(0.68 0.16 70);
+  --macro-track: oklch(0.88 0.01 90);
+
   /* iOS paints the strip above and below the page with `theme-color`, so it has
      to be a plain colour a meta tag can carry -- oklch() and a translucent
      value are both dropped, and dropped means white. components/theme-color.tsx
@@ -95,6 +111,17 @@
 }
 
 .dark {
+  /* S104's four macro rings. Not the chart series: those are greyscale in
+     light and dark by design, and matcha's are pastels tuned to sit behind
+     type -- neither can carry four marks that have to be told apart at 48px.
+     Four hues, one per macro, saturated enough that a filled arc separates
+     from its track at a glance in every theme. */
+  --macro-calories: oklch(0.7 0.19 25);
+  --macro-protein: oklch(0.72 0.17 152);
+  --macro-carbs: oklch(0.68 0.16 255);
+  --macro-fat: oklch(0.78 0.15 70);
+  --macro-track: oklch(0.32 0.01 90);
+
   --theme-color: #0a0a0a;
   --shadow-card: 0 1px 2px oklch(0 0 0 / 30%), 0 8px 24px -8px oklch(0 0 0 / 45%);
   --background: oklch(0.145 0 0);
@@ -147,6 +174,16 @@
  * to whatever :root happens to hold.
  */
 .strawberry-matcha {
+  /* S104's four macro rings, in this theme's own family rather than the
+     generic four: strawberry, matcha, caramel and a deep berry, each taken
+     to chart saturation. The palette's own values are tuned to sit behind
+     type, which is too pale for an arc to separate from its track. */
+  --macro-calories: oklch(0.62 0.19 12);
+  --macro-protein: oklch(0.56 0.17 131);
+  --macro-carbs: oklch(0.64 0.14 58);
+  --macro-fat: oklch(0.5 0.14 335);
+  --macro-track: oklch(0.87 0.02 74);
+
   /* Native controls and scrollbars have no CSS variables to read; without this
      they paint themselves dark on a system set to dark. */
   color-scheme: light;

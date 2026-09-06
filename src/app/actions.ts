@@ -150,6 +150,82 @@ export async function loadIntakeWindow(
   };
 }
 
+/**
+ * S103/S89. What the month calendar needs to know about a day: whether
+ * anything is logged (S103's plain fill) and the four macro totals a day's
+ * rings (S89) read against its `day_goals` row. One row serves both, since
+ * `intake_days` already sums all of it.
+ */
+export type DayLog = {
+  log_date: string;
+  item_count: number;
+  kcal: number;
+  protein_g: number;
+  carb_g: number;
+  fat_g: number;
+};
+
+function toDayLog(row: {
+  log_date: unknown;
+  item_count: unknown;
+  kcal: unknown;
+  protein_g: unknown;
+  carb_g: unknown;
+  fat_g: unknown;
+}): DayLog {
+  return {
+    log_date: row.log_date as string,
+    item_count: Number(row.item_count),
+    kcal: Number(row.kcal),
+    protein_g: Number(row.protein_g),
+    carb_g: Number(row.carb_g),
+    fat_g: Number(row.fat_g),
+  };
+}
+
+/**
+ * Every day between two months that has anything logged, for the window
+ * `/log/month` pages through -- and, only when `includeGoals` is set, the
+ * dated goal each of those days is read against (S89).
+ *
+ * The mirror of `loadTrainingWindow` and `loadIntakeWindow` above, for the
+ * same reason: the month on screen is client state, so paging into a month
+ * already held costs nothing and only the edges of the window ever reach the
+ * network. `includeGoals` follows the page's own strict-mode gate -- calm's
+ * plain filled dot (S103) never needs a goal, so it never asks for one.
+ */
+export async function loadIntakeDaysWindow(
+  from: string,
+  to: string,
+  includeGoals: boolean,
+): Promise<{ days: DayLog[]; dayGoals: DayGoal[]; error: string | null }> {
+  const day = /^\d{4}-\d{2}-\d{2}$/;
+  if (!day.test(from) || !day.test(to)) return { days: [], dayGoals: [], error: "Bad date range" };
+
+  const supabase = await createClient();
+  const [{ data, error }, goalsResult] = await Promise.all([
+    supabase
+      .from("intake_days")
+      .select("log_date, item_count, kcal, protein_g, carb_g, fat_g")
+      .gte("log_date", from)
+      .lte("log_date", to),
+    includeGoals
+      ? supabase
+          .from("day_goals")
+          .select("log_date, calorie_goal, protein_goal_g, carb_goal_g, fat_goal_g")
+          .gte("log_date", from)
+          .lte("log_date", to)
+      : Promise.resolve({ data: null, error: null }),
+  ]);
+  if (error) return { days: [], dayGoals: [], error: error.message };
+
+  return {
+    days: (data ?? []).map(toDayLog),
+    dayGoals: goalsResult.error ? [] : (goalsResult.data ?? []).map(toDayGoal),
+    error: null,
+  };
+}
+
 export async function deleteEntry(id: string) {
   const supabase = await createClient();
   const { error } = await supabase.from("intake_entries").delete().eq("id", id);

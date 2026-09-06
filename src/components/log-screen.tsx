@@ -6,6 +6,7 @@ import Link from "next/link";
 import {
   BookmarkPlus,
   ChartNoAxesColumn,
+  ChevronDown,
   ChevronLeft,
   ChevronRight,
   CookingPot,
@@ -195,8 +196,21 @@ export function LogScreen({
             <ChevronLeft className="size-5" />
           </Button>
 
-          <h1 className="flex-1 text-center text-[17px] font-semibold tracking-[-0.01em]">
-            {label}
+          {/* S103. The one way into the month view -- a chevron beside the
+              date rather than a second calendar icon competing with Recipes
+              and Trends for the same row. The date text stays the label; the
+              chevron is the whole affordance. */}
+          <h1 className="flex-1">
+            <Button
+              variant="ghost"
+              asChild
+              className="h-11 w-full justify-center gap-1 text-[17px] font-semibold tracking-[-0.01em]"
+            >
+              <Link href="/log/month" prefetch>
+                {label}
+                <ChevronDown className="size-4 text-muted-foreground" />
+              </Link>
+            </Button>
           </h1>
 
           <div className="flex items-center gap-0.5">
