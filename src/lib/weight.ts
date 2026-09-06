@@ -176,10 +176,21 @@ export function chartSeries(entries: WeighIn[], fromDate?: string): ChartPoint[]
  * applying it -- all this function still owns is which fields of a point carry
  * a number. Both series go in: fitting to the trend alone would let a reading
  * sit outside its own axis.
+ *
+ * `extra` is the goal weight (S60), already converted to the display unit, or
+ * null with no goal on file. It has to widen the SAME domain rather than being
+ * drawn on an axis that stops short of it -- a goal 15 lb outside the plotted
+ * range would otherwise draw its reference line off-screen. Still fitted, never
+ * zero-based: a goal is a value the axis has to reach, not a reason to start it
+ * at zero.
  */
-export function axisDomain(points: ChartPoint[], pad = 1): [number, number] {
+export function axisDomain(
+  points: ChartPoint[],
+  extra?: number | null,
+  pad = 1,
+): [number, number] {
   return measureDomain(
-    points.flatMap((p) => [p.weightLb, p.trendLb]),
+    [...points.flatMap((p) => [p.weightLb, p.trendLb]), extra ?? null],
     pad,
   );
 }

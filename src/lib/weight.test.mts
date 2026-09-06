@@ -239,6 +239,28 @@ test("an empty chart series yields a usable axis rather than Infinity", () => {
   assert.deepEqual(axisDomain([]), [0, 1]);
 });
 
+test("a goal weight outside the plotted range widens the axis to reach it", () => {
+  // 15 lb below the lowest reading: a goal this far under the trend must still
+  // land inside the domain, or its reference line draws off-screen.
+  const points = chartSeries(series("2026-08-01", 10, 180, -0.3));
+  const [low] = axisDomain(points);
+  const [lowWithGoal, highWithGoal] = axisDomain(points, low - 15);
+  assert.ok(lowWithGoal <= low - 15);
+  assert.ok(highWithGoal >= low);
+});
+
+test("a goal weight already inside the plotted range does not change the axis", () => {
+  const points = chartSeries(series("2026-08-01", 10, 180, -0.3));
+  const withoutGoal = axisDomain(points);
+  const withGoal = axisDomain(points, 179);
+  assert.deepEqual(withGoal, withoutGoal);
+});
+
+test("no goal weight leaves the axis exactly as it was", () => {
+  const points = chartSeries(series("2026-08-01", 10, 180, -0.3));
+  assert.deepEqual(axisDomain(points, null), axisDomain(points));
+});
+
 test("the rate divides by the span it actually covered, not by the window it was asked for", () => {
   // Readings stop 7 days short of a 4-week window: 3 weeks of data asked about
   // over 4. Dividing the change by 4 would understate the rate by a quarter, so

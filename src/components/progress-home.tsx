@@ -5,7 +5,7 @@ import Link from "next/link";
 import { Scale, Trash2 } from "lucide-react";
 import { toast } from "sonner";
 
-import { CartesianGrid, Line, LineChart, XAxis, YAxis } from "recharts";
+import { CartesianGrid, Line, LineChart, ReferenceLine, XAxis, YAxis } from "recharts";
 
 import { WINDOW_BUFFER_MONTHS, WINDOW_MONTHS, shiftMonth, shortDate, trim } from "@/lib/training";
 import {
@@ -233,6 +233,7 @@ export function ProgressHome({
           windowKey={windowKey}
           onWindowChange={setWindowKey}
           extending={chartUnderCovered}
+          goal={goal}
         />
 
         <PinnedLiftBlock pinned={pinned} />
@@ -673,6 +674,7 @@ function WeightChart({
   windowKey,
   onWindowChange,
   extending,
+  goal,
 }: {
   entries: WeighIn[];
   unit: DisplayUnit;
@@ -680,6 +682,9 @@ function WeightChart({
   windowKey: ChartWindowKey;
   onWindowChange: (key: ChartWindowKey) => void;
   extending: boolean;
+  /** S60. Only the weight half draws anything here -- the rate has no line,
+   * and S60 rules out projecting a date from it. */
+  goal: WeightGoal;
 }) {
   // Smoothed over the WHOLE log and only then clipped, so the line entering
   // from the left carries its history rather than restarting at the window
@@ -696,7 +701,9 @@ function WeightChart({
       })),
     [entries, from, unit],
   );
-  const domain = useMemo(() => axisDomain(points), [points]);
+  // Converted once, here, same as every other weight on this chart (S69).
+  const goalWeight = goal.weightLb === null ? null : toDisplay(goal.weightLb, unit);
+  const domain = useMemo(() => axisDomain(points, goalWeight), [points, goalWeight]);
 
   /**
    * A swipe across the chart is a second way to reach the window toggle above
@@ -802,6 +809,25 @@ function WeightChart({
           {/* Fitted, never zero-based: a 0-200 axis flattens a real cut into a
               horizontal line. The rule is S79's, applied by axisDomain. */}
           <YAxis domain={domain} {...Y_AXIS} />
+
+          {/* S60. What the trend is MEASURED AGAINST, not a second measurement
+              -- thin, dashed and muted so it never reads as a data series.
+              No line at all with no goal on file, and nothing else about the
+              chart changes; the axis already made room for it above. */}
+          {goalWeight !== null && (
+            <ReferenceLine
+              y={goalWeight}
+              stroke="var(--muted-foreground)"
+              strokeDasharray="4 4"
+              strokeOpacity={0.7}
+              label={{
+                value: `${trim(goalWeight)} ${unit}`,
+                position: "insideTopRight",
+                fontSize: 10,
+                fill: "var(--muted-foreground)",
+              }}
+            />
+          )}
 
           {/* No ChartTooltip. There is no hover on a phone, and S79 rules out a
               touch tooltip nobody discovers -- the exact numbers are in the
