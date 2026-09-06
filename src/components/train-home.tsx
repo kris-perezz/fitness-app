@@ -264,7 +264,7 @@ export function TrainHome({
             }}
             onSelect={(day) => day && open(dateKey(day))}
             mode="single"
-            className="p-0"
+            className="bg-transparent p-0"
           />
         </div>
 
@@ -372,7 +372,7 @@ function PickDay({
             // is not offered in the first place.
             disabled={{ after: toDate(today) }}
             defaultMonth={toDate(today)}
-            className="p-0"
+            className="bg-transparent p-0"
           />
         </div>
 

@@ -46,7 +46,7 @@ export function BottomNav() {
           nothing, so page content scrolled through it sharp and unobscured --
           which reads as broken rather than as translucent. The inset is still
           there; it is now inside the surface doing the covering. */}
-      <ul className="mx-auto flex max-w-md items-stretch justify-around gap-1 border-t border-border bg-background/85 px-2 py-1 pb-safe backdrop-blur-md">
+      <ul data-slot="nav-bar" className="mx-auto flex max-w-md items-stretch justify-around gap-1 border-t border-border bg-background/85 px-2 py-1 pb-safe backdrop-blur-md">
         {TABS.map(({ href, label, icon: Icon, also }) => {
           // Prefix match so nested routes keep their tab lit.
           const active =

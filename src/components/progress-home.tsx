@@ -247,7 +247,7 @@ export function ProgressHome({
             }}
             onSelect={(day) => day && setEditing(dateKey(day))}
             mode="single"
-            className="p-0"
+            className="bg-transparent p-0"
           />
         </div>
 
