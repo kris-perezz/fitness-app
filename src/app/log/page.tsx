@@ -7,6 +7,7 @@ import {
   type IntakeEntry,
 } from "@/lib/food";
 import { toMicros } from "@/lib/micros";
+import { toDayGoal } from "@/lib/goals";
 import { LogScreen } from "@/components/log-screen";
 
 export const dynamic = "force-dynamic";
@@ -49,17 +50,30 @@ export default async function LogPage({
 
   const supabase = await createClient();
 
-  const [{ data: foods }, { data: entries }, { data: goals }, { data: auth }] = await Promise.all([
-    supabase.from("foods").select("*").order("name"),
-    supabase
-      .from("intake_entries")
-      .select("*")
-      .gte("log_date", from)
-      .lte("log_date", to)
-      .order("created_at", { ascending: true }),
-    supabase.from("nutrition_settings").select("*").maybeSingle(),
-    supabase.auth.getUser(),
-  ]);
+  const [{ data: foods }, { data: entries }, { data: dayGoals }, { data: settings }, { data: auth }] =
+    await Promise.all([
+      supabase.from("foods").select("*").order("name"),
+      supabase
+        .from("intake_entries")
+        .select("*")
+        .gte("log_date", from)
+        .lte("log_date", to)
+        .order("created_at", { ascending: true }),
+      // S60. The dated goal for every day in the window, looked up in Postgres
+      // rather than pulled whole and filtered client-side. A day with no row
+      // here has no goal -- the log tab grades it against nothing rather than
+      // guessing at an earlier or later one.
+      supabase
+        .from("day_goals")
+        .select("log_date, calorie_goal, protein_goal_g, carb_goal_g, fat_goal_g")
+        .gte("log_date", from)
+        .lte("log_date", to),
+      // Only strict_mode is read live here now (S77) -- the goal numbers
+      // themselves come from day_goals above, one per day rather than one for
+      // the whole window.
+      supabase.from("nutrition_settings").select("strict_mode").maybeSingle(),
+      supabase.auth.getUser(),
+    ]);
 
   return (
     <LogScreen
@@ -68,7 +82,8 @@ export default async function LogPage({
       loadedTo={to}
       foods={visibleFoods((foods ?? []) as CatalogRow[], auth.user?.id ?? null)}
       entries={(entries ?? []) as IntakeEntry[]}
-      goals={goals}
+      dayGoals={(dayGoals ?? []).map(toDayGoal)}
+      strictMode={settings?.strict_mode === true}
     />
   );
 }

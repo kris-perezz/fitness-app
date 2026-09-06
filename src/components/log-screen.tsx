@@ -49,17 +49,9 @@ import { FoodSourceBadge } from "@/components/food-source-badge";
 import { CalorieRing } from "@/components/calorie-ring";
 import { toast } from "sonner";
 import { PAGE, SURFACE, SURFACE_PAD } from "@/lib/ui";
+import type { DayGoal } from "@/lib/goals";
 
 type Entry = IntakeEntry;
-
-type Goals = {
-  calorie_goal: number;
-  protein_goal_g: number;
-  carb_goal_g: number;
-  fat_goal_g: number;
-  /** S75. Read here and stored nowhere else -- the tone owns no data (S77). */
-  strict_mode?: boolean | null;
-} | null;
 
 const round = (v: number) => Math.round(v);
 const withCommas = (v: number) => round(v).toLocaleString();
@@ -70,7 +62,8 @@ export function LogScreen({
   loadedTo,
   foods,
   entries: initialEntries,
-  goals,
+  dayGoals: initialDayGoals,
+  strictMode,
 }: {
   /** The day to open on -- today, or whatever `?date=` asked for. */
   date: string;
@@ -79,7 +72,14 @@ export function LogScreen({
   loadedTo: string;
   foods: Food[];
   entries: Entry[];
-  goals: Goals;
+  /**
+   * S60. One row per day that has one, for every day in the loaded window.
+   * A day with no row here has no goal -- it is not resolved against an
+   * earlier or later day's number, only ever its own.
+   */
+  dayGoals: DayGoal[];
+  /** S75/S77. Read live, never dated -- the tone owns no data. */
+  strictMode: boolean;
 }) {
   const router = useRouter();
   const [addingTo, setAddingTo] = useState<Meal | null>(null);
@@ -94,6 +94,9 @@ export function LogScreen({
   // The window, and everything in it. Grown outwards in place rather than
   // refetched, so a day already held is never asked for twice.
   const [entries, setEntries] = useState(initialEntries);
+  // S60. Grown alongside `entries`, by the same fetch -- a day's goal is read
+  // from the same window its food is, never fetched or filtered separately.
+  const [dayGoals, setDayGoals] = useState(initialDayGoals);
   const [from, setFrom] = useState(loadedFrom);
   const [to, setTo] = useState(loadedTo);
   const loading = useRef(false);
@@ -128,6 +131,7 @@ export function LogScreen({
       .then((res) => {
         if (res.error) return; // Silent: nothing is broken, there is just less history on screen.
         setEntries((prev) => [...prev, ...res.entries]);
+        setDayGoals((prev) => [...prev, ...res.dayGoals]);
         setFrom(nextFrom);
         setTo(nextTo);
       })
@@ -151,9 +155,17 @@ export function LogScreen({
     { kcal: 0, protein_g: 0, fat_g: 0, carb_g: 0 },
   );
 
-  const calorieGoal = goals?.calorie_goal ?? 2000;
+  // S60. This day's own row, never an earlier or later one's. Undefined
+  // before the user's first entry or first goals save under this feature --
+  // a day genuinely has no goal, the same state a user with none set is
+  // already in, so nothing here invents one.
+  const goal = useMemo(() => dayGoals.find((g) => g.log_date === date), [dayGoals, date]);
+  // 0 rather than a default: every check downstream already treats a goal
+  // `<= 0` as "nothing to grade", which is what CalorieRing's `goal: number`
+  // prop uses for the same case, so the ring needs no second, nullable shape.
+  const calorieGoal = goal?.calorie_goal ?? 0;
   // S75. Calm unless the user turned it on. Never suggested, never prompted.
-  const tone: Tone = goals?.strict_mode ? "strict" : "calm";
+  const tone: Tone = strictMode ? "strict" : "calm";
 
   // S71. A day still being lived is not a day you fell short of: at 2pm, under
   // a floor only means dinner has not happened. Yesterday is finished and can
@@ -232,7 +244,7 @@ export function LogScreen({
                 label="Protein"
                 metric="protein"
                 value={totals.protein_g}
-                goal={goals?.protein_goal_g ?? null}
+                goal={goal?.protein_goal_g ?? null}
                 finished={finished}
                 tone={tone}
               />
@@ -240,7 +252,7 @@ export function LogScreen({
                 label="Carbs"
                 metric="carbs"
                 value={totals.carb_g}
-                goal={goals?.carb_goal_g ?? null}
+                goal={goal?.carb_goal_g ?? null}
                 finished={finished}
                 tone={tone}
               />
@@ -248,7 +260,7 @@ export function LogScreen({
                 label="Fat"
                 metric="fat"
                 value={totals.fat_g}
-                goal={goals?.fat_goal_g ?? null}
+                goal={goal?.fat_goal_g ?? null}
                 finished={finished}
                 tone={tone}
               />
