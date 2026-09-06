@@ -252,11 +252,15 @@ export function ProgressHome({
               // RANGE rather than as six separate days.
               weighed:
                 "bg-primary! text-primary-foreground! rounded-full border-2 border-transparent bg-clip-padding font-medium",
+              // A fill from the month either side is real food or a real
+              // session, so it is drawn -- at less weight, so the month on
+              // screen still reads as the subject.
+              outside: "opacity-45",
               today: "rounded-full ring-2 ring-ring ring-inset",
             }}
             onSelect={(day) => day && setEditing(dateKey(day))}
             mode="single"
-            className="bg-transparent p-0 [--cell-size:--spacing(10)]"
+            className="bg-transparent p-0 [--cell-size:--spacing(8)]"
           />
         </Card>
 

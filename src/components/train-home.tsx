@@ -267,11 +267,15 @@ export function TrainHome({
               // Today keeps a ring rather than a background, so it stays
               // identifiable whether or not it is also filled -- the two facts
               // are independent and must not compete for one channel.
+              // A fill from the month either side is real food or a real
+              // session, so it is drawn -- at less weight, so the month on
+              // screen still reads as the subject.
+              outside: "opacity-45",
               today: "rounded-full ring-2 ring-ring ring-inset",
             }}
             onSelect={(day) => day && open(dateKey(day))}
             mode="single"
-            className="bg-transparent p-0 [--cell-size:--spacing(10)]"
+            className="bg-transparent p-0 [--cell-size:--spacing(8)]"
           />
         </Card>
 
@@ -379,6 +383,20 @@ function PickDay({
             // is not offered in the first place.
             disabled={{ after: toDate(today) }}
             defaultMonth={toDate(today)}
+            // Six rows whatever the month needs, so paging does not resize the
+            // sheet under the thumb that is paging it.
+            fixedWeeks
+            // The same round day mark the tab calendars carry, so a day means
+            // the same shape wherever it is drawn. The day slot is restated
+            // rather than added to: the registry's own rules round the first
+            // and last cell of a selected RANGE, and in single mode they only
+            // ever cut a Sunday or a Saturday in half.
+            classNames={{
+              day: "group/day relative size-(--cell-size) shrink-0 rounded-full p-0 text-center select-none [&_button]:rounded-full",
+            }}
+            modifiersClassNames={{
+              today: "rounded-full ring-2 ring-ring ring-inset",
+            }}
             className="bg-transparent p-0 [--cell-size:--spacing(11)]"
           />
         </div>
@@ -470,7 +488,7 @@ function MonthVolume({
           directly, and half for each one it helps.
         </p>
       ) : (
-        <ChartContainer config={volumeConfig} className="mt-2 h-[360px] w-full">
+        <ChartContainer config={volumeConfig} className="mt-2 h-[300px] w-full">
           <BarChart
             accessibilityLayer
             data={volume}
