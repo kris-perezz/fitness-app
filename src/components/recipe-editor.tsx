@@ -126,7 +126,7 @@ export function RecipeEditor({
     <>
       <main className="mx-auto w-full max-w-md flex-1 pb-[calc(6rem+env(safe-area-inset-bottom))]">
         <header className="flex items-center gap-1 border-b border-border px-2 py-2">
-          <Button size="icon" variant="ghost" aria-label="All recipes" asChild>
+          <Button size="icon-xl" variant="ghost" aria-label="All recipes" asChild>
             <Link href="/recipes">
               <ChevronLeft className="size-5" />
             </Link>
@@ -298,9 +298,8 @@ export function RecipeEditor({
               {pending ? "Saving" : "Save recipe"}
             </Button>
             <Button
-              variant="outline"
-              size="icon"
-              className="h-11 text-destructive"
+              size="icon-xl"
+              variant="destructive"
               aria-label="Delete recipe"
               disabled={pending}
               onClick={() => setConfirmDelete(true)}
@@ -415,7 +414,7 @@ function IngredientRow({ line, onChanged }: { line: EditorLine; onChanged: () =>
             onConfirm={remove}
             trigger={
               <Button
-                size="icon"
+                size="icon-xl"
                 variant="ghost"
                 className="text-muted-foreground"
                 aria-label={`Remove ${line.food.name}`}

@@ -67,10 +67,11 @@ function FieldHint({ label, children }: { label: string; children: React.ReactNo
         <Button
           type="button"
           variant="ghost"
-          size="icon"
+          size="icon-xl"
           // Small mark, full-size target: the icon reads as 14px and the button
-          // still answers to a thumb.
-          className="-my-2 size-8 text-muted-foreground"
+          // still answers to a thumb. `-my-2` pulls the extra height back out of
+          // the row's layout; the hit box keeps it.
+          className="-my-2 text-muted-foreground"
           aria-label={label}
         >
           <Info className="size-3.5" />
@@ -225,7 +226,7 @@ export function GoalsForm({ goals }: { goals: Goals }) {
   }
 
   return (
-    <main className="mx-auto w-full max-w-md flex-1 space-y-2 px-3 pb-[calc(6rem+env(safe-area-inset-bottom))] pt-2">
+    <main className="mx-auto w-full max-w-md flex-1 space-y-3 px-4 pb-[calc(6rem+env(safe-area-inset-bottom))] pt-2">
       <Card className="gap-0 border border-border/60 py-0 shadow-[var(--shadow-card)] ring-0 backdrop-blur-xl space-y-5 px-4 py-4">
         {/* S75/S79. FIRST ON THE SCREEN, because it now decides what the rest
             of the screen is for: with it off there are no macro targets to set,
@@ -410,13 +411,13 @@ export function GoalsForm({ goals }: { goals: Goals }) {
             >
               <ToggleGroupItem
                 value="lb"
-                className="rounded-full border-0 px-3 text-xs data-[state=on]:bg-card data-[state=on]:shadow-sm"
+                className="rounded-full border-0 px-3 text-xs"
               >
                 lb
               </ToggleGroupItem>
               <ToggleGroupItem
                 value="kg"
-                className="rounded-full border-0 px-3 text-xs data-[state=on]:bg-card data-[state=on]:shadow-sm"
+                className="rounded-full border-0 px-3 text-xs"
               >
                 kg
               </ToggleGroupItem>
@@ -440,8 +441,8 @@ export function GoalsForm({ goals }: { goals: Goals }) {
         <form action={signOut}>
           <Button
             type="submit"
-            variant="ghost"
-            className="h-12 w-full justify-start rounded-none px-4 text-[15px] font-normal text-destructive hover:text-destructive"
+            variant="destructive"
+            className="h-12 w-full justify-start rounded-none px-4 text-[15px] font-normal"
           >
             <LogOut className="size-4" /> Sign out
           </Button>
