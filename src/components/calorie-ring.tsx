@@ -63,7 +63,10 @@ export function CalorieRing({
             r={RING_RADIUS}
             fill="none"
             strokeWidth={RING_STROKE}
-            className="stroke-muted"
+            // Not plain --muted: the ring sits on a translucent card over a
+            // tinted page, and the untouched token is close enough to that
+            // ground to disappear into it.
+            className="stroke-[color-mix(in_oklch,var(--muted),var(--foreground)_7%)]"
           />
           <circle
             cx={RING_SIZE / 2}
@@ -73,7 +76,11 @@ export function CalorieRing({
             strokeWidth={RING_STROKE}
             strokeLinecap="round"
             strokeDasharray={RING_CIRCUMFERENCE}
-            strokeDashoffset={RING_CIRCUMFERENCE * (1 - fraction)}
+            // A floor of about two degrees, so a day with nothing logged still
+            // shows where the arc starts. At a true zero the round cap has no
+            // length to draw and the ring reads as having no fill at all rather
+            // than as empty.
+            strokeDashoffset={RING_CIRCUMFERENCE * (1 - Math.max(fraction, 0.006))}
             className={alarming ? "stroke-destructive" : "stroke-primary"}
           />
         </svg>
@@ -91,7 +98,7 @@ export function CalorieRing({
             {label}
           </span>
           <span
-            className="text-muted-foreground"
+            className="uppercase tracking-[0.1em] text-muted-foreground"
             // In pixels for the same reason the figure is, and to the same
             // numbers the fit above assumes: this line is what pushes the
             // figure off centre, so it is not free to grow underneath it.
