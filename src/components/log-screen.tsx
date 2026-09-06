@@ -228,43 +228,33 @@ export function LogScreen({
         </header>
 
         <Card className={cn(SURFACE, SURFACE_PAD)}>
-          {/* Stacked macros beside the ring rather than under it, so both fit
-              on one line at the page's 375px floor. */}
-          <div className="flex items-center gap-4">
-            <div className="shrink-0">
-              <CalorieRing
-                consumed={totals.kcal}
-                goal={calorieGoal}
-                finished={finished}
-                tone={tone}
-              />
-            </div>
-            <div className="flex min-w-0 flex-1 flex-col gap-2">
-              <MacroMeter
-                label="Protein"
-                metric="protein"
-                value={totals.protein_g}
-                goal={goal?.protein_goal_g ?? null}
-                finished={finished}
-                tone={tone}
-              />
-              <MacroMeter
-                label="Carbs"
-                metric="carbs"
-                value={totals.carb_g}
-                goal={goal?.carb_goal_g ?? null}
-                finished={finished}
-                tone={tone}
-              />
-              <MacroMeter
-                label="Fat"
-                metric="fat"
-                value={totals.fat_g}
-                goal={goal?.fat_goal_g ?? null}
-                finished={finished}
-                tone={tone}
-              />
-            </div>
+          <CalorieRing consumed={totals.kcal} goal={calorieGoal} finished={finished} tone={tone} />
+
+          <div className="mt-4 grid grid-cols-3 gap-2">
+            <MacroMeter
+              label="Protein"
+              metric="protein"
+              value={totals.protein_g}
+              goal={goal?.protein_goal_g ?? null}
+              finished={finished}
+              tone={tone}
+            />
+            <MacroMeter
+              label="Carbs"
+              metric="carbs"
+              value={totals.carb_g}
+              goal={goal?.carb_goal_g ?? null}
+              finished={finished}
+              tone={tone}
+            />
+            <MacroMeter
+              label="Fat"
+              metric="fat"
+              value={totals.fat_g}
+              goal={goal?.fat_goal_g ?? null}
+              finished={finished}
+              tone={tone}
+            />
           </div>
         </Card>
 
@@ -377,15 +367,14 @@ export function LogScreen({
  * strict is on; the calm screen just does not grade you against them.
  */
 /**
- * What each status looks like and, more importantly, what it SAYS. Colour is
- * never the only carrier (S76): the ring has said its overshoot in words since
- * it was written, and the macros under it did not.
+ * The hue a macro's figure takes at each status. The number carries it; the
+ * fraction beside it is what says how far off the day is.
  */
-const PAINT: Record<Paint, { text: string; word: string }> = {
-  none: { text: "", word: "" },
-  good: { text: "text-success", word: "met" },
-  warn: { text: "text-warning", word: "short" },
-  bad: { text: "text-destructive", word: "over" },
+const PAINT: Record<Paint, string> = {
+  none: "",
+  good: "text-success",
+  warn: "text-warning",
+  bad: "text-destructive",
 };
 
 function MacroMeter({
@@ -408,26 +397,25 @@ function MacroMeter({
   // call sites so there is one place that can ever decide to grade a macro.
   const against = tone === "strict" ? goal : null;
   const paint = toneOf(metric, statusOf(metric, value, against, finished), tone);
-  const said = PAINT[paint];
+  const paintClass = PAINT[paint];
 
   return (
-    // Label left, figure right on one line: three of these stack beside the
-    // ring, in the width left over next to it.
-    <div className="flex items-baseline justify-between gap-2">
-      <span className="text-[11px] uppercase tracking-[0.06em] text-muted-foreground">
+    // A TILE, not a line. Label-left value-right across a third of the width
+    // puts two 12px words at opposite ends of a cell with nothing between them,
+    // and the three of them then read across as one run-on string. Bounds and a
+    // stack are what separate them.
+    <div className="py-1 text-center">
+      <div className="text-[11px] uppercase tracking-[0.06em] text-muted-foreground">
         {label}
-      </span>
-      <span className={cn("text-lg font-semibold whitespace-nowrap tabular-nums", said.text)}>
+      </div>
+      <div className={cn("mt-1 text-xl font-semibold leading-none tabular-nums", paintClass)}>
         {round(value)}
         {against === null ? (
           <span className="text-xs font-normal text-muted-foreground">g</span>
         ) : (
           <span className="text-xs font-normal text-muted-foreground">/{round(against)}g</span>
         )}
-        {/* S76. Colour is never the only carrier, so the state is said in a word
-            as well: greyscale, colour blindness and a screen reader all get it. */}
-        {said.word && <span className="ml-1 text-[10px] font-medium">{said.word}</span>}
-      </span>
+      </div>
     </div>
   );
 }

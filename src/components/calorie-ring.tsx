@@ -5,6 +5,7 @@ import {
   RING_CAPTION_LINE_PX,
   RING_CAPTION_PX,
   RING_CIRCUMFERENCE,
+  RING_MIN_FRACTION,
   RING_RADIUS,
   RING_SIZE,
   RING_STROKE,
@@ -103,7 +104,7 @@ export function CalorieRing({
             // shows where the arc starts. At a true zero the round cap has no
             // length to draw and the ring reads as having no fill at all rather
             // than as empty.
-            strokeDashoffset={RING_CIRCUMFERENCE * (1 - Math.max(fraction, 0.006))}
+            strokeDashoffset={RING_CIRCUMFERENCE * (1 - Math.max(fraction, RING_MIN_FRACTION))}
             className={ARC[paint]}
           />
         </svg>
@@ -131,28 +132,25 @@ export function CalorieRing({
               marginTop: 4,
             }}
           >
-            {/* The unit rides along for a screen reader in both tones. Calm
-                drops the `x of y cal` line below, which used to be the only
-                place the word appeared in the accessible content. */}
-            {caption}
-            {tone === "strict" && ` of ${goal.toLocaleString()}`}{" "}
+            {/* A fraction rather than a sentence: the figure above is what was
+                eaten and this is what it was against, which is the whole of
+                what the middle of a ring has room to say. The unit rides
+                along for a screen reader in both tones. */}
+            {caption ?? `/ ${goal.toLocaleString()}`}{" "}
             <span className="sr-only">calories</span>
           </span>
         </div>
       </div>
 
-      {/* S76. COLOUR IS NEVER THE ONLY CARRIER: the state is said in words as
-          well, so it survives greyscale, colour blindness and a screen reader.
-          One line, not three -- the figure above already prints what was eaten
-          and the caption now prints what it was against, so a separate
-          `x of y cal` row was the same fact for the third time. */}
-      {paint !== "none" && (
+      {/* The countdown, kept alive for the whole of a strict day rather than
+          appearing only once something has gone wrong: a line that shows up to
+          deliver bad news is a line the reader learns to dread. Calm says
+          nothing here, and neither tone says anything without a goal. */}
+      {tone === "strict" && goal > 0 && (
         <p className={cn("mt-1.5 text-xs font-medium tabular-nums", SAID[paint])}>
-          {paint === "bad"
+          {remaining < 0
             ? `${Math.abs(remaining).toLocaleString()} over`
-            : paint === "good"
-              ? "on target"
-              : `${remaining.toLocaleString()} left`}
+            : `${remaining.toLocaleString()} left`}
         </p>
       )}
     </div>

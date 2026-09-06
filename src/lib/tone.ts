@@ -171,11 +171,12 @@ export function captionFor(metric: Metric, value: number, goal: number | null): 
  * draining, and the same subtraction run past the goal turns into a tally of
  * the overshoot in the largest type on the screen. The arc still fills against
  * the goal, so the shape of the day survives -- what goes is the score attached
- * to it. Strict counts down, which is what strict is for.
+ * to it.
  *
- * PAST THE GOAL EVEN STRICT STOPS SUBTRACTING (S78). Strict names the overshoot
- * in its own red line under the ring, where a caption can carry it; the biggest
- * number on the screen does not need to be one you are behind by.
+ * ONE FIGURE IN BOTH TONES: what was eaten. Strict prints the goal under it as
+ * a fraction and states what is left, or what it went over by, in its own line
+ * beneath the ring -- so the countdown is still there to read without the
+ * biggest number on the screen changing meaning halfway through a day.
  *
  * TAKES THE TONE, and is one of exactly two functions that may (see the S77
  * test). What it chooses is which fact to SHOW -- both figures are the same
@@ -188,6 +189,5 @@ export function ringFigure(
   tone: Tone = "calm",
 ): { value: number; caption: string | null } {
   if (tone !== "strict" || goal <= 0) return { value: consumed, caption: "eaten" };
-  if (consumed <= goal) return { value: goal - consumed, caption: "left" };
-  return { value: consumed, caption: "eaten" };
+  return { value: consumed, caption: null };
 }
