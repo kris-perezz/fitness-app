@@ -1,6 +1,6 @@
 import { notFound } from "next/navigation";
 import { createClient } from "@/lib/supabase/server";
-import { wakingDate } from "@/lib/food";
+import { todayDate } from "@/lib/food";
 import { NO_BESTS } from "@/lib/training";
 import type {
   Bests,
@@ -67,7 +67,7 @@ export default async function WorkoutPage({ params }: PageProps<"/train/[id]">) 
       lastSessions={history.lastSessions}
       bests={history.bests}
       exercises={(exercises ?? []) as Exercise[]}
-      today={wakingDate()}
+      today={todayDate()}
       recentExerciseIds={recent}
     />
   );

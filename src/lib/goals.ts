@@ -123,3 +123,43 @@ export function balanceAround(
   const filled = split(rest, shares, pinned === "fat_goal_g" ? 0 : undefined);
   return { ...filled, [pinned]: heldGrams };
 }
+
+// -------------------------------------------------------- S60, dated goals
+/**
+ * The goal a day was logged under, kept ON THE DAY (`day_goals`, 0031) rather
+ * than read live from `nutrition_settings` -- the same rule S7/S19 apply to
+ * food, applied here to what the food was judged against. A day with no row
+ * has no goal, exactly like a user who has never opened the goals tab; there
+ * is no resolving backward to an earlier day's number and no invented
+ * default.
+ *
+ * `strict_mode` is deliberately not part of this shape. S77 owns that
+ * separately, read live everywhere, because the tone owns no data.
+ */
+export type DayGoal = {
+  log_date: string;
+  calorie_goal: number;
+  protein_goal_g: number;
+  carb_goal_g: number;
+  fat_goal_g: number;
+};
+
+/**
+ * PostgREST hands `numeric` back as a string, so the conversion happens once
+ * at the boundary -- the same rule `toWeighIn` follows, for the same reason.
+ */
+export function toDayGoal(row: {
+  log_date: unknown;
+  calorie_goal: unknown;
+  protein_goal_g: unknown;
+  carb_goal_g: unknown;
+  fat_goal_g: unknown;
+}): DayGoal {
+  return {
+    log_date: row.log_date as string,
+    calorie_goal: Number(row.calorie_goal),
+    protein_goal_g: Number(row.protein_goal_g),
+    carb_goal_g: Number(row.carb_goal_g),
+    fat_goal_g: Number(row.fat_goal_g),
+  };
+}

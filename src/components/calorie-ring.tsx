@@ -1,8 +1,11 @@
-import { fillPercent, isAlarming, ringFigure, statusOf, type Tone } from "@/lib/tone";
+import { fillPercent, ringFigure, statusOf, toneOf, type Tone } from "@/lib/tone";
+import { cn } from "@/lib/utils";
+import type { Paint } from "@/lib/tone";
 import {
   RING_CAPTION_LINE_PX,
   RING_CAPTION_PX,
   RING_CIRCUMFERENCE,
+  RING_MIN_FRACTION,
   RING_RADIUS,
   RING_SIZE,
   RING_STROKE,
@@ -17,13 +20,33 @@ import {
  * draw one circle, and this needs no axes, tooltips or responsiveness beyond a
  * viewBox.
  */
+/** The arc, per status. `none` keeps primary, which is what a day in progress
+ * has always looked like. */
+const SAID: Record<Paint, string> = {
+  none: "",
+  good: "text-success",
+  warn: "text-warning",
+  bad: "text-destructive",
+};
+
+const ARC: Record<Paint, string> = {
+  none: "stroke-primary",
+  good: "stroke-success",
+  warn: "stroke-warning",
+  bad: "stroke-destructive",
+};
+
 export function CalorieRing({
   consumed,
   goal,
+  finished,
   tone = "calm",
 }: {
   consumed: number;
   goal: number;
+  /** S71, and the ring was the one place ignoring it: today was graded as a
+   * finished day while the three macros in the same card were not. */
+  finished: boolean;
   /** S75. Read at render time and stored nowhere (S77). */
   tone?: Tone;
 }) {
@@ -36,8 +59,9 @@ export function CalorieRing({
   // from what is left into what was eaten (S78) -- and not the colour. Red stays
   // reserved for destructive actions and for the one genuine health limit
   // (S73), which is not this.
-  const status = statusOf("calories", consumed, goal, true);
-  const alarming = isAlarming("calories", status, tone);
+  const status = statusOf("calories", consumed, goal, finished);
+  const paint = toneOf("calories", status, tone);
+  const alarming = paint === "bad";
   // S79. Calm shows what was eaten; only strict counts down. And past the goal
   // neither of them subtracts (S78) -- strict says it in the red line below.
   const { value: figure, caption } = ringFigure(consumed, goal, tone);
@@ -63,7 +87,10 @@ export function CalorieRing({
             r={RING_RADIUS}
             fill="none"
             strokeWidth={RING_STROKE}
-            className="stroke-muted"
+            // Mixed toward --muted-foreground rather than plain --muted or
+            // raw --foreground, so the track stays visible on a translucent
+            // card while still carrying the theme's own hue.
+            className="stroke-[color-mix(in_oklch,var(--muted),var(--muted-foreground)_35%)]"
           />
           <circle
             cx={RING_SIZE / 2}
@@ -73,8 +100,12 @@ export function CalorieRing({
             strokeWidth={RING_STROKE}
             strokeLinecap="round"
             strokeDasharray={RING_CIRCUMFERENCE}
-            strokeDashoffset={RING_CIRCUMFERENCE * (1 - fraction)}
-            className={alarming ? "stroke-destructive" : "stroke-primary"}
+            // A floor of about two degrees, so a day with nothing logged still
+            // shows where the arc starts. At a true zero the round cap has no
+            // length to draw and the ring reads as having no fill at all rather
+            // than as empty.
+            strokeDashoffset={RING_CIRCUMFERENCE * (1 - Math.max(fraction, RING_MIN_FRACTION))}
+            className={ARC[paint]}
           />
         </svg>
 
@@ -91,7 +122,7 @@ export function CalorieRing({
             {label}
           </span>
           <span
-            className="text-muted-foreground"
+            className="uppercase tracking-[0.1em] text-muted-foreground"
             // In pixels for the same reason the figure is, and to the same
             // numbers the fit above assumes: this line is what pushes the
             // figure off centre, so it is not free to grow underneath it.
@@ -101,32 +132,25 @@ export function CalorieRing({
               marginTop: 4,
             }}
           >
-            {/* The unit rides along for a screen reader in both tones. Calm
-                drops the `x of y cal` line below, which used to be the only
-                place the word appeared in the accessible content. */}
-            {caption} <span className="sr-only">calories</span>
+            {/* A fraction rather than a sentence: the figure above is what was
+                eaten and this is what it was against, which is the whole of
+                what the middle of a ring has room to say. The unit rides
+                along for a screen reader in both tones. */}
+            {caption ?? `/ ${goal.toLocaleString()}`}{" "}
+            <span className="sr-only">calories</span>
           </span>
         </div>
       </div>
 
-      {/* S76. COLOUR IS NEVER THE ONLY CARRIER: strict states the overshoot in
-          words as well, so the mode survives greyscale, colour blindness and a
-          screen reader. Calm leaves the arithmetic to the reader, which is the
-          difference between the two modes rather than a second feature. */}
-      {alarming && (
-        <p className="mt-2 text-xs font-medium tabular-nums text-destructive">
-          over by {Math.abs(remaining).toLocaleString()}
-        </p>
-      )}
-
-      {/* S79. THE GOAL IS A STRICT-MODE IDEA. `x of y` is a fraction, and a
-          fraction is a score whatever colour it is painted -- the same reason
-          the macros under this ring stopped showing one. Calm keeps the arc,
-          which carries the shape of the day without putting a number on how
-          well you did at it, and the goal is still one tap away on Goals. */}
-      {tone === "strict" && (
-        <p className="mt-3 text-xs text-muted-foreground tabular-nums">
-          {consumed.toLocaleString()} of {goal.toLocaleString()} cal
+      {/* The countdown, kept alive for the whole of a strict day rather than
+          appearing only once something has gone wrong: a line that shows up to
+          deliver bad news is a line the reader learns to dread. Calm says
+          nothing here, and neither tone says anything without a goal. */}
+      {tone === "strict" && goal > 0 && (
+        <p className={cn("mt-1.5 text-xs font-medium tabular-nums", SAID[paint])}>
+          {remaining < 0
+            ? `${Math.abs(remaining).toLocaleString()} over`
+            : `${remaining.toLocaleString()} left`}
         </p>
       )}
     </div>

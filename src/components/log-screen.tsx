@@ -6,6 +6,7 @@ import Link from "next/link";
 import {
   BookmarkPlus,
   ChartNoAxesColumn,
+  ChevronDown,
   ChevronLeft,
   ChevronRight,
   CookingPot,
@@ -17,14 +18,14 @@ import {
   LOG_WINDOW_DAYS,
   MEALS,
   shiftDate,
-  wakingDate,
+  todayDate,
   type Food,
   type IntakeEntry,
   type Meal,
 } from "@/lib/food";
 import { deleteEntry, loadIntakeWindow, saveEntryAsFood } from "@/app/actions";
 import { Button } from "@/components/ui/button";
-import { Progress } from "@/components/ui/progress";
+import { Card } from "@/components/ui/card";
 import { ButtonGroup } from "@/components/ui/button-group";
 import {
   Drawer,
@@ -41,24 +42,17 @@ import {
   ItemTitle,
 } from "@/components/ui/item";
 import { cn } from "@/lib/utils";
-import { fillPercent, isAlarming, statusOf, type Metric, type Tone } from "@/lib/tone";
+import { statusOf, toneOf, type Metric, type Paint, type Tone } from "@/lib/tone";
 import { AddSheet } from "@/components/add-sheet";
 import { ConfirmAction } from "@/components/confirm-action";
 import { EditFoodSheet } from "@/components/edit-food-sheet";
 import { FoodSourceBadge } from "@/components/food-source-badge";
 import { CalorieRing } from "@/components/calorie-ring";
 import { toast } from "sonner";
+import { PAGE, SURFACE, SURFACE_PAD } from "@/lib/ui";
+import type { DayGoal } from "@/lib/goals";
 
 type Entry = IntakeEntry;
-
-type Goals = {
-  calorie_goal: number;
-  protein_goal_g: number;
-  carb_goal_g: number;
-  fat_goal_g: number;
-  /** S75. Read here and stored nowhere else -- the tone owns no data (S77). */
-  strict_mode?: boolean | null;
-} | null;
 
 const round = (v: number) => Math.round(v);
 const withCommas = (v: number) => round(v).toLocaleString();
@@ -69,7 +63,8 @@ export function LogScreen({
   loadedTo,
   foods,
   entries: initialEntries,
-  goals,
+  dayGoals: initialDayGoals,
+  strictMode,
 }: {
   /** The day to open on -- today, or whatever `?date=` asked for. */
   date: string;
@@ -78,7 +73,14 @@ export function LogScreen({
   loadedTo: string;
   foods: Food[];
   entries: Entry[];
-  goals: Goals;
+  /**
+   * S60. One row per day that has one, for every day in the loaded window.
+   * A day with no row here has no goal -- it is not resolved against an
+   * earlier or later day's number, only ever its own.
+   */
+  dayGoals: DayGoal[];
+  /** S75/S77. Read live, never dated -- the tone owns no data. */
+  strictMode: boolean;
 }) {
   const router = useRouter();
   const [addingTo, setAddingTo] = useState<Meal | null>(null);
@@ -93,11 +95,14 @@ export function LogScreen({
   // The window, and everything in it. Grown outwards in place rather than
   // refetched, so a day already held is never asked for twice.
   const [entries, setEntries] = useState(initialEntries);
+  // S60. Grown alongside `entries`, by the same fetch -- a day's goal is read
+  // from the same window its food is, never fetched or filtered separately.
+  const [dayGoals, setDayGoals] = useState(initialDayGoals);
   const [from, setFrom] = useState(loadedFrom);
   const [to, setTo] = useState(loadedTo);
   const loading = useRef(false);
 
-  const today = wakingDate();
+  const today = todayDate();
 
   /**
    * Extend BEFORE the edge is reached, not when it is hit -- the same contract
@@ -127,6 +132,7 @@ export function LogScreen({
       .then((res) => {
         if (res.error) return; // Silent: nothing is broken, there is just less history on screen.
         setEntries((prev) => [...prev, ...res.entries]);
+        setDayGoals((prev) => [...prev, ...res.dayGoals]);
         setFrom(nextFrom);
         setTo(nextTo);
       })
@@ -150,9 +156,17 @@ export function LogScreen({
     { kcal: 0, protein_g: 0, fat_g: 0, carb_g: 0 },
   );
 
-  const calorieGoal = goals?.calorie_goal ?? 2000;
+  // S60. This day's own row, never an earlier or later one's. Undefined
+  // before the user's first entry or first goals save under this feature --
+  // a day genuinely has no goal, the same state a user with none set is
+  // already in, so nothing here invents one.
+  const goal = useMemo(() => dayGoals.find((g) => g.log_date === date), [dayGoals, date]);
+  // 0 rather than a default: every check downstream already treats a goal
+  // `<= 0` as "nothing to grade", which is what CalorieRing's `goal: number`
+  // prop uses for the same case, so the ring needs no second, nullable shape.
+  const calorieGoal = goal?.calorie_goal ?? 0;
   // S75. Calm unless the user turned it on. Never suggested, never prompted.
-  const tone: Tone = goals?.strict_mode ? "strict" : "calm";
+  const tone: Tone = strictMode ? "strict" : "calm";
 
   // S71. A day still being lived is not a day you fell short of: at 2pm, under
   // a floor only means dinner has not happened. Yesterday is finished and can
@@ -171,10 +185,10 @@ export function LogScreen({
 
   return (
     <>
-      <main className="mx-auto w-full max-w-md flex-1 pb-[calc(6rem+env(safe-area-inset-bottom))]">
-        <header className="flex items-center justify-between border-b border-border px-2 py-2">
+      <main className={PAGE}>
+        <header className="flex items-center gap-1 px-1 py-1">
           <Button
-            size="icon"
+            size="icon-xl"
             variant="ghost"
             aria-label="Previous day"
             onClick={() => setDate(shiftDate(date, -1))}
@@ -182,11 +196,26 @@ export function LogScreen({
             <ChevronLeft className="size-5" />
           </Button>
 
-          <span className="text-sm font-medium">{label}</span>
-
-          <div className="flex items-center">
+          {/* S103. The one way into the month view -- a chevron beside the
+              date rather than a second calendar icon competing with Recipes
+              and Trends for the same row. The date text stays the label; the
+              chevron is the whole affordance. */}
+          <h1 className="flex-1">
             <Button
-              size="icon"
+              variant="ghost"
+              asChild
+              className="h-11 w-full justify-center gap-1 text-[17px] font-semibold tracking-[-0.01em]"
+            >
+              <Link href="/log/month" prefetch>
+                {label}
+                <ChevronDown className="size-4 text-muted-foreground" />
+              </Link>
+            </Button>
+          </h1>
+
+          <div className="flex items-center gap-0.5">
+            <Button
+              size="icon-xl"
               variant="ghost"
               aria-label="Next day"
               disabled={date >= today}
@@ -199,12 +228,12 @@ export function LogScreen({
                 They sit after the day arrows because they are not part of them
                 -- and Trends sits last because it is the one that leaves
                 today behind entirely. */}
-            <Button size="icon" variant="ghost" aria-label="Recipes" asChild>
+            <Button size="icon-xl" variant="ghost" aria-label="Recipes" asChild>
               <Link href="/recipes">
                 <CookingPot className="size-5" />
               </Link>
             </Button>
-            <Button size="icon" variant="ghost" aria-label="Trends" asChild>
+            <Button size="icon-xl" variant="ghost" aria-label="Trends" asChild>
               <Link href="/trends">
                 <ChartNoAxesColumn className="size-5" />
               </Link>
@@ -212,15 +241,15 @@ export function LogScreen({
           </div>
         </header>
 
-        <section className="border-b border-border px-5 py-6">
-          <CalorieRing consumed={totals.kcal} goal={calorieGoal} tone={tone} />
+        <Card className={cn(SURFACE, SURFACE_PAD)}>
+          <CalorieRing consumed={totals.kcal} goal={calorieGoal} finished={finished} tone={tone} />
 
-          <div className="mt-6 grid grid-cols-3 gap-4">
+          <div className="mt-4 grid grid-cols-3 gap-2">
             <MacroMeter
               label="Protein"
               metric="protein"
               value={totals.protein_g}
-              goal={goals?.protein_goal_g ?? null}
+              goal={goal?.protein_goal_g ?? null}
               finished={finished}
               tone={tone}
             />
@@ -228,7 +257,7 @@ export function LogScreen({
               label="Carbs"
               metric="carbs"
               value={totals.carb_g}
-              goal={goals?.carb_goal_g ?? null}
+              goal={goal?.carb_goal_g ?? null}
               finished={finished}
               tone={tone}
             />
@@ -236,22 +265,22 @@ export function LogScreen({
               label="Fat"
               metric="fat"
               value={totals.fat_g}
-              goal={goals?.fat_goal_g ?? null}
+              goal={goal?.fat_goal_g ?? null}
               finished={finished}
               tone={tone}
             />
           </div>
-        </section>
+        </Card>
 
         {MEALS.map((meal) => {
           const items = dayEntries.filter((e) => e.meal === meal);
           const mealKcal = items.reduce((sum, e) => sum + e.kcal, 0);
 
           return (
-            <section key={meal} className="border-b border-border">
-              <div className="flex items-center justify-between px-5 pb-2 pt-4">
-                <h2 className="text-sm font-semibold">{meal}</h2>
-                <span className="text-sm tabular-nums text-muted-foreground">
+            <Card key={meal} className={SURFACE}>
+              <div className="flex items-baseline justify-between px-3.5 pb-2 pt-3">
+                <h2 className="text-[17px] font-semibold tracking-[-0.01em]">{meal}</h2>
+                <span className="text-[15px] tabular-nums text-muted-foreground">
                   {withCommas(mealKcal)}
                 </span>
               </div>
@@ -263,7 +292,7 @@ export function LogScreen({
                       <Item
                         asChild
                         size="sm"
-                        className="rounded-none px-5 py-2.5 active:bg-accent"
+                        className="rounded-none px-3.5 py-2 active:bg-accent"
                       >
                         <button onClick={() => setDetail(e)} className="text-left">
                           <ItemContent className="min-w-0">
@@ -283,19 +312,18 @@ export function LogScreen({
                 </ul>
               )}
 
-              {/* A button, not a full-bleed strip. The strip read as another
-                  row of the meal's list, which is a thing you open rather than
-                  a thing you do. */}
-              <div className="px-5 pb-4 pt-1">
-                <Button
-                  variant="outline"
-                  className="h-11 w-full"
-                  onClick={() => setAddingTo(meal)}
-                >
-                  <Plus className="size-4" /> Add food
-                </Button>
-              </div>
-            </section>
+              {/* Quiet and left-aligned. Four outlined full-width buttons on one
+                  screen is four calls to action of equal weight, which leaves the
+                  meal headings with no rank of their own -- and an empty day read
+                  as a form rather than as a day. */}
+              <Button
+                variant="ghost"
+                className="h-10 w-full justify-start px-3.5 text-sm font-normal text-muted-foreground"
+                onClick={() => setAddingTo(meal)}
+              >
+                <Plus className="size-4" /> Add food
+              </Button>
+            </Card>
           );
         })}
       </main>
@@ -352,6 +380,17 @@ export function LogScreen({
  * still exist, still drive the calorie split, and still come back the moment
  * strict is on; the calm screen just does not grade you against them.
  */
+/**
+ * The hue a macro's figure takes at each status. The number carries it; the
+ * fraction beside it is what says how far off the day is.
+ */
+const PAINT: Record<Paint, string> = {
+  none: "",
+  good: "text-success",
+  warn: "text-warning",
+  bad: "text-destructive",
+};
+
 function MacroMeter({
   label,
   metric,
@@ -371,38 +410,26 @@ function MacroMeter({
   // S79. The goal is a strict-mode idea. Resolved HERE rather than at the three
   // call sites so there is one place that can ever decide to grade a macro.
   const against = tone === "strict" ? goal : null;
-  const alarming = isAlarming(metric, statusOf(metric, value, against, finished), tone);
+  const paint = toneOf(metric, statusOf(metric, value, against, finished), tone);
+  const paintClass = PAINT[paint];
 
   return (
-    <div>
-      <div className="flex items-baseline justify-between text-xs">
-        <span className="text-muted-foreground">{label}</span>
-        <span className="tabular-nums">
-          {round(value)}
-          {against === null ? (
-            <span className="text-muted-foreground">g</span>
-          ) : (
-            <span className="text-muted-foreground"> / {round(against)}g</span>
-          )}
-        </span>
+    // A TILE, not a line. Label-left value-right across a third of the width
+    // puts two 12px words at opposite ends of a cell with nothing between them,
+    // and the three of them then read across as one run-on string. Bounds and a
+    // stack are what separate them.
+    <div className="py-1 text-center">
+      <div className="text-[11px] uppercase tracking-[0.06em] text-muted-foreground">
+        {label}
       </div>
-      {/* The registry's Progress, not a hand-built bar. It carries the
-          progressbar role and its aria-valuenow, which two divs and an inline
-          width never did.
-
-          Absent entirely without a goal, rather than sitting there at zero: a
-          bar with nothing to fill against is a progressbar whose aria-valuenow
-          is a lie, and visually it reads as a day you have not started. */}
-      {against !== null && (
-        <Progress
-          value={fillPercent(value, against)}
-          aria-label={`${label}: ${round(value)} of ${round(against)} grams`}
-          className={cn(
-            "mt-1.5 h-1",
-            alarming && "[&>[data-slot=progress-indicator]]:bg-destructive",
-          )}
-        />
-      )}
+      <div className={cn("mt-1 text-xl font-semibold leading-none tabular-nums", paintClass)}>
+        {round(value)}
+        {against === null ? (
+          <span className="text-xs font-normal text-muted-foreground">g</span>
+        ) : (
+          <span className="text-xs font-normal text-muted-foreground">/{round(against)}g</span>
+        )}
+      </div>
     </div>
   );
 }
@@ -448,6 +475,14 @@ function EntryDetail({
                 {entry.qty} {entry.unit} · {entry.meal}
                 {entry.estimate && " · estimate"}
               </p>
+
+              {/* S100. The longer sentence the name was titled from, kept out
+                  of the list and shown only here, where there is room to read
+                  it. Absent for a catalog food and for anything logged before
+                  this existed. */}
+              {entry.description && (
+                <p className="mt-2 text-sm text-muted-foreground">{entry.description}</p>
+              )}
 
               {/* Hand-rolled: see ingredient-sheet.tsx -- Chart is the only
                   registry option and it would pull recharts in to render six

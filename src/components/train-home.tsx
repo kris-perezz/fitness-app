@@ -21,6 +21,7 @@ import {
 } from "@/components/ui/chart";
 import { closeStaleWorkouts, loadTrainingWindow, openWorkoutOn } from "@/app/training-actions";
 import { Button } from "@/components/ui/button";
+import { Card } from "@/components/ui/card";
 import { Calendar } from "@/components/ui/calendar";
 import { Item, ItemActions, ItemContent, ItemDescription, ItemTitle } from "@/components/ui/item";
 import {
@@ -38,6 +39,8 @@ import {
   EmptyTitle,
 } from "@/components/ui/empty";
 import { toast } from "sonner";
+import { cn } from "@/lib/utils";
+import { PAGE, SURFACE, SURFACE_PAD } from "@/lib/ui";
 
 /** S32. One day's credit to one muscle, straight off the muscle_volume view. */
 export type DayVolume = { date: string; muscle: string; sets: number };
@@ -200,13 +203,12 @@ export function TrainHome({
 
   return (
     <>
-      <main className="mx-auto w-full max-w-md flex-1 pb-[calc(6rem+env(safe-area-inset-bottom))]">
-        {/* The primary action sits ABOVE the calendar and the list. It was under
-            the list until a month with thirty sessions made the point: the one
+      <main className={PAGE}>
+        {/* The primary action sits ABOVE the calendar and the list: the one
             thing you came here to do should not be reachable only by scrolling
             past everything you have already done. Resuming beats browsing, so an
             open session takes the slot when there is one. */}
-        <div className="border-b border-border px-5 py-4">
+        <header className="pt-1">
           {openSession ? (
             <Button className="h-12 w-full text-base" asChild>
               {/* Full prefetch, not the default. A dynamic route prefetched
@@ -223,9 +225,9 @@ export function TrainHome({
               <CalendarPlus className="size-4" /> Add session
             </Button>
           )}
-        </div>
+        </header>
 
-        <div className="flex justify-center border-b border-border px-2 py-3">
+        <Card className={cn(SURFACE, "items-center px-1 py-2")}>
           <Calendar
             month={toDate(`${month}-01`)}
             // Straight to state. There is nothing to fetch, so there is
@@ -256,17 +258,26 @@ export function TrainHome({
               // Marked important because the calendar paints `today` with
               // bg-muted on this same element, and a trained today must read as
               // trained. Class order alone would not settle that reliably.
-              trained: "bg-primary! text-primary-foreground! rounded-md font-medium",
+              // The transparent border plus bg-clip-padding is what keeps two
+              // consecutive days from touching. Square fills sat edge to edge and
+              // six sessions in a row fused into one bar that read as a selected
+              // RANGE rather than as six separate days.
+              trained:
+                "bg-primary! text-primary-foreground! rounded-full border-2 border-transparent bg-clip-padding font-medium",
               // Today keeps a ring rather than a background, so it stays
               // identifiable whether or not it is also filled -- the two facts
               // are independent and must not compete for one channel.
-              today: "rounded-md ring-2 ring-ring ring-inset",
+              // A fill from the month either side is real food or a real
+              // session, so it is drawn -- at less weight, so the month on
+              // screen still reads as the subject.
+              outside: "opacity-45",
+              today: "rounded-full ring-2 ring-ring ring-inset",
             }}
             onSelect={(day) => day && open(dateKey(day))}
             mode="single"
-            className="p-0"
+            className="bg-transparent p-0 [--cell-size:--spacing(8)]"
           />
-        </div>
+        </Card>
 
         <MonthVolume volume={monthVolume} month={month} scale={volumeScale} />
 
@@ -289,7 +300,7 @@ export function TrainHome({
           <ul className="divide-y divide-border">
             {monthSessions.map((s) => (
               <li key={s.id}>
-                <Item asChild size="sm" className="rounded-none px-5 py-3 active:bg-accent">
+                <Item asChild size="sm" className="rounded-none px-3.5 py-3 active:bg-accent">
                   {/* Full prefetch -- see the resume link above. */}
                   <Link href={`/train/${s.id}`} prefetch>
                     <ItemContent className="min-w-0">
@@ -372,7 +383,21 @@ function PickDay({
             // is not offered in the first place.
             disabled={{ after: toDate(today) }}
             defaultMonth={toDate(today)}
-            className="p-0"
+            // Six rows whatever the month needs, so paging does not resize the
+            // sheet under the thumb that is paging it.
+            fixedWeeks
+            // The same round day mark the tab calendars carry, so a day means
+            // the same shape wherever it is drawn. The day slot is restated
+            // rather than added to: the registry's own rules round the first
+            // and last cell of a selected RANGE, and in single mode they only
+            // ever cut a Sunday or a Saturday in half.
+            classNames={{
+              day: "group/day relative size-(--cell-size) shrink-0 rounded-full p-0 text-center select-none [&_button]:rounded-full",
+            }}
+            modifiersClassNames={{
+              today: "rounded-full ring-2 ring-ring ring-inset",
+            }}
+            className="bg-transparent p-0 [--cell-size:--spacing(11)]"
           />
         </div>
 
@@ -398,7 +423,7 @@ function PickDay({
 
 /**
  * Dates cross this boundary as YYYY-MM-DD strings, the same as `log_date` and
- * the food side's `wakingDate()`. They are converted at midday so that a
+ * the food side's `todayDate()`. They are converted at midday so that a
  * timezone offset can never shunt a day either way.
  */
 const volumeConfig = {
@@ -449,12 +474,12 @@ function MonthVolume({
   const total = volume.reduce((t, v) => t + v.sets, 0);
 
   return (
-    <section className="border-b border-border px-5 py-4">
+    <Card className={cn(SURFACE, SURFACE_PAD)}>
       <div className="flex items-baseline justify-between gap-2">
-        <h2 className="text-sm font-medium">Sets per muscle</h2>
-        <span className="text-xs tabular-nums text-muted-foreground">
-          {trim(total)} total
-        </span>
+        <h2 className="text-[11px] font-semibold uppercase tracking-[0.08em] text-muted-foreground">
+          Sets per muscle
+        </h2>
+        <span className="text-xs tabular-nums text-muted-foreground">{trim(total)} total</span>
       </div>
 
       {total === 0 ? (
@@ -463,7 +488,7 @@ function MonthVolume({
           directly, and half for each one it helps.
         </p>
       ) : (
-        <ChartContainer config={volumeConfig} className="mt-3 h-[340px] w-full">
+        <ChartContainer config={volumeConfig} className="mt-2 h-[300px] w-full">
           <BarChart
             accessibilityLayer
             data={volume}
@@ -511,8 +536,8 @@ function MonthVolume({
               // from the baseline it is measured from and makes short ones look
               // longer than they are; the earlier version's comment said this
               // and its code did not.
-              radius={[0, 5, 5, 0]}
-              barSize={11}
+              radius={[0, 6, 6, 0]}
+              barSize={13}
               // Recharts animates a bar from its previous value to its new one,
               // so switching months slides the bars across rather than cutting.
               // That only works because the chart STAYS MOUNTED -- keying it on
@@ -537,7 +562,7 @@ function MonthVolume({
           </BarChart>
         </ChartContainer>
       )}
-    </section>
+    </Card>
   );
 }
 

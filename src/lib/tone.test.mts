@@ -130,15 +130,16 @@ test("S79: calm shows what was eaten, and only strict counts down", () => {
   assert.deepEqual(ringFigure(1900, 2100), { value: 1900, caption: "eaten" });
   assert.deepEqual(ringFigure(2240, 2100), { value: 2240, caption: "eaten" });
 
-  assert.deepEqual(ringFigure(1900, 2100, "strict"), { value: 200, caption: "left" });
-  assert.deepEqual(ringFigure(2100, 2100, "strict"), { value: 0, caption: "left" });
+  // Strict prints the same figure and hands the goal to the caption, which the
+  // ring renders as a fraction under it.
+  assert.deepEqual(ringFigure(1900, 2100, "strict"), { value: 1900, caption: null });
+  assert.deepEqual(ringFigure(2100, 2100, "strict"), { value: 2100, caption: null });
 });
 
-test("S78: even strict stops subtracting once the goal is passed", () => {
-  // Counting down is fair for a day in progress; the same subtraction run past
-  // the goal puts a tally of the overshoot in the biggest type on the screen.
-  // Strict names it in the red line under the ring instead.
-  assert.deepEqual(ringFigure(2240, 2100, "strict"), { value: 2240, caption: "eaten" });
+test("S78: the ring never subtracts, in either tone", () => {
+  // The biggest number on the screen is what was eaten whatever the day did.
+  // What is left, or what it went over by, is the line under the ring.
+  assert.deepEqual(ringFigure(2240, 2100, "strict"), { value: 2240, caption: null });
 });
 
 test("no goal on file is not a goal of zero", () => {

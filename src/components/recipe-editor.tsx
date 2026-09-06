@@ -23,6 +23,7 @@ import { IngredientSheet } from "@/components/ingredient-sheet";
 import { ConfirmAction } from "@/components/confirm-action";
 import { Button } from "@/components/ui/button";
 import { ButtonGroup } from "@/components/ui/button-group";
+import { Card } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
 import { Field, FieldLabel } from "@/components/ui/field";
 import { Item, ItemActions, ItemContent, ItemDescription, ItemTitle } from "@/components/ui/item";
@@ -45,6 +46,8 @@ import {
   AlertDialogTitle,
 } from "@/components/ui/alert-dialog";
 import { toast } from "sonner";
+import { cn } from "@/lib/utils";
+import { PAGE, SURFACE, SURFACE_PAD } from "@/lib/ui";
 
 /** An ingredient row joined to its food, which is what the maths needs. */
 export type EditorLine = RecipeLine & { id: string };
@@ -124,9 +127,9 @@ export function RecipeEditor({
 
   return (
     <>
-      <main className="mx-auto w-full max-w-md flex-1 pb-[calc(6rem+env(safe-area-inset-bottom))]">
-        <header className="flex items-center gap-1 border-b border-border px-2 py-2">
-          <Button size="icon" variant="ghost" aria-label="All recipes" asChild>
+      <main className={PAGE}>
+        <header className="flex items-center gap-1 px-1 py-1">
+          <Button size="icon-xl" variant="ghost" aria-label="All recipes" asChild>
             <Link href="/recipes">
               <ChevronLeft className="size-5" />
             </Link>
@@ -134,7 +137,7 @@ export function RecipeEditor({
           <span className="truncate text-sm font-medium">{name || "Untitled recipe"}</span>
         </header>
 
-        <section className="border-b border-border px-5 py-5">
+        <Card className={cn(SURFACE, SURFACE_PAD)}>
           <Field>
             <FieldLabel htmlFor="recipe_name" className="text-xs font-normal text-muted-foreground">
               Name
@@ -192,9 +195,9 @@ export function RecipeEditor({
             one portion is one portion&rsquo;s share whatever the pot weighs. A cooked weight
             is only needed to log an odd-sized portion by grams.
           </p>
-        </section>
+        </Card>
 
-        <section className="border-b border-border px-5 py-5">
+        <Card className={cn(SURFACE, SURFACE_PAD)}>
           {/* Hand-rolled: Chart is the only registry option for a figure and it
               would pull recharts in to render four numbers. */}
           <div className="grid grid-cols-4 gap-2 text-center">
@@ -214,44 +217,41 @@ export function RecipeEditor({
             per serving · whole dish {round(total.kcal).toLocaleString()} cal
             {raw.known && raw.grams > 0 ? ` · ${round(raw.grams)} g in` : ""}
           </p>
-        </section>
+        </Card>
 
         {check && check.verdict !== "plausible" && (
-          <section className="border-b border-border px-5 py-4">
-            {/* S21 is advisory and never blocks a save -- real cooks do reduce a
-                stew hard. It is a prompt to look, so it says what to look at. */}
-            <Alert variant="destructive">
-              <TriangleAlert />
-              <AlertTitle>
-                {check.verdict === "low"
-                  ? `Only ${Math.round(check.ratio * 100)}% of what went in came out`
-                  : `More came out (${Math.round(check.ratio * 100)}%) than went in`}
-              </AlertTitle>
-              <AlertDescription>
-                {check.verdict === "low"
-                  ? "That is more loss than simmering explains. Check for an over-stated ingredient quantity."
-                  : "Something is missing or under-stated. Check for an ingredient you did not add."}{" "}
-                Saving is fine either way.
-              </AlertDescription>
-            </Alert>
-          </section>
+          // S21 is advisory and never blocks a save -- real cooks do reduce a
+          // stew hard. It is a prompt to look, so it says what to look at.
+          // Alert brings its own surface, so it takes the page directly.
+          <Alert variant="destructive">
+            <TriangleAlert />
+            <AlertTitle>
+              {check.verdict === "low"
+                ? `Only ${Math.round(check.ratio * 100)}% of what went in came out`
+                : `More came out (${Math.round(check.ratio * 100)}%) than went in`}
+            </AlertTitle>
+            <AlertDescription>
+              {check.verdict === "low"
+                ? "That is more loss than simmering explains. Check for an over-stated ingredient quantity."
+                : "Something is missing or under-stated. Check for an ingredient you did not add."}{" "}
+              Saving is fine either way.
+            </AlertDescription>
+          </Alert>
         )}
 
         {cookedWeight !== null && cookedWeight > 0 && !raw.known && (
-          <section className="border-b border-border px-5 py-4">
-            <Alert>
-              <TriangleAlert />
-              <AlertTitle>Cannot check the yield</AlertTitle>
-              <AlertDescription>
-                No weight is recorded for {raw.missing.join(", ")}, so what went in cannot be
-                totalled. Fill in the serving weight on those foods to enable the check.
-              </AlertDescription>
-            </Alert>
-          </section>
+          <Alert>
+            <TriangleAlert />
+            <AlertTitle>Cannot check the yield</AlertTitle>
+            <AlertDescription>
+              No weight is recorded for {raw.missing.join(", ")}, so what went in cannot be
+              totalled. Fill in the serving weight on those foods to enable the check.
+            </AlertDescription>
+          </Alert>
         )}
 
-        <section className="border-b border-border">
-          <div className="flex items-center justify-between px-5 pb-2 pt-4">
+        <Card className={SURFACE}>
+          <div className="flex items-center justify-between px-3.5 pb-2 pt-3">
             <h2 className="text-sm font-semibold">Ingredients</h2>
             <span className="text-sm tabular-nums text-muted-foreground">{lines.length}</span>
           </div>
@@ -281,14 +281,14 @@ export function RecipeEditor({
             </ul>
           )}
 
-          <div className="px-5 pb-4 pt-1">
+          <div className="px-3.5 pb-4 pt-1">
             <Button variant="outline" className="h-11 w-full" onClick={() => setAdding(true)}>
               <Plus className="size-4" /> Add ingredient
             </Button>
           </div>
-        </section>
+        </Card>
 
-        <section className="px-5 py-5">
+        <div>
           <ButtonGroup className="w-full">
             <Button
               className="h-11 flex-1 text-base"
@@ -298,9 +298,8 @@ export function RecipeEditor({
               {pending ? "Saving" : "Save recipe"}
             </Button>
             <Button
-              variant="outline"
-              size="icon"
-              className="h-11 text-destructive"
+              size="icon-xl"
+              variant="destructive"
               aria-label="Delete recipe"
               disabled={pending}
               onClick={() => setConfirmDelete(true)}
@@ -312,7 +311,7 @@ export function RecipeEditor({
             Saving publishes this dish as a food, so a portion is logged like anything else.
             Portions already logged keep the numbers they were logged with.
           </p>
-        </section>
+        </div>
       </main>
 
       <IngredientSheet
@@ -388,7 +387,7 @@ function IngredientRow({ line, onChanged }: { line: EditorLine; onChanged: () =>
 
   return (
     <li>
-      <Item size="sm" className="rounded-none px-5 py-2.5">
+      <Item size="sm" className="rounded-none px-3.5 py-2.5">
         <ItemContent className="min-w-0">
           <ItemTitle className="font-normal">{line.food.name}</ItemTitle>
           <ItemDescription className="text-xs">
@@ -415,7 +414,7 @@ function IngredientRow({ line, onChanged }: { line: EditorLine; onChanged: () =>
             onConfirm={remove}
             trigger={
               <Button
-                size="icon"
+                size="icon-xl"
                 variant="ghost"
                 className="text-muted-foreground"
                 aria-label={`Remove ${line.food.name}`}

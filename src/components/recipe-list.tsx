@@ -6,6 +6,7 @@ import Link from "next/link";
 import { ChevronLeft, CookingPot, Plus } from "lucide-react";
 import { createRecipe } from "@/app/actions";
 import { Button } from "@/components/ui/button";
+import { Card } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
 import { Field, FieldLabel } from "@/components/ui/field";
 import { Item, ItemActions, ItemContent, ItemDescription, ItemTitle } from "@/components/ui/item";
@@ -24,6 +25,7 @@ import {
   EmptyTitle,
 } from "@/components/ui/empty";
 import { toast } from "sonner";
+import { PAGE, SURFACE } from "@/lib/ui";
 
 export type RecipeSummary = {
   id: string;
@@ -38,9 +40,9 @@ export function RecipeList({ recipes }: { recipes: RecipeSummary[] }) {
 
   return (
     <>
-      <main className="mx-auto w-full max-w-md flex-1 pb-[calc(6rem+env(safe-area-inset-bottom))]">
-        <header className="flex items-center gap-1 border-b border-border px-2 py-2">
-          <Button size="icon" variant="ghost" aria-label="Back to the log" asChild>
+      <main className={PAGE}>
+        <header className="flex items-center gap-1 px-1 py-1">
+          <Button size="icon-xl" variant="ghost" aria-label="Back to the log" asChild>
             <Link href="/log">
               <ChevronLeft className="size-5" />
             </Link>
@@ -65,34 +67,34 @@ export function RecipeList({ recipes }: { recipes: RecipeSummary[] }) {
         )}
 
         {recipes.length > 0 && (
-          <ul className="divide-y divide-border">
-            {recipes.map((r) => (
-              <li key={r.id}>
-                <Item asChild size="sm" className="rounded-none px-5 py-3 active:bg-accent">
-                  <Link href={`/recipes/${r.id}`}>
-                    <ItemContent className="min-w-0">
-                      <ItemTitle className="font-normal">{r.name}</ItemTitle>
-                      <ItemDescription className="text-xs">
-                        {r.ingredientCount === 0
-                          ? "No ingredients yet"
-                          : `${r.ingredientCount} ingredient${r.ingredientCount === 1 ? "" : "s"} · ${r.servings} serving${r.servings === 1 ? "" : "s"}`}
-                      </ItemDescription>
-                    </ItemContent>
-                    <ItemActions className="shrink-0 text-sm tabular-nums text-muted-foreground">
-                      {r.ingredientCount === 0 ? "" : `${r.kcalPerServing} cal`}
-                    </ItemActions>
-                  </Link>
-                </Item>
-              </li>
-            ))}
-          </ul>
+          <Card className={SURFACE}>
+            <ul>
+              {recipes.map((r) => (
+                <li key={r.id}>
+                  <Item asChild size="sm" className="rounded-none px-3.5 py-3 active:bg-accent">
+                    <Link href={`/recipes/${r.id}`}>
+                      <ItemContent className="min-w-0">
+                        <ItemTitle className="font-normal">{r.name}</ItemTitle>
+                        <ItemDescription className="text-xs">
+                          {r.ingredientCount === 0
+                            ? "No ingredients yet"
+                            : `${r.ingredientCount} ingredient${r.ingredientCount === 1 ? "" : "s"} · ${r.servings} serving${r.servings === 1 ? "" : "s"}`}
+                        </ItemDescription>
+                      </ItemContent>
+                      <ItemActions className="shrink-0 text-sm tabular-nums text-muted-foreground">
+                        {r.ingredientCount === 0 ? "" : `${r.kcalPerServing} cal`}
+                      </ItemActions>
+                    </Link>
+                  </Item>
+                </li>
+              ))}
+            </ul>
+          </Card>
         )}
 
-        <div className="border-b border-border px-5 py-4">
-          <Button variant="outline" className="h-11 w-full" onClick={() => setNaming(true)}>
-            <Plus className="size-4" /> New recipe
-          </Button>
-        </div>
+        <Button variant="outline" className="h-11 w-full" onClick={() => setNaming(true)}>
+          <Plus className="size-4" /> New recipe
+        </Button>
       </main>
 
       <NewRecipeSheet open={naming} onOpenChange={setNaming} />

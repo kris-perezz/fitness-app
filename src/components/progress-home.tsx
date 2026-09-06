@@ -5,7 +5,7 @@ import Link from "next/link";
 import { Scale, Trash2 } from "lucide-react";
 import { toast } from "sonner";
 
-import { CartesianGrid, Line, LineChart, XAxis, YAxis } from "recharts";
+import { CartesianGrid, Line, LineChart, ReferenceLine, XAxis, YAxis } from "recharts";
 
 import { WINDOW_BUFFER_MONTHS, WINDOW_MONTHS, shiftMonth, shortDate, trim } from "@/lib/training";
 import {
@@ -31,6 +31,7 @@ import type { LiftPoint } from "@/lib/training";
 import { LiftChart, enoughSessions } from "@/components/lift-chart";
 import { deleteWeighIn, loadWeighInWindow, saveWeighIn } from "@/app/progress-actions";
 import { Button } from "@/components/ui/button";
+import { Card } from "@/components/ui/card";
 import { ToggleGroup, ToggleGroupItem } from "@/components/ui/toggle-group";
 import { Calendar } from "@/components/ui/calendar";
 import { ChartContainer, type ChartConfig } from "@/components/ui/chart";
@@ -52,6 +53,8 @@ import {
 } from "@/components/ui/empty";
 import { InputGroup, InputGroupInput, InputGroupAddon, InputGroupText } from "@/components/ui/input-group";
 import { Item, ItemActions, ItemContent, ItemTitle } from "@/components/ui/item";
+import { cn } from "@/lib/utils";
+import { PAGE, SURFACE, SURFACE_PAD } from "@/lib/ui";
 
 /**
  * S54-S59. The weight log, which is the training log with one number instead of
@@ -190,15 +193,15 @@ export function ProgressHome({
 
   return (
     <>
-      <main className="mx-auto w-full max-w-md flex-1 pb-[calc(6rem+env(safe-area-inset-bottom))]">
+      <main className={PAGE}>
         {/* The primary action sits above everything, same as the train tab: the
             thing you came to do is not reachable only by scrolling past what you
             have already done. */}
-        <div className="border-b border-border px-5 py-4">
+        <header className="pt-1">
           <Button className="h-12 w-full text-base" onClick={() => setEditing(today)}>
             <Scale className="size-4" /> Weigh in
           </Button>
-        </div>
+        </header>
 
         {/* S67. EVERY BLOCK DEGRADES ON ITS OWN, and the first weigh-in is the
             case where that matters most: with no readings at all, the chart,
@@ -230,11 +233,12 @@ export function ProgressHome({
           windowKey={windowKey}
           onWindowChange={setWindowKey}
           extending={chartUnderCovered}
+          goal={goal}
         />
 
         <PinnedLiftBlock pinned={pinned} />
 
-        <div className="flex justify-center border-b border-border px-2 py-3">
+        <Card className={cn(SURFACE, "items-center px-1 py-2")}>
           <Calendar
             month={toDate(`${month}-01`)}
             onMonthChange={(next) => setMonth(monthKey(next))}
@@ -242,14 +246,23 @@ export function ProgressHome({
             disabled={{ after: toDate(today) }}
             modifiers={{ weighed: weighedDays }}
             modifiersClassNames={{
-              weighed: "bg-primary! text-primary-foreground! rounded-md font-medium",
-              today: "rounded-md ring-2 ring-ring ring-inset",
+              // The transparent border plus bg-clip-padding is what keeps two
+              // consecutive days from touching. Square fills sat edge to edge and
+              // six sessions in a row fused into one bar that read as a selected
+              // RANGE rather than as six separate days.
+              weighed:
+                "bg-primary! text-primary-foreground! rounded-full border-2 border-transparent bg-clip-padding font-medium",
+              // A fill from the month either side is real food or a real
+              // session, so it is drawn -- at less weight, so the month on
+              // screen still reads as the subject.
+              outside: "opacity-45",
+              today: "rounded-full ring-2 ring-ring ring-inset",
             }}
             onSelect={(day) => day && setEditing(dateKey(day))}
             mode="single"
-            className="p-0"
+            className="bg-transparent p-0 [--cell-size:--spacing(8)]"
           />
-        </div>
+        </Card>
 
         {monthEntries.length === 0 ? (
           <Empty className="py-12">
@@ -268,7 +281,7 @@ export function ProgressHome({
           <ul className="divide-y divide-border">
             {monthEntries.map((e) => (
               <li key={e.date}>
-                <Item size="sm" className="rounded-none px-5 py-3 active:bg-accent">
+                <Item size="sm" className="rounded-none px-3.5 py-3 active:bg-accent">
                   <ItemContent className="min-w-0">
                     <ItemTitle className="font-normal">{shortDate(e.date)}</ItemTitle>
                   </ItemContent>
@@ -363,51 +376,47 @@ function Headline({
   if (head.trendLb === null) {
     const need = MIN_TREND_ENTRIES - head.entryCount;
     return (
-      <section className="border-b border-border px-5 py-4">
+      <Card className={cn(SURFACE, SURFACE_PAD)}>
         {/* Labelled for the same reason the trend is, and labelled DIFFERENTLY:
             below the floor this is the scale, not a trend, and the two states
             must not look like the same number changing its mind. */}
-        <p className="text-xs text-muted-foreground">Last reading</p>
-        <p className="text-3xl font-semibold tabular-nums">
-          {toDisplay(head.latest.weightLb, unit).toFixed(1)} {unit}
+        <p className="text-[11px] font-semibold uppercase tracking-[0.08em] text-muted-foreground">
+          Last reading
+        </p>
+        <p className="mt-1 text-[40px] font-semibold leading-none tracking-[-0.03em] tabular-nums">
+          {toDisplay(head.latest.weightLb, unit).toFixed(1)}
+          <span className="ml-1 text-lg font-medium text-muted-foreground">{unit}</span>
         </p>
         <p className="mt-1 text-xs text-muted-foreground">
           {shortDate(head.latest.date)} · {need} more {need === 1 ? "weigh-in" : "weigh-ins"} and
           this becomes a trend
         </p>
-      </section>
+      </Card>
     );
   }
 
   return (
-    <section className="border-b border-border px-5 py-4">
+    <Card className={cn(SURFACE, SURFACE_PAD)}>
       {/* The big number is the trend, so it SAYS "trend". Unlabelled, a 163.0
           sitting beside a 161.8 reads as two scale readings and invites the one
           question this tab exists to answer -- which of these am I? The word
           used to be on the third line, attached to the rate, where it labelled
           the wrong number. */}
-      <p className="text-xs text-muted-foreground">Trend weight</p>
+      <p className="text-[11px] font-semibold uppercase tracking-[0.08em] text-muted-foreground">
+        Trend weight
+      </p>
       {/* Both weights to one decimal. `trim` drops a trailing .0, which printed
           the trend as "163" next to a reading of "161.8" and made two
           measurements of one quantity look like two kinds of number. */}
-      <p className="text-3xl font-semibold tabular-nums">
-        {toDisplay(head.trendLb, unit).toFixed(1)} {unit}
+      <p className="mt-1 text-[40px] font-semibold leading-none tracking-[-0.03em] tabular-nums">
+        {toDisplay(head.trendLb, unit).toFixed(1)}
+        <span className="ml-1 text-lg font-medium text-muted-foreground">{unit}</span>
       </p>
       {rate ? (
         <p className="mt-1 text-sm text-muted-foreground">
           <span className="tabular-nums">{rateLabel(rate, unit)}</span> {windowLabel(rate.days)}
         </p>
       ) : null}
-      {/* The reading stays on screen and stays subordinate. Showing the trend
-          alone would be a number the user cannot find on their own scale. */}
-      <p className="mt-1 text-xs text-muted-foreground">
-        Last reading{" "}
-        <span className="tabular-nums">
-          {toDisplay(head.latest.weightLb, unit).toFixed(1)} {unit}
-        </span>
-        {" · "}
-        {shortDate(head.latest.date)}
-      </p>
 
       {/* S60. The goal SITS BESIDE the rate; it does not grade it. No "on
           track", no "behind", and deliberately no projected date -- compounding
@@ -436,7 +445,7 @@ function Headline({
           )}
         </p>
       )}
-    </section>
+    </Card>
   );
 }
 
@@ -530,7 +539,12 @@ function WeighInSheet({
   }
 
   return (
-    <Drawer open={date !== null} onOpenChange={onOpenChange}>
+    // repositionInputs={false}: the layout viewport already shrinks for the
+    // keyboard (see interactiveWidget in app/layout.tsx), so vaul's own lift
+    // on focus is a second response to the same event -- it shoves the sheet
+    // against the notch and, with no snapPoints here, takes the drag height
+    // with it. The field still clears the keyboard; the viewport does that part.
+    <Drawer open={date !== null} onOpenChange={onOpenChange} repositionInputs={false}>
       <DrawerContent>
         <DrawerHeader className="px-5 pb-2 pt-0">
           <DrawerTitle className="text-base">
@@ -568,7 +582,7 @@ function WeighInSheet({
           {existing && (
             <ConfirmAction
               trigger={
-                <Button variant="ghost" size="icon" className="size-11 shrink-0" aria-label="Delete">
+                <Button variant="ghost" size="icon-xl" className="size-11 shrink-0" aria-label="Delete">
                   <Trash2 className="size-4" />
                 </Button>
               }
@@ -604,14 +618,16 @@ function PinnedLiftBlock({ pinned }: { pinned: PinnedLift | null }) {
   if (!pinned) return null;
 
   return (
-    <section className="border-b border-border px-5 py-4">
+    <Card className={cn(SURFACE, SURFACE_PAD)}>
       <div className="flex items-baseline justify-between gap-2">
-        <h2 className="text-sm font-medium">
+        <h2 className="text-[17px] font-semibold tracking-[-0.01em]">
           <Link href={`/exercise/${pinned.id}`} className="underline-offset-4 hover:underline">
             {pinned.name}
           </Link>
         </h2>
-        <span className="text-xs text-muted-foreground">Estimated 1RM</span>
+        <span className="text-[11px] font-semibold uppercase tracking-[0.08em] text-muted-foreground">
+          Estimated 1RM
+        </span>
       </div>
 
       {enoughSessions(pinned.points) ? (
@@ -621,7 +637,7 @@ function PinnedLiftBlock({ pinned }: { pinned: PinnedLift | null }) {
           Not enough sessions yet to draw a trend.
         </p>
       )}
-    </section>
+    </Card>
   );
 }
 
@@ -649,7 +665,10 @@ function round1(n: number): number {
  */
 const weightConfig = {
   trendLb: { label: "Trend", color: "var(--primary)" },
-  weightLb: { label: "Weighed", color: "var(--muted-foreground)" },
+  // Strawberry, where the theme has one. The raw readings are the noise the
+  // trend is drawn through, and grey noise under a green line left the pink in
+  // this app doing nothing but tinting the page behind the chart.
+  weightLb: { label: "Weighed", color: "var(--chart-2)" },
 } satisfies ChartConfig;
 
 function WeightChart({
@@ -659,6 +678,7 @@ function WeightChart({
   windowKey,
   onWindowChange,
   extending,
+  goal,
 }: {
   entries: WeighIn[];
   unit: DisplayUnit;
@@ -666,6 +686,9 @@ function WeightChart({
   windowKey: ChartWindowKey;
   onWindowChange: (key: ChartWindowKey) => void;
   extending: boolean;
+  /** S60. Only the weight half draws anything here -- the rate has no line,
+   * and S60 rules out projecting a date from it. */
+  goal: WeightGoal;
 }) {
   // Smoothed over the WHOLE log and only then clipped, so the line entering
   // from the left carries its history rather than restarting at the window
@@ -682,7 +705,52 @@ function WeightChart({
       })),
     [entries, from, unit],
   );
-  const domain = useMemo(() => axisDomain(points), [points]);
+  // Converted once, here, same as every other weight on this chart (S69).
+  const goalWeight = goal.weightLb === null ? null : toDisplay(goal.weightLb, unit);
+  const domain = useMemo(() => axisDomain(points, goalWeight), [points, goalWeight]);
+
+  /**
+   * A swipe across the chart is a second way to reach the window toggle above
+   * it, not a replacement -- the ToggleGroup stays the keyboard/AT path and
+   * drives the same `onWindowChange`. Read on the container's own pointer
+   * events rather than a gesture library: this is one axis, one threshold and
+   * one step, which does not earn a dependency.
+   *
+   * The gesture is judged on its own displacement, not on which element it
+   * started or ended over, so the start point is all that has to be kept
+   * between pointerdown and the move that crosses the threshold.
+   */
+  const swipeStart = useRef<{ x: number; y: number } | null>(null);
+  const swiped = useRef(false);
+  const SWIPE_PX = 40;
+
+  function onSwipeStart(e: React.PointerEvent<HTMLDivElement>) {
+    swipeStart.current = { x: e.clientX, y: e.clientY };
+    swiped.current = false;
+    e.currentTarget.setPointerCapture(e.pointerId);
+  }
+
+  function onSwipeMove(e: React.PointerEvent<HTMLDivElement>) {
+    if (!swipeStart.current || swiped.current) return;
+    const dx = e.clientX - swipeStart.current.x;
+    const dy = e.clientY - swipeStart.current.y;
+    // Horizontal enough, and past the threshold -- short of both, this is a
+    // vertical scroll or a tap, and `touch-pan-y` on the container already
+    // leaves the scroll itself to the browser.
+    if (Math.abs(dx) < SWIPE_PX || Math.abs(dx) < Math.abs(dy)) return;
+    swiped.current = true;
+
+    const index = CHART_WINDOWS.findIndex((w) => w.key === windowKey);
+    // Left moves to the next LONGER window, matching the ToggleGroup's own
+    // left-to-right order (1M -> 3M -> ...). Clamped rather than wrapped: a
+    // swipe past either end has nowhere further to go, not back to the start.
+    const next = CHART_WINDOWS[index + (dx < 0 ? 1 : -1)];
+    if (next) onWindowChange(next.key);
+  }
+
+  function onSwipeEnd() {
+    swipeStart.current = null;
+  }
 
   // Thin data is a sentence, not a chart (S79). Below the trend floor there is
   // nothing to draw that would not be a two-point line dressed up as a shape,
@@ -690,13 +758,18 @@ function WeightChart({
   if (entries.length < MIN_TREND_ENTRIES) return null;
 
   return (
-    <section className="border-b border-border px-5 py-4">
+    <Card className={cn(SURFACE, SURFACE_PAD)}>
       <div className="flex items-center justify-between gap-3">
-        <h2 className="text-sm font-medium">{chartWindow(windowKey).title}</h2>
+        <h2 className="text-[11px] font-semibold uppercase tracking-[0.08em] text-muted-foreground">
+          {chartWindow(windowKey).title}
+        </h2>
+        {/* One container with a moving selection, not five outlined chips in a
+            row -- a chip row makes five equal objects out of one control, and
+            the chosen one is then a fill you have to hunt for. */}
         <ToggleGroup
           type="single"
           size="sm"
-          variant="outline"
+          className="gap-0 rounded-full bg-muted/60 p-0.5"
           value={windowKey}
           // A single ToggleGroup deselects when its active item is pressed
           // again, which would leave the chart with no window at all; ignore
@@ -705,7 +778,11 @@ function WeightChart({
           aria-label="Chart window"
         >
           {CHART_WINDOWS.map((w) => (
-            <ToggleGroupItem key={w.key} value={w.key} className="px-2 text-xs">
+            <ToggleGroupItem
+              key={w.key}
+              value={w.key}
+              className="rounded-full border-0 px-3 text-xs"
+            >
               {w.label}
             </ToggleGroupItem>
           ))}
@@ -715,7 +792,16 @@ function WeightChart({
       {/* While a wider window is still being fetched the chart holds what it
           has, dimmed. Drawing a full-width axis over half the history without
           saying so would present "not loaded yet" as "you did not weigh". */}
-      <div className={extending ? "opacity-50 transition-opacity" : "transition-opacity"}>
+      <div
+        className={cn(
+          "touch-pan-y",
+          extending ? "opacity-50 transition-opacity" : "transition-opacity",
+        )}
+        onPointerDown={onSwipeStart}
+        onPointerMove={onSwipeMove}
+        onPointerUp={onSwipeEnd}
+        onPointerCancel={onSwipeEnd}
+      >
 
       <ChartContainer config={weightConfig} className={`mt-3 ${CHART_CLASS}`}>
         <LineChart accessibilityLayer data={points} margin={{ left: 0, right: 8, top: 4 }}>
@@ -727,6 +813,25 @@ function WeightChart({
           {/* Fitted, never zero-based: a 0-200 axis flattens a real cut into a
               horizontal line. The rule is S79's, applied by axisDomain. */}
           <YAxis domain={domain} {...Y_AXIS} />
+
+          {/* S60. What the trend is MEASURED AGAINST, not a second measurement
+              -- thin, dashed and muted so it never reads as a data series.
+              No line at all with no goal on file, and nothing else about the
+              chart changes; the axis already made room for it above. */}
+          {goalWeight !== null && (
+            <ReferenceLine
+              y={goalWeight}
+              stroke="var(--muted-foreground)"
+              strokeDasharray="4 4"
+              strokeOpacity={0.7}
+              label={{
+                value: `${trim(goalWeight)} ${unit}`,
+                position: "insideTopRight",
+                fontSize: 10,
+                fill: "var(--muted-foreground)",
+              }}
+            />
+          )}
 
           {/* No ChartTooltip. There is no hover on a phone, and S79 rules out a
               touch tooltip nobody discovers -- the exact numbers are in the
@@ -748,7 +853,7 @@ function WeightChart({
             stroke="none"
             // The one place a series overrides the contract's `dot: false`, and
             // it is the point of this series: the readings ARE the dots.
-            dot={{ r: 1.6, fill: "var(--color-weightLb)", fillOpacity: 0.45, strokeWidth: 0 }}
+            dot={{ r: 1.9, fill: "var(--color-weightLb)", fillOpacity: 0.75, strokeWidth: 0 }}
           />
           <Line
             {...SERIES}
@@ -764,7 +869,7 @@ function WeightChart({
         </LineChart>
       </ChartContainer>
       </div>
-    </section>
+    </Card>
   );
 }
 

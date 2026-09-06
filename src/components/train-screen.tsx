@@ -65,6 +65,8 @@ import {
   EmptyTitle,
 } from "@/components/ui/empty";
 import { toast } from "sonner";
+import { cn } from "@/lib/utils";
+import { PAGE, SURFACE, SURFACE_PAD } from "@/lib/ui";
 
 /**
  * S22-S28, S43-S46. The gym screen.
@@ -155,9 +157,9 @@ export function TrainScreen({
 
   return (
     <>
-      <main className="mx-auto w-full max-w-md flex-1 pb-[calc(6rem+env(safe-area-inset-bottom))]">
-        <header className="flex items-center gap-1 border-b border-border px-2 py-2">
-          <Button size="icon" variant="ghost" aria-label="All sessions" asChild>
+      <main className={PAGE}>
+        <header className="flex items-center gap-1 px-1 py-1">
+          <Button size="icon-xl" variant="ghost" aria-label="All sessions" asChild>
             {/* ?browse=1, because /train sends you back into an open session on
                 sight (S26). Without it this chevron would bounce straight here
                 again and the calendar would be unreachable mid-workout. */}
@@ -168,17 +170,19 @@ export function TrainScreen({
           <span className="min-w-0 flex-1 truncate text-sm font-medium">
             {past ? shortDate(workout.log_date) : "Today's session"}
           </span>
-          <span className="shrink-0 pr-3 text-xs tabular-nums text-muted-foreground">
+          <span className="shrink-0 pr-1 text-xs tabular-nums text-muted-foreground">
             {workingSets} {workingSets === 1 ? "set" : "sets"}
             {volume > 0 && ` · ${Math.round(volume).toLocaleString()} lb`}
           </span>
         </header>
 
         {stale && (
-          <p className="border-b border-border px-5 py-3 text-xs text-muted-foreground">
-            Left open from {shortDate(workout.log_date)}. Finishing it keeps its sets on that
-            day rather than rolling them into today.
-          </p>
+          <Card className={cn(SURFACE, SURFACE_PAD)}>
+            <p className="text-xs text-muted-foreground">
+              Left open from {shortDate(workout.log_date)}. Finishing it keeps its sets on that
+              day rather than rolling them into today.
+            </p>
+          </Card>
         )}
 
         {slots.length === 0 && (
@@ -215,62 +219,57 @@ export function TrainScreen({
           <PendingSlot key={`${name}_${i}`} name={name} />
         ))}
 
-        <div className="px-5 py-4">
+        <Button
+          variant="outline"
+          className="h-11 w-full text-base"
+          onClick={() => setPicking(true)}
+        >
+          <Plus className="size-4" /> Add exercise
+        </Button>
+
+        <ButtonGroup className="w-full">
           <Button
             variant="outline"
-            className="h-11 w-full text-base"
-            onClick={() => setPicking(true)}
+            className="h-11 flex-1"
+            disabled={pending}
+            onClick={() =>
+              run(() => finishWorkout(workout.id), () => {
+                toast.success("Session finished");
+                router.push("/train");
+              })
+            }
           >
-            <Plus className="size-4" /> Add exercise
+            {pending ? "Finishing" : workout.ended_at ? "Done" : "Finish session"}
           </Button>
-        </div>
-
-        <section className="border-t border-border px-5 py-5">
-          <ButtonGroup className="w-full">
-            <Button
-              variant="outline"
-              className="h-11 flex-1"
-              disabled={pending}
-              onClick={() =>
-                run(() => finishWorkout(workout.id), () => {
-                  toast.success("Session finished");
-                  router.push("/train");
-                })
-              }
-            >
-              {pending ? "Finishing" : workout.ended_at ? "Done" : "Finish session"}
-            </Button>
-            {/* Offered whatever is in the session, not only while it is empty.
-                It used to appear only for an empty one, which meant a single
-                logged set made a session permanent: a mistyped date or a day
-                opened by accident could never be removed. The wording carries
-                the weight instead -- an empty session says nothing is lost, a
-                full one counts out exactly what goes. */}
-            <ConfirmAction
-              title={allSets === 0 ? "Discard this session?" : "Delete this session?"}
-              description={
-                allSets === 0
-                  ? "Nothing has been logged in it yet, so nothing is lost -- the day simply goes back to being untrained."
-                  : `Its ${allSets} ${allSets === 1 ? "set" : "sets"} across ${slots.length} ${
-                      slots.length === 1 ? "exercise" : "exercises"
-                    } go with it. This cannot be undone.`
-              }
-              confirmLabel={allSets === 0 ? "Discard" : "Delete"}
-              onConfirm={() => run(() => discardWorkout(workout.id), () => router.push("/train"))}
-              trigger={
-                <Button
-                  variant="outline"
-                  size="icon"
-                  className="h-11 text-destructive"
-                  aria-label={allSets === 0 ? "Discard session" : "Delete session"}
-                  disabled={pending}
-                >
-                  <Trash2 className="size-4" />
-                </Button>
-              }
-            />
-          </ButtonGroup>
-        </section>
+          {/* Offered whatever is in the session, not only while it is empty.
+              It used to appear only for an empty one, which meant a single
+              logged set made a session permanent: a mistyped date or a day
+              opened by accident could never be removed. The wording carries
+              the weight instead -- an empty session says nothing is lost, a
+              full one counts out exactly what goes. */}
+          <ConfirmAction
+            title={allSets === 0 ? "Discard this session?" : "Delete this session?"}
+            description={
+              allSets === 0
+                ? "Nothing has been logged in it yet, so nothing is lost -- the day simply goes back to being untrained."
+                : `Its ${allSets} ${allSets === 1 ? "set" : "sets"} across ${slots.length} ${
+                    slots.length === 1 ? "exercise" : "exercises"
+                  } go with it. This cannot be undone.`
+            }
+            confirmLabel={allSets === 0 ? "Discard" : "Delete"}
+            onConfirm={() => run(() => discardWorkout(workout.id), () => router.push("/train"))}
+            trigger={
+              <Button
+                size="icon-xl"
+                variant="destructive"
+                aria-label={allSets === 0 ? "Discard session" : "Delete session"}
+                disabled={pending}
+              >
+                <Trash2 className="size-4" />
+              </Button>
+            }
+          />
+        </ButtonGroup>
       </main>
 
       <ExercisePicker
@@ -304,12 +303,12 @@ export function TrainScreen({
  */
 function PendingSlot({ name }: { name: string }) {
   return (
-    <section className="border-t border-border px-5 py-4">
+    <Card className={cn(SURFACE, SURFACE_PAD)}>
       <div className="flex items-center gap-2 text-sm font-medium text-muted-foreground">
         <Spinner />
         {name}
       </div>
-    </section>
+    </Card>
   );
 }
 
@@ -355,8 +354,8 @@ function SlotSection({
   const suggestion = suggestFor(sets, last);
 
   return (
-    <section className="border-b border-border">
-      <div className="flex items-center justify-between gap-2 px-5 pb-2 pt-4">
+    <Card className={SURFACE}>
+      <div className="flex items-center justify-between gap-2 px-3.5 pb-2 pt-3">
         <div className="min-w-0">
           {/* The name is the way into this lift's history (S80): "is bench
               moving" is asked while looking at bench, and the answer should not
@@ -395,7 +394,7 @@ function SlotSection({
           }
           trigger={
             <Button
-              size="icon"
+              size="icon-xl"
               variant="ghost"
               className="shrink-0 text-muted-foreground"
               aria-label={`Remove ${slot.name}`}
@@ -453,9 +452,9 @@ function SlotSection({
                   {/* 44px, not the 28px an icon-sm gives: this is the app's own
                       floor, stated in bottom-nav.tsx, and it sits on every set. */}
                   <Button
-                    size="icon"
+                    size="icon-xl"
                     variant="ghost"
-                    className="size-11 text-muted-foreground"
+                    className="text-muted-foreground"
                     aria-label={`Edit set ${set.set_index + 1}`}
                     onClick={() => setEditing(set)}
                   >
@@ -583,7 +582,7 @@ function SlotSection({
           </div>
         </CollapsibleContent>
       </Collapsible>
-    </section>
+    </Card>
   );
 }
 
@@ -751,7 +750,7 @@ function SetForm({
           onPressedChange={setWarmup}
           variant="outline"
           aria-label="Log this as a warm-up set"
-          className="h-10 gap-1.5 px-3 data-[state=on]:border-primary data-[state=on]:bg-primary data-[state=on]:text-primary-foreground data-[state=on]:hover:bg-primary"
+          className="h-10 gap-1.5 px-3"
         >
           {warmup ? <Check /> : <Flame />}
           Warm-up
@@ -760,9 +759,8 @@ function SetForm({
         <ButtonGroup className="ml-auto">
           {onDelete && (
             <Button
-              variant="outline"
-              size="icon"
-              className="h-10 text-destructive"
+              size="icon-xl"
+              variant="destructive"
               aria-label="Delete this set"
               onClick={onDelete}
             >

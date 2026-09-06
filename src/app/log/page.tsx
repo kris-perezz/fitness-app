@@ -2,11 +2,12 @@ import { createClient } from "@/lib/supabase/server";
 import {
   LOG_WINDOW_DAYS,
   shiftDate,
-  wakingDate,
+  todayDate,
   type Food,
   type IntakeEntry,
 } from "@/lib/food";
 import { toMicros } from "@/lib/micros";
+import { toDayGoal } from "@/lib/goals";
 import { LogScreen } from "@/components/log-screen";
 
 export const dynamic = "force-dynamic";
@@ -36,30 +37,43 @@ export default async function LogPage({
   searchParams: Promise<{ date?: string }>;
 }) {
   const { date: requested } = await searchParams;
-  const date = /^\d{4}-\d{2}-\d{2}$/.test(requested ?? "") ? requested! : wakingDate();
+  const date = /^\d{4}-\d{2}-\d{2}$/.test(requested ?? "") ? requested! : todayDate();
 
   // Both ways from the anchor, unlike train's one -- days can be paged forward
   // as well as back, and arriving on an old day through `?date=` would
   // otherwise put the edge one tap away. Never past today: there is nothing
   // there to fetch.
-  const today = wakingDate();
+  const today = todayDate();
   const from = shiftDate(date, -LOG_WINDOW_DAYS);
   const ahead = shiftDate(date, LOG_WINDOW_DAYS);
   const to = ahead > today ? today : ahead;
 
   const supabase = await createClient();
 
-  const [{ data: foods }, { data: entries }, { data: goals }, { data: auth }] = await Promise.all([
-    supabase.from("foods").select("*").order("name"),
-    supabase
-      .from("intake_entries")
-      .select("*")
-      .gte("log_date", from)
-      .lte("log_date", to)
-      .order("created_at", { ascending: true }),
-    supabase.from("nutrition_settings").select("*").maybeSingle(),
-    supabase.auth.getUser(),
-  ]);
+  const [{ data: foods }, { data: entries }, { data: dayGoals }, { data: settings }, { data: auth }] =
+    await Promise.all([
+      supabase.from("foods").select("*").order("name"),
+      supabase
+        .from("intake_entries")
+        .select("*")
+        .gte("log_date", from)
+        .lte("log_date", to)
+        .order("created_at", { ascending: true }),
+      // S60. The dated goal for every day in the window, looked up in Postgres
+      // rather than pulled whole and filtered client-side. A day with no row
+      // here has no goal -- the log tab grades it against nothing rather than
+      // guessing at an earlier or later one.
+      supabase
+        .from("day_goals")
+        .select("log_date, calorie_goal, protein_goal_g, carb_goal_g, fat_goal_g")
+        .gte("log_date", from)
+        .lte("log_date", to),
+      // Only strict_mode is read live here now (S77) -- the goal numbers
+      // themselves come from day_goals above, one per day rather than one for
+      // the whole window.
+      supabase.from("nutrition_settings").select("strict_mode").maybeSingle(),
+      supabase.auth.getUser(),
+    ]);
 
   return (
     <LogScreen
@@ -68,7 +82,8 @@ export default async function LogPage({
       loadedTo={to}
       foods={visibleFoods((foods ?? []) as CatalogRow[], auth.user?.id ?? null)}
       entries={(entries ?? []) as IntakeEntry[]}
-      goals={goals}
+      dayGoals={(dayGoals ?? []).map(toDayGoal)}
+      strictMode={settings?.strict_mode === true}
     />
   );
 }

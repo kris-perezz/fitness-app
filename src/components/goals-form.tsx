@@ -3,6 +3,7 @@
 import { useState, useTransition } from "react";
 import { saveGoals, signOut } from "@/app/actions";
 import { Button } from "@/components/ui/button";
+import { Card } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
 import { Field, FieldGroup, FieldLabel } from "@/components/ui/field";
 import {
@@ -11,7 +12,7 @@ import {
   PopoverDescription,
   PopoverTrigger,
 } from "@/components/ui/popover";
-import { Info } from "lucide-react";
+import { Info, LogOut } from "lucide-react";
 import {
   MACRO_KEYS,
   balance,
@@ -26,6 +27,8 @@ import { Switch } from "@/components/ui/switch";
 import { ThemeToggle } from "@/components/theme-toggle";
 import { fromDisplay, toDisplay, type DisplayUnit } from "@/lib/weight";
 import { toast } from "sonner";
+import { cn } from "@/lib/utils";
+import { PAGE, SURFACE, SURFACE_PAD } from "@/lib/ui";
 
 type Goals =
   | ({
@@ -66,10 +69,11 @@ function FieldHint({ label, children }: { label: string; children: React.ReactNo
         <Button
           type="button"
           variant="ghost"
-          size="icon"
+          size="icon-xl"
           // Small mark, full-size target: the icon reads as 14px and the button
-          // still answers to a thumb.
-          className="-my-2 size-8 text-muted-foreground"
+          // still answers to a thumb. `-my-2` pulls the extra height back out of
+          // the row's layout; the hit box keeps it.
+          className="-my-2 text-muted-foreground"
           aria-label={label}
         >
           <Info className="size-3.5" />
@@ -209,8 +213,8 @@ export function GoalsForm({ goals }: { goals: Goals }) {
   }
 
   function save() {
-    // Blur usually reconciles first; a keyboard Save on an unbalanced form
-    // should not slip a mismatched split into the database.
+    // Blur usually reconciles first; a commit on an unbalanced form should not
+    // slip a mismatched split into the database.
     const values = isBalanced(current.calorie_goal, current) ? current : reconcile("calorie_goal");
 
     startTransition(async () => {
@@ -224,12 +228,8 @@ export function GoalsForm({ goals }: { goals: Goals }) {
   }
 
   return (
-    <main className="mx-auto w-full max-w-md flex-1 pb-[calc(6rem+env(safe-area-inset-bottom))]">
-      <header className="flex items-center border-b border-border px-5 py-3">
-        <span className="text-sm font-medium">Goals</span>
-      </header>
-
-      <div className="space-y-6 px-5 py-6">
+    <main className={PAGE}>
+      <Card className={cn(SURFACE, SURFACE_PAD, "space-y-5")}>
         {/* S75/S79. FIRST ON THE SCREEN, because it now decides what the rest
             of the screen is for: with it off there are no macro targets to set,
             so a form full of them would be asking for numbers nothing reads.
@@ -406,15 +406,21 @@ export function GoalsForm({ goals }: { goals: Goals }) {
             <ToggleGroup
               type="single"
               size="sm"
-              variant="outline"
+              className="gap-0 rounded-full bg-muted/60 p-0.5"
               value={unit}
               onValueChange={(next) => next && switchUnit(next as DisplayUnit)}
               aria-label="Weight unit"
             >
-              <ToggleGroupItem value="lb" className="px-3 text-xs">
+              <ToggleGroupItem
+                value="lb"
+                className="rounded-full border-0 px-3 text-xs"
+              >
                 lb
               </ToggleGroupItem>
-              <ToggleGroupItem value="kg" className="px-3 text-xs">
+              <ToggleGroupItem
+                value="kg"
+                className="rounded-full border-0 px-3 text-xs"
+              >
                 kg
               </ToggleGroupItem>
             </ToggleGroup>
@@ -424,15 +430,32 @@ export function GoalsForm({ goals }: { goals: Goals }) {
         <Button className="h-11 w-full text-base" onClick={save} disabled={pending}>
           {pending ? "Saving" : "Save"}
         </Button>
+      </Card>
 
+      <Card className={SURFACE}>
         <ThemeToggle />
+      </Card>
 
+      {/* Its own card, away from the settings. Sign out is not a preference, and
+          a row that ends the session should not sit in the same box as one that
+          changes a colour.
+
+          A quiet list row like Appearance above, not a filled destructive
+          button -- a solid colour block inside a translucent card reads as a
+          clipped rectangle rather than a row. Destructive stays legible in the
+          colour of the label and icon instead. */}
+      <Card className={SURFACE}>
         <form action={signOut}>
-          <Button type="submit" variant="ghost" className="w-full text-muted-foreground">
-            Sign out
+          <Button
+            type="submit"
+            variant="ghost"
+            className="h-12 w-full justify-start rounded-none px-4 text-[15px] font-normal text-destructive"
+          >
+            <LogOut className="size-4" /> Sign out
           </Button>
         </form>
-      </div>
+      </Card>
+
     </main>
   );
 }

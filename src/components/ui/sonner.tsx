@@ -7,9 +7,14 @@ import { CircleCheckIcon, InfoIcon, TriangleAlertIcon, OctagonXIcon, Loader2Icon
 const Toaster = ({ ...props }: ToasterProps) => {
   const { theme = "system" } = useTheme()
 
+  // Sonner knows three values. A named palette is not one of them, and it reads
+  // its surface off the app's own variables anyway, so anything else is light.
+  const surface: ToasterProps["theme"] =
+    theme === "dark" || theme === "system" ? theme : "light"
+
   return (
     <Sonner
-      theme={theme as ToasterProps["theme"]}
+      theme={surface}
       className="toaster group"
       icons={{
         success: (

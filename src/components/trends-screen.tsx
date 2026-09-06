@@ -2,7 +2,7 @@
 
 import Link from "next/link";
 import { ChevronLeft, ChartNoAxesColumn } from "lucide-react";
-import { Bar, BarChart, CartesianGrid, ReferenceLine, XAxis, YAxis } from "recharts";
+import { Bar, BarChart, CartesianGrid, Line, XAxis, YAxis } from "recharts";
 
 import {
   CHART_CLASS,
@@ -14,9 +14,12 @@ import {
 } from "@/lib/chart";
 import { estimateShare, loggedDays, type IntakeDay, type TopFood, type TrendPoint } from "@/lib/trends";
 import { Button } from "@/components/ui/button";
+import { Card } from "@/components/ui/card";
 import { ChartContainer, type ChartConfig } from "@/components/ui/chart";
 import { Empty, EmptyDescription, EmptyHeader, EmptyMedia, EmptyTitle } from "@/components/ui/empty";
 import { Item, ItemContent, ItemDescription, ItemTitle } from "@/components/ui/item";
+import { cn } from "@/lib/utils";
+import { PAGE, SURFACE, SURFACE_PAD } from "@/lib/ui";
 
 /**
  * The Food tab's Trends view (S83-S86). What a month of eating looks like,
@@ -51,14 +54,10 @@ const proteinConfig = {
 export function TrendsScreen({
   points,
   days,
-  calorieGoal,
-  proteinGoal,
   topFoods,
 }: {
   points: TrendPoint[];
   days: IntakeDay[];
-  calorieGoal: number | null;
-  proteinGoal: number | null;
   /** Null means the query failed -- see TopFoods. Empty means nothing logged. */
   topFoods: TopFood[] | null;
 }) {
@@ -66,9 +65,9 @@ export function TrendsScreen({
   const share = estimateShare(days);
 
   return (
-    <main className="mx-auto w-full max-w-md flex-1 pb-[calc(6rem+env(safe-area-inset-bottom))]">
-      <header className="flex items-center gap-1 border-b border-border px-2 py-2">
-        <Button size="icon" variant="ghost" aria-label="Back to the log" asChild>
+    <main className={PAGE}>
+      <header className="flex items-center gap-1 px-1 py-1">
+        <Button size="icon-xl" variant="ghost" aria-label="Back to the log" asChild>
           <Link href="/log">
             <ChevronLeft className="size-5" />
           </Link>
@@ -95,9 +94,8 @@ export function TrendsScreen({
             caption={`${logged} of the last 30 days logged`}
             points={points}
             dataKey="kcal"
+            goalKey="calorieGoal"
             config={calorieConfig}
-            goal={calorieGoal}
-            goalLabel="Goal"
             /* A day short of the goal is not a verdict, and the last bar is
                usually TODAY, which is unfinished rather than low (S71). */
             thin="A few more logged days and this becomes a pattern."
@@ -105,12 +103,10 @@ export function TrendsScreen({
 
           <DayChart
             title="Protein a day"
-            caption={proteinGoal ? `Floor ${Math.round(proteinGoal)} g` : undefined}
             points={points}
             dataKey="protein_g"
+            goalKey="proteinGoal"
             config={proteinConfig}
-            goal={proteinGoal}
-            goalLabel="Floor"
             thin="A few more logged days and this becomes a pattern."
           />
 
@@ -120,7 +116,7 @@ export function TrendsScreen({
               legitimate entry (S35), and this is context for how hard to lean
               on the two charts above rather than a score. */}
           {share.entries > 0 && (
-            <section className="border-b border-border px-5 py-4">
+            <Card className={cn(SURFACE, SURFACE_PAD)}>
               <p className="text-sm">
                 <span className="font-medium tabular-nums">{share.percent}%</span> of the{" "}
                 <span className="tabular-nums">{share.entries}</span>{" "}
@@ -132,7 +128,7 @@ export function TrendsScreen({
                 behind it. It says how hard to lean on the numbers above, not that anything is
                 wrong with them.
               </p>
-            </section>
+            </Card>
           )}
         </>
       )}
@@ -159,27 +155,27 @@ function TopFoods({ foods }: { foods: TopFood[] | null }) {
   // "could not ask" are different facts and only one of them is about eating.
   if (foods === null) {
     return (
-      <section className="border-b border-border px-5 py-4">
+      <Card className={cn(SURFACE, SURFACE_PAD)}>
         <h2 className="text-sm font-medium">Where the calories went</h2>
         <p className="mt-2 text-xs text-muted-foreground">
           Not available right now.
         </p>
-      </section>
+      </Card>
     );
   }
 
   if (foods.length === 0) return null;
 
   return (
-    <section className="border-b border-border py-4">
-      <h2 className="px-5 text-sm font-medium">Where the calories went</h2>
-      <p className="px-5 pt-1 text-xs text-muted-foreground">
+    <Card className={SURFACE}>
+      <h2 className="px-3.5 pt-4 text-sm font-medium">Where the calories went</h2>
+      <p className="px-3.5 pt-1 text-xs text-muted-foreground">
         Most calories over the last 30 days, whatever the portion size.
       </p>
-      <ul className="mt-2 divide-y divide-border">
+      <ul className="mt-2">
         {foods.map((food) => (
           <li key={food.key}>
-            <Item size="sm" className="rounded-none px-5 py-3">
+            <Item size="sm" className="rounded-none px-3.5 py-3">
               <ItemContent className="min-w-0">
                 <ItemTitle className="font-normal">{food.name}</ItemTitle>
                 <ItemDescription className="text-xs tabular-nums">
@@ -194,16 +190,23 @@ function TopFoods({ foods }: { foods: TopFood[] | null }) {
           </li>
         ))}
       </ul>
-    </section>
+    </Card>
   );
 }
 
 /**
- * A day-by-day bar chart with its goal as a dashed reference.
+ * A day-by-day bar chart with its goal drawn as a stepped line over it.
  *
- * BARS, not a line: days are discrete, and a line between Tuesday and Wednesday
- * implies eating in between, which is not a thing that happens on a chart of
- * daily totals (S83).
+ * BARS, not a line, for the DATA: days are discrete, and a line between
+ * Tuesday and Wednesday implies eating in between, which is not a thing that
+ * happens on a chart of daily totals (S83). The GOAL is the opposite case --
+ * it genuinely holds between the days it did not change, which is what a
+ * stepped line says and a bar per day would not.
+ *
+ * S60. The goal is PER DAY, not one flat number for the window: a change
+ * shows as a step where it happened rather than silently redrawing every day
+ * before it at the new number. `connectNulls={false}` so a day with no stored
+ * goal is a gap in the line, never bridged to a neighbour's value.
  *
  * The axis is zero-based because calories and grams in a day are TOTALS, where
  * zero is a real value with a meaning -- the opposite of the bodyweight rule,
@@ -214,24 +217,23 @@ function DayChart({
   caption,
   points,
   dataKey,
+  goalKey,
   config,
-  goal,
-  goalLabel,
   thin,
 }: {
   title: string;
   caption?: string;
   points: TrendPoint[];
   dataKey: "kcal" | "protein_g";
+  goalKey: "calorieGoal" | "proteinGoal";
   config: ChartConfig;
-  goal: number | null;
-  goalLabel: string;
   thin: string;
 }) {
   const values = points.map((p) => p[dataKey]);
+  const goalValues = points.map((p) => p[goalKey]);
 
   return (
-    <section className="border-b border-border px-5 py-4">
+    <Card className={cn(SURFACE, SURFACE_PAD)}>
       <div className="flex items-baseline justify-between gap-2">
         <h2 className="text-sm font-medium">{title}</h2>
         {caption && <span className="text-xs text-muted-foreground">{caption}</span>}
@@ -247,31 +249,17 @@ function DayChart({
             <YAxis
               {...Y_AXIS}
               width={38}
-              // The goal is inside the domain on purpose: a reference line
-              // above the tallest bar would otherwise be clipped off the top,
-              // and an invisible reference is worse than none.
+              // The goal line is inside the domain on purpose: above the
+              // tallest bar it would otherwise be clipped off the top, and an
+              // invisible reference is worse than none.
               domain={countDomain(
-                [...values.filter((v): v is number => v !== null), ...(goal ? [goal] : [])],
+                [
+                  ...values.filter((v): v is number => v !== null),
+                  ...goalValues.filter((v): v is number => v !== null),
+                ],
                 dataKey === "kcal" ? 500 : 25,
               )}
             />
-            {goal !== null && (
-              /* Neutral and dashed, never red on the wrong side of it (S79
-                 rule 5 / S70). The line states where the target is; it does
-                 not grade the bars against it. */
-              <ReferenceLine
-                y={goal}
-                stroke="var(--muted-foreground)"
-                strokeDasharray="4 4"
-                strokeOpacity={0.7}
-                label={{
-                  value: goalLabel,
-                  position: "insideTopRight",
-                  fontSize: 10,
-                  fill: "var(--muted-foreground)",
-                }}
-              />
-            )}
             <Bar
               dataKey={dataKey}
               fill={`var(--color-${dataKey})`}
@@ -281,9 +269,24 @@ function DayChart({
               // pager on Train, nothing here swaps underneath it.
               isAnimationActive={false}
             />
+            {/* Neutral and dashed, never red on the wrong side of it (S79
+                rule 5 / S70). The line states where the target is; it does
+                not grade the bars against it. Drawn after the bars so it
+                sits on top of them rather than under. */}
+            <Line
+              dataKey={goalKey}
+              type="stepAfter"
+              stroke="var(--muted-foreground)"
+              strokeDasharray="4 4"
+              strokeOpacity={0.7}
+              strokeWidth={1.5}
+              dot={false}
+              isAnimationActive={false}
+              connectNulls={false}
+            />
           </BarChart>
         </ChartContainer>
       )}
-    </section>
+    </Card>
   );
 }

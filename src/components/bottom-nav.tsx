@@ -46,7 +46,7 @@ export function BottomNav() {
           nothing, so page content scrolled through it sharp and unobscured --
           which reads as broken rather than as translucent. The inset is still
           there; it is now inside the surface doing the covering. */}
-      <ul className="mx-auto flex max-w-md items-stretch justify-around gap-1 border-t border-border bg-background/85 px-2 py-1 pb-safe backdrop-blur-md">
+      <ul data-slot="nav-bar" className="mx-auto flex max-w-md items-stretch justify-around gap-1 border-t border-border bg-background/85 px-2 py-1 pb-safe backdrop-blur-md">
         {TABS.map(({ href, label, icon: Icon, also }) => {
           // Prefix match so nested routes keep their tab lit.
           const active =
@@ -74,8 +74,13 @@ export function BottomNav() {
                 aria-current={active ? "page" : undefined}
                 className={cn(
                   // 44px minimum target, which is the floor on both platforms.
-                  "flex min-h-11 flex-col items-center justify-center gap-0.5 rounded-lg py-1.5 transition-colors active:bg-accent",
-                  active ? "text-foreground" : "text-muted-foreground",
+                  "relative flex min-h-11 flex-col items-center justify-center gap-0.5 rounded-lg py-1.5 transition-colors active:bg-accent",
+                  // A dot as well as the colour. Foreground against
+                  // muted-foreground is one step of grey, which is not enough to
+                  // find at a glance and nothing at all in greyscale.
+                  active
+                    ? "text-foreground after:absolute after:bottom-0 after:size-1 after:rounded-full after:bg-primary"
+                    : "text-muted-foreground",
                 )}
               >
                 <Icon className="size-5" aria-hidden />

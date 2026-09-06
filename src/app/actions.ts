@@ -10,6 +10,7 @@ import { estimateFromDescription, type DescribeResult } from "@/lib/describe";
 import { generatedFood, type RecipeDetails, type RecipeLine } from "@/lib/recipe";
 import {
   sourceRank,
+  todayDate,
   type Food,
   type FoodSource,
   type IntakeEntry,
@@ -17,6 +18,7 @@ import {
   type Meal,
 } from "@/lib/food";
 import type { Micros } from "@/lib/micros";
+import { toDayGoal, type DayGoal } from "@/lib/goals";
 
 export type NewEntry = Macros & {
   /**
@@ -30,6 +32,9 @@ export type NewEntry = Macros & {
   meal: Meal;
   food_id: string | null;
   name: string;
+  /** S100. Required rather than optional, so every call site says explicitly
+   * whether this entry has one -- a catalog food logged by quantity has none. */
+  description: string | null;
   qty: number;
   unit: string;
   estimate: boolean;
@@ -57,13 +62,50 @@ export async function addEntry(
     .single();
   if (error) return { entry: null, error: error.message };
 
+  await seedDayGoal(supabase, user.id, entry.log_date);
+
   revalidatePath("/log");
   return { entry: data as unknown as IntakeEntry, error: null };
 }
 
+/**
+ * S60. The FIRST entry on a day locks in that day's goal, so a prescription
+ * changed later never re-grades it -- an insert only, never an update: a day
+ * that already has a row, because it already had an entry or because the
+ * goal was saved on it directly (`saveGoals`), keeps what it has.
+ *
+ * Reads today's LIVE prescription rather than taking one as a parameter, so a
+ * back-dated entry -- the log tab pages to any day up to today -- stores what
+ * is on file now under that day. Today's numbers are all this feature knows
+ * about a day that predates it, which is the honest starting point.
+ *
+ * Failure here is not failure of the entry that triggered it: the entry has
+ * already been written, and a day left ungraded degrades to exactly the state
+ * a user with no goals set is already in.
+ */
+async function seedDayGoal(
+  supabase: Awaited<ReturnType<typeof createClient>>,
+  userId: string,
+  logDate: string,
+) {
+  const { data: settings } = await supabase
+    .from("nutrition_settings")
+    .select("calorie_goal, protein_goal_g, carb_goal_g, fat_goal_g")
+    .maybeSingle();
+  if (!settings) return;
+
+  const { error } = await supabase
+    .from("day_goals")
+    .upsert(
+      { user_id: userId, log_date: logDate, ...settings },
+      { onConflict: "user_id,log_date", ignoreDuplicates: true },
+    );
+  if (error) console.error("day_goals seed failed", error.message);
+}
+
 /** What the log screen reads. `micros` and `sugar_g` are stored and not shown. */
 const ENTRY_COLUMNS =
-  "id, log_date, food_id, name, meal, qty, unit, estimate, kcal, protein_g, fat_g, carb_g, fiber_g, sodium_mg";
+  "id, log_date, food_id, name, description, meal, qty, unit, estimate, kcal, protein_g, fat_g, carb_g, fiber_g, sodium_mg";
 
 /**
  * Every entry between two days, for the window the log tab pages through.
@@ -75,20 +117,113 @@ const ENTRY_COLUMNS =
 export async function loadIntakeWindow(
   from: string,
   to: string,
-): Promise<{ entries: IntakeEntry[]; error: string | null }> {
+): Promise<{ entries: IntakeEntry[]; dayGoals: DayGoal[]; error: string | null }> {
   const day = /^\d{4}-\d{2}-\d{2}$/;
-  if (!day.test(from) || !day.test(to)) return { entries: [], error: "Bad date range" };
+  if (!day.test(from) || !day.test(to)) return { entries: [], dayGoals: [], error: "Bad date range" };
 
   const supabase = await createClient();
-  const { data, error } = await supabase
-    .from("intake_entries")
-    .select(ENTRY_COLUMNS)
-    .gte("log_date", from)
-    .lte("log_date", to)
-    .order("created_at", { ascending: true });
-  if (error) return { entries: [], error: error.message };
+  // Together, not in sequence: the log tab grows both by the same stretch of
+  // days at once, and chaining them would spend a second round trip to learn
+  // dates the first one already named.
+  const [{ data, error }, { data: goalRows, error: goalError }] = await Promise.all([
+    supabase
+      .from("intake_entries")
+      .select(ENTRY_COLUMNS)
+      .gte("log_date", from)
+      .lte("log_date", to)
+      .order("created_at", { ascending: true }),
+    supabase
+      .from("day_goals")
+      .select("log_date, calorie_goal, protein_goal_g, carb_goal_g, fat_goal_g")
+      .gte("log_date", from)
+      .lte("log_date", to),
+  ]);
+  if (error) return { entries: [], dayGoals: [], error: error.message };
 
-  return { entries: (data ?? []) as unknown as IntakeEntry[], error: null };
+  return {
+    entries: (data ?? []) as unknown as IntakeEntry[],
+    // Silent on its own error: a day whose goal failed to load renders as a
+    // day with no goal, which is a real and already-handled state rather than
+    // a broken one.
+    dayGoals: goalError ? [] : (goalRows ?? []).map(toDayGoal),
+    error: null,
+  };
+}
+
+/**
+ * S103/S89. What the month calendar needs to know about a day: whether
+ * anything is logged (S103's plain fill) and the four macro totals a day's
+ * rings (S89) read against its `day_goals` row. One row serves both, since
+ * `intake_days` already sums all of it.
+ */
+export type DayLog = {
+  log_date: string;
+  item_count: number;
+  kcal: number;
+  protein_g: number;
+  carb_g: number;
+  fat_g: number;
+};
+
+function toDayLog(row: {
+  log_date: unknown;
+  item_count: unknown;
+  kcal: unknown;
+  protein_g: unknown;
+  carb_g: unknown;
+  fat_g: unknown;
+}): DayLog {
+  return {
+    log_date: row.log_date as string,
+    item_count: Number(row.item_count),
+    kcal: Number(row.kcal),
+    protein_g: Number(row.protein_g),
+    carb_g: Number(row.carb_g),
+    fat_g: Number(row.fat_g),
+  };
+}
+
+/**
+ * Every day between two months that has anything logged, for the window
+ * `/log/month` pages through -- and, only when `includeGoals` is set, the
+ * dated goal each of those days is read against (S89).
+ *
+ * The mirror of `loadTrainingWindow` and `loadIntakeWindow` above, for the
+ * same reason: the month on screen is client state, so paging into a month
+ * already held costs nothing and only the edges of the window ever reach the
+ * network. `includeGoals` follows the page's own strict-mode gate -- calm's
+ * plain filled dot (S103) never needs a goal, so it never asks for one.
+ */
+export async function loadIntakeDaysWindow(
+  from: string,
+  to: string,
+  includeGoals: boolean,
+): Promise<{ days: DayLog[]; dayGoals: DayGoal[]; error: string | null }> {
+  const day = /^\d{4}-\d{2}-\d{2}$/;
+  if (!day.test(from) || !day.test(to)) return { days: [], dayGoals: [], error: "Bad date range" };
+
+  const supabase = await createClient();
+  const [{ data, error }, goalsResult] = await Promise.all([
+    supabase
+      .from("intake_days")
+      .select("log_date, item_count, kcal, protein_g, carb_g, fat_g")
+      .gte("log_date", from)
+      .lte("log_date", to),
+    includeGoals
+      ? supabase
+          .from("day_goals")
+          .select("log_date, calorie_goal, protein_goal_g, carb_goal_g, fat_goal_g")
+          .gte("log_date", from)
+          .lte("log_date", to)
+      : Promise.resolve({ data: null, error: null }),
+  ]);
+  if (error) return { days: [], dayGoals: [], error: error.message };
+
+  return {
+    days: (data ?? []).map(toDayLog),
+    dayGoals: goalsResult.error ? [] : (goalsResult.data ?? []).map(toDayGoal),
+    error: null,
+  };
 }
 
 export async function deleteEntry(id: string) {
@@ -138,10 +273,30 @@ export async function saveGoals(goals: Goals) {
     .upsert({ ...goals, user_id: user.id, updated_at: new Date().toISOString() });
   if (error) return { error: error.message };
 
+  // S60. Today's dated row is corrected along with the live prescription --
+  // a typo fixed minutes after saving should not stick to today's food under
+  // the wrong number. Every OTHER day's row is left exactly as it is: this is
+  // the one write that is allowed to touch a day already on file, and only
+  // because today IS "the current date" it is being saved as.
+  const { error: dayError } = await supabase.from("day_goals").upsert(
+    {
+      user_id: user.id,
+      log_date: todayDate(),
+      calorie_goal: goals.calorie_goal,
+      protein_goal_g: goals.protein_goal_g,
+      carb_goal_g: goals.carb_goal_g,
+      fat_goal_g: goals.fat_goal_g,
+    },
+    { onConflict: "user_id,log_date" },
+  );
+  if (dayError) return { error: dayError.message };
+
   revalidatePath("/log");
   revalidatePath("/goals");
   // S69. The progress tab reads the unit and every weight on it changes.
   revalidatePath("/progress");
+  // The trends charts draw a stepped goal line from day_goals (S83-S86).
+  revalidatePath("/trends");
   return { error: null };
 }
 
