@@ -44,7 +44,20 @@ function Calendar({
         ...formatters,
       }}
       classNames={{
-        root: cn("w-fit", defaultClassNames.root),
+        // A fixed footprint derived from --cell-size, not `w-fit`. Everything
+        // under `root` down to the day grid is percentage-width, so with no
+        // dimension of its own the shrink-to-fit box took its size from
+        // whichever child had the widest natural content -- the month caption,
+        // whose text ("September 2026" vs "May 2026") varies with the month.
+        // That let paging months resize the whole calendar and, with it, the
+        // rendered cell size, even though --cell-size itself never changed.
+        // Pinning the box to the grid's own width removes that variable.
+        root: cn(
+          props.showWeekNumber
+            ? "w-[calc(var(--cell-size)*8)]"
+            : "w-[calc(var(--cell-size)*7)]",
+          defaultClassNames.root
+        ),
         months: cn(
           "relative flex flex-col gap-4 md:flex-row",
           defaultClassNames.months
