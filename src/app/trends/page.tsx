@@ -1,5 +1,5 @@
 import { createClient } from "@/lib/supabase/server";
-import { wakingDate } from "@/lib/food";
+import { todayDate } from "@/lib/food";
 import { TREND_DAYS, dailySeries, trendsWindow, type IntakeDay, type TopFood } from "@/lib/trends";
 import { toDayGoal, type DayGoal } from "@/lib/goals";
 import { TrendsScreen } from "@/components/trends-screen";
@@ -18,7 +18,7 @@ export const dynamic = "force-dynamic";
  */
 export default async function TrendsPage() {
   const supabase = await createClient();
-  const today = wakingDate();
+  const today = todayDate();
   const { from, to } = trendsWindow(today, TREND_DAYS);
 
   const [{ data: days }, { data: settings }, { data: dayGoals }, top] = await Promise.all([

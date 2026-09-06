@@ -17,7 +17,7 @@ import {
   LOG_WINDOW_DAYS,
   MEALS,
   shiftDate,
-  wakingDate,
+  todayDate,
   type Food,
   type IntakeEntry,
   type Meal,
@@ -101,7 +101,7 @@ export function LogScreen({
   const [to, setTo] = useState(loadedTo);
   const loading = useRef(false);
 
-  const today = wakingDate();
+  const today = todayDate();
 
   /**
    * Extend BEFORE the edge is reached, not when it is hit -- the same contract

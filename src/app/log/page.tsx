@@ -2,7 +2,7 @@ import { createClient } from "@/lib/supabase/server";
 import {
   LOG_WINDOW_DAYS,
   shiftDate,
-  wakingDate,
+  todayDate,
   type Food,
   type IntakeEntry,
 } from "@/lib/food";
@@ -37,13 +37,13 @@ export default async function LogPage({
   searchParams: Promise<{ date?: string }>;
 }) {
   const { date: requested } = await searchParams;
-  const date = /^\d{4}-\d{2}-\d{2}$/.test(requested ?? "") ? requested! : wakingDate();
+  const date = /^\d{4}-\d{2}-\d{2}$/.test(requested ?? "") ? requested! : todayDate();
 
   // Both ways from the anchor, unlike train's one -- days can be paged forward
   // as well as back, and arriving on an old day through `?date=` would
   // otherwise put the edge one tap away. Never past today: there is nothing
   // there to fetch.
-  const today = wakingDate();
+  const today = todayDate();
   const from = shiftDate(date, -LOG_WINDOW_DAYS);
   const ahead = shiftDate(date, LOG_WINDOW_DAYS);
   const to = ahead > today ? today : ahead;

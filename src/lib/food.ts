@@ -288,12 +288,11 @@ export function searchFoods(foods: Food[], query: string): Food[] {
 }
 
 /**
- * The waking day, not the calendar day: anything logged before 04:00 belongs
- * to the day you woke on.
+ * Today, on the phone's own clock and in its own timezone. The day rolls at
+ * midnight, which is the only boundary a reader does not have to be told about.
  */
-export function wakingDate(now = new Date()): string {
+export function todayDate(now = new Date()): string {
   const d = new Date(now);
-  if (d.getHours() < 4) d.setDate(d.getDate() - 1);
   return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}-${String(d.getDate()).padStart(2, "0")}`;
 }
 

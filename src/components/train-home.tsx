@@ -405,7 +405,7 @@ function PickDay({
 
 /**
  * Dates cross this boundary as YYYY-MM-DD strings, the same as `log_date` and
- * the food side's `wakingDate()`. They are converted at midday so that a
+ * the food side's `todayDate()`. They are converted at midday so that a
  * timezone offset can never shunt a day either way.
  */
 const volumeConfig = {

@@ -1,6 +1,6 @@
 import { redirect } from "next/navigation";
 import { createClient } from "@/lib/supabase/server";
-import { wakingDate } from "@/lib/food";
+import { todayDate } from "@/lib/food";
 import { WINDOW_MONTHS, shiftMonth } from "@/lib/training";
 import { TrainHome, type DayVolume, type SessionSummary } from "@/components/train-home";
 
@@ -34,7 +34,7 @@ export default async function TrainPage({
 }: {
   searchParams: Promise<{ browse?: string }>;
 }) {
-  const today = wakingDate();
+  const today = todayDate();
   const supabase = await createClient();
 
   // The window ends today and reaches back WINDOW_MONTHS, today's month
