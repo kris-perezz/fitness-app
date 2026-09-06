@@ -41,6 +41,7 @@ import {
 import { toast } from "sonner";
 import { cn } from "@/lib/utils";
 import { PAGE, SURFACE, SURFACE_PAD } from "@/lib/ui";
+import { useSwipe } from "@/lib/swipe";
 
 /** S32. One day's credit to one muscle, straight off the muscle_volume view. */
 export type DayVolume = { date: string; muscle: string; sets: number };
@@ -201,6 +202,14 @@ export function TrainHome({
     void closeStaleWorkouts().then(() => router.refresh());
   }, [staleOpen, router]);
 
+  // What the calendar's own two nav arrows do, from anywhere on the grid. The
+  // month drives the chart and the list under it too, so this pages the whole
+  // screen rather than just the dates.
+  const monthSwipe = useSwipe({
+    onLeft: () => setMonth(shiftMonth(month, 1)),
+    onRight: () => setMonth(shiftMonth(month, -1)),
+  });
+
   return (
     <>
       <main className={PAGE}>
@@ -227,7 +236,7 @@ export function TrainHome({
           )}
         </header>
 
-        <Card className={cn(SURFACE, "items-center px-1 py-2")}>
+        <Card className={cn(SURFACE, "items-center px-1 py-2", "touch-pan-y")} {...monthSwipe}>
           <Calendar
             month={toDate(`${month}-01`)}
             // Straight to state. There is nothing to fetch, so there is
@@ -350,6 +359,13 @@ function PickDay({
   const router = useRouter();
   const [picked, setPicked] = useState<Date | undefined>(() => toDate(today));
   const [pending, startTransition] = useTransition();
+  // Held here only so the grid can be swiped. Uncontrolled, the month is
+  // day-picker's own private state and a gesture has nothing to move.
+  const [month, setMonth] = useState(() => toDate(today));
+  const monthSwipe = useSwipe({
+    onLeft: () => setMonth(shiftMonthDate(month, 1)),
+    onRight: () => setMonth(shiftMonthDate(month, -1)),
+  });
 
   function go() {
     if (!picked) return;
@@ -374,15 +390,16 @@ function PickDay({
           </DrawerDescription>
         </DrawerHeader>
 
-        <div className="flex justify-center px-2 pb-2">
+        <div className="flex justify-center px-2 pb-2 touch-pan-y" {...monthSwipe}>
           <Calendar
             mode="single"
             selected={picked}
             onSelect={setPicked}
+            month={month}
+            onMonthChange={setMonth}
             // Not merely rejected on submit -- a day you have not lived through
             // is not offered in the first place.
             disabled={{ after: toDate(today) }}
-            defaultMonth={toDate(today)}
             // Six rows whatever the month needs, so paging does not resize the
             // sheet under the thumb that is paging it.
             fixedWeeks
@@ -582,4 +599,9 @@ function dateKey(d: Date): string {
 
 function monthKey(d: Date): string {
   return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}`;
+}
+
+/** `shiftMonth` for the one calendar that holds its month as a Date. */
+function shiftMonthDate(d: Date, months: number): Date {
+  return toDate(shiftMonth(monthKey(d), months));
 }

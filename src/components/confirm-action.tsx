@@ -32,17 +32,29 @@ export function ConfirmAction({
   description,
   confirmLabel = "Delete",
   onConfirm,
+  open,
+  onOpenChange,
 }: {
-  trigger: ReactNode;
+  /**
+   * What the user presses to get here. Omitted when the dialog is opened by a
+   * gesture instead -- a swipe has no element of its own to hang a trigger on.
+   */
+  trigger?: ReactNode;
   title: string;
   /** What is lost, in one sentence. Say the consequence, not "are you sure?". */
   description: string;
   confirmLabel?: string;
   onConfirm: () => void;
+  /**
+   * Controlled only when something outside opens it. Left undefined the
+   * dialog stays uncontrolled and the trigger drives it, exactly as before.
+   */
+  open?: boolean;
+  onOpenChange?: (open: boolean) => void;
 }) {
   return (
-    <AlertDialog>
-      <AlertDialogTrigger asChild>{trigger}</AlertDialogTrigger>
+    <AlertDialog open={open} onOpenChange={onOpenChange}>
+      {trigger && <AlertDialogTrigger asChild>{trigger}</AlertDialogTrigger>}
       <AlertDialogContent>
         <AlertDialogHeader>
           <AlertDialogTitle>{title}</AlertDialogTitle>

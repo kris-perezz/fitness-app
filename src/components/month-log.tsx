@@ -13,6 +13,7 @@ import { Calendar } from "@/components/ui/calendar";
 import { DayRingsButton, RING_LEGEND, type DayRingInfo } from "@/components/day-rings";
 import { cn } from "@/lib/utils";
 import { PAGE, SURFACE } from "@/lib/ui";
+import { useSwipe } from "@/lib/swipe";
 
 /**
  * S103. Exactly S57's shape, moved to Food: a filled day is a day with
@@ -114,8 +115,22 @@ export function MonthLog({
     return info;
   }, [strictMode, days, dayGoals]);
 
+  // The back arrow in the header, as a gesture. This app is installed to the
+  // home screen, where there is no browser edge-swipe to fall back on, so a
+  // stacked screen that cannot be swiped back cannot be left except by aiming
+  // at a 44px target in the corner.
+  const back = useSwipe({ onRight: () => router.push("/log") });
+
+  // What the calendar's own two nav arrows do, from anywhere on the grid.
+  // Nothing is clamped forward: the arrows are not either, and a month past
+  // today is an empty grid rather than a wrong one.
+  const swipe = useSwipe({
+    onLeft: () => setMonth(shiftMonth(month, 1)),
+    onRight: () => setMonth(shiftMonth(month, -1)),
+  });
+
   return (
-    <main className={PAGE}>
+    <main className={cn(PAGE, "touch-pan-y")} {...back}>
       <header className="flex items-center gap-1 px-1 py-1">
         <Button size="icon-xl" variant="ghost" aria-label="Back to the log" asChild>
           <Link href="/log">
@@ -142,7 +157,7 @@ export function MonthLog({
         </div>
       )}
 
-      <Card className={cn(SURFACE, "items-center py-2", "px-1")}>
+      <Card className={cn(SURFACE, "items-center py-2", "px-1", "touch-pan-y")} {...swipe}>
         <Calendar
           month={toDate(`${month}-01`)}
           onMonthChange={(next) => setMonth(monthKey(next))}

@@ -50,6 +50,8 @@ import { FoodSourceBadge } from "@/components/food-source-badge";
 import { CalorieRing } from "@/components/calorie-ring";
 import { toast } from "sonner";
 import { PAGE, SURFACE, SURFACE_PAD } from "@/lib/ui";
+import { useSwipe } from "@/lib/swipe";
+import { SwipeToDelete } from "@/components/swipe-to-delete";
 import type { DayGoal } from "@/lib/goals";
 
 type Entry = IntakeEntry;
@@ -183,9 +185,31 @@ export function LogScreen({
             day: "numeric",
           });
 
+  // Shared by the swipe on a row and the Delete button in the entry detail --
+  // one place decides what a removed entry does to the window on screen.
+  const [, startEntryDelete] = useTransition();
+  function removeEntry(entry: Entry) {
+    startEntryDelete(async () => {
+      const res = await deleteEntry(entry.id);
+      if (res.error) {
+        toast.error(res.error);
+        return;
+      }
+      setEntries((prev) => prev.filter((e) => e.id !== entry.id));
+    });
+  }
+
+  // The same step the two arrows in the header take, on the whole page: a day
+  // is what this screen is, so paging it should not mean finding a 44px target
+  // at the top of it. Forward stops at today, exactly as the arrow does.
+  const swipe = useSwipe({
+    onLeft: () => date < today && setDate(shiftDate(date, 1)),
+    onRight: () => setDate(shiftDate(date, -1)),
+  });
+
   return (
     <>
-      <main className={PAGE}>
+      <main className={cn(PAGE, "touch-pan-y")} {...swipe}>
         <header className="flex items-center gap-1 px-1 py-1">
           <Button
             size="icon-xl"
@@ -289,24 +313,33 @@ export function LogScreen({
                 <ul>
                   {items.map((e) => (
                     <li key={e.id}>
-                      <Item
-                        asChild
-                        size="sm"
-                        className="rounded-none px-3.5 py-2 active:bg-accent"
+                      {/* The entry detail keeps the Delete button it always
+                          had; this is the shortcut past it for the entry you
+                          only opened to get rid of. */}
+                      <SwipeToDelete
+                        title={`Delete ${e.name}?`}
+                        description={`${round(e.kcal)} calories come off ${e.meal}. This cannot be undone.`}
+                        onConfirm={() => removeEntry(e)}
                       >
-                        <button onClick={() => setDetail(e)} className="text-left">
-                          <ItemContent className="min-w-0">
-                            <ItemTitle className="font-normal">{e.name}</ItemTitle>
-                            <ItemDescription className="text-xs">
-                              {e.qty} {e.unit}
-                              {e.estimate && " · estimate"}
-                            </ItemDescription>
-                          </ItemContent>
-                          <ItemActions className="shrink-0 text-sm tabular-nums text-muted-foreground">
-                            {withCommas(e.kcal)}
-                          </ItemActions>
-                        </button>
-                      </Item>
+                        <Item
+                          asChild
+                          size="sm"
+                          className="rounded-none px-3.5 py-2 active:bg-accent"
+                        >
+                          <button onClick={() => setDetail(e)} className="text-left">
+                            <ItemContent className="min-w-0">
+                              <ItemTitle className="font-normal">{e.name}</ItemTitle>
+                              <ItemDescription className="text-xs">
+                                {e.qty} {e.unit}
+                                {e.estimate && " · estimate"}
+                              </ItemDescription>
+                            </ItemContent>
+                            <ItemActions className="shrink-0 text-sm tabular-nums text-muted-foreground">
+                              {withCommas(e.kcal)}
+                            </ItemActions>
+                          </button>
+                        </Item>
+                      </SwipeToDelete>
                     </li>
                   ))}
                 </ul>

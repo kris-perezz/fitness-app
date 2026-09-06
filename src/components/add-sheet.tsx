@@ -52,6 +52,7 @@ import {
 import { Spinner } from "@/components/ui/spinner";
 import { MACROS, rowsFrom, scaleOf, totals, type Row } from "@/lib/portion";
 import { liftForKeyboard } from "@/lib/sheet";
+import { useSwipe } from "@/lib/swipe";
 import { downscaleToDataUrl } from "@/lib/image";
 import { toast } from "sonner";
 
@@ -321,8 +322,12 @@ function QtyStep({
     });
   }
 
+  // The Back button as a gesture. A sheet step is a stacked screen like any
+  // other, and the drawer's own drag is vertical, so the axis is free.
+  const back = useSwipe({ onRight: onBack });
+
   return (
-    <div className="flex min-h-0 flex-1 flex-col">
+    <div className="flex min-h-0 flex-1 flex-col touch-pan-y" {...back}>
       <div className="min-h-0 flex-1 overflow-y-auto overscroll-contain px-5 pb-4">
         <Button
           variant="ghost"
@@ -682,9 +687,14 @@ function CustomStep({
     });
   }
 
+  // The Back button as a gesture. A sheet step is a stacked screen like any
+  // other, and the drawer's own drag is vertical, so the axis is free.
+  const back = useSwipe({ onRight: onBack });
+
   return (
     <div
-      className="flex min-h-0 flex-1 flex-col"
+      className="flex min-h-0 flex-1 flex-col touch-pan-y"
+      {...back}
       onFocusCapture={(e) => {
         if (isField(e.target)) setTyping(true);
       }}

@@ -4,7 +4,7 @@ import { useState, useTransition } from "react";
 import { useRouter } from "next/navigation";
 import Link from "next/link";
 import { ChevronLeft, CookingPot, Plus } from "lucide-react";
-import { createRecipe } from "@/app/actions";
+import { createRecipe, deleteRecipe } from "@/app/actions";
 import { Button } from "@/components/ui/button";
 import { Card } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
@@ -25,6 +25,9 @@ import {
   EmptyTitle,
 } from "@/components/ui/empty";
 import { toast } from "sonner";
+import { SwipeToDelete } from "@/components/swipe-to-delete";
+import { useSwipe } from "@/lib/swipe";
+import { cn } from "@/lib/utils";
 import { PAGE, SURFACE } from "@/lib/ui";
 
 export type RecipeSummary = {
@@ -36,11 +39,32 @@ export type RecipeSummary = {
 };
 
 export function RecipeList({ recipes }: { recipes: RecipeSummary[] }) {
+  const router = useRouter();
   const [naming, setNaming] = useState(false);
+  const [, startDelete] = useTransition();
+
+  // The editor is still where a recipe is deleted deliberately, with its own
+  // button and the same warning. This is the shortcut for the dish you opened
+  // by accident and never filled in.
+  function remove(recipe: RecipeSummary) {
+    startDelete(async () => {
+      const res = await deleteRecipe(recipe.id);
+      if (res.error) {
+        toast.error(res.error);
+        return;
+      }
+      router.refresh();
+    });
+  }
+
+  // The back arrow in the header, as a gesture. Installed to a home screen
+  // there is no browser edge-swipe to fall back on, so a stacked screen that
+  // cannot be swiped back can only be left by aiming at the corner.
+  const back = useSwipe({ onRight: () => router.push("/log") });
 
   return (
     <>
-      <main className={PAGE}>
+      <main className={cn(PAGE, "touch-pan-y")} {...back}>
         <header className="flex items-center gap-1 px-1 py-1">
           <Button size="icon-xl" variant="ghost" aria-label="Back to the log" asChild>
             <Link href="/log">
@@ -71,21 +95,27 @@ export function RecipeList({ recipes }: { recipes: RecipeSummary[] }) {
             <ul>
               {recipes.map((r) => (
                 <li key={r.id}>
-                  <Item asChild size="sm" className="rounded-none px-3.5 py-3 active:bg-accent">
-                    <Link href={`/recipes/${r.id}`}>
-                      <ItemContent className="min-w-0">
-                        <ItemTitle className="font-normal">{r.name}</ItemTitle>
-                        <ItemDescription className="text-xs">
-                          {r.ingredientCount === 0
-                            ? "No ingredients yet"
-                            : `${r.ingredientCount} ingredient${r.ingredientCount === 1 ? "" : "s"} · ${r.servings} serving${r.servings === 1 ? "" : "s"}`}
-                        </ItemDescription>
-                      </ItemContent>
-                      <ItemActions className="shrink-0 text-sm tabular-nums text-muted-foreground">
-                        {r.ingredientCount === 0 ? "" : `${r.kcalPerServing} cal`}
-                      </ItemActions>
-                    </Link>
-                  </Item>
+                  <SwipeToDelete
+                    title={`Delete ${r.name}?`}
+                    description="The recipe and its ingredients go. Days you already logged a portion on are not touched."
+                    onConfirm={() => remove(r)}
+                  >
+                    <Item asChild size="sm" className="rounded-none px-3.5 py-3 active:bg-accent">
+                      <Link href={`/recipes/${r.id}`}>
+                        <ItemContent className="min-w-0">
+                          <ItemTitle className="font-normal">{r.name}</ItemTitle>
+                          <ItemDescription className="text-xs">
+                            {r.ingredientCount === 0
+                              ? "No ingredients yet"
+                              : `${r.ingredientCount} ingredient${r.ingredientCount === 1 ? "" : "s"} · ${r.servings} serving${r.servings === 1 ? "" : "s"}`}
+                          </ItemDescription>
+                        </ItemContent>
+                        <ItemActions className="shrink-0 text-sm tabular-nums text-muted-foreground">
+                          {r.ingredientCount === 0 ? "" : `${r.kcalPerServing} cal`}
+                        </ItemActions>
+                      </Link>
+                    </Item>
+                  </SwipeToDelete>
                 </li>
               ))}
             </ul>

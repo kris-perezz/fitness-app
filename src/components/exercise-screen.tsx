@@ -3,6 +3,7 @@
 import Link from "next/link";
 import { ChevronLeft, Pin, PinOff, TrendingUp } from "lucide-react";
 import { useTransition } from "react";
+import { useRouter } from "next/navigation";
 import { toast } from "sonner";
 import { pinExercise } from "@/app/progress-actions";
 import {
@@ -22,6 +23,7 @@ import { Empty, EmptyDescription, EmptyHeader, EmptyMedia, EmptyTitle } from "@/
 import { Item, ItemContent, ItemDescription, ItemTitle } from "@/components/ui/item";
 import { cn } from "@/lib/utils";
 import { PAGE, SURFACE, SURFACE_PAD } from "@/lib/ui";
+import { useSwipe } from "@/lib/swipe";
 
 /**
  * One lift's history (S80).
@@ -46,6 +48,7 @@ export function ExerciseScreen({
   /** S81. Whether THIS lift is the one on the progress tab. */
   pinned: boolean;
 }) {
+  const router = useRouter();
   const [pending, startTransition] = useTransition();
 
   /**
@@ -68,8 +71,13 @@ export function ExerciseScreen({
   const enough = enoughSessions(points);
   const showRepBand = hasRepBand(points);
 
+  // The back arrow in the header, as a gesture. Installed to a home screen
+  // there is no browser edge-swipe to fall back on, so a stacked screen that
+  // cannot be swiped back can only be left by aiming at the corner.
+  const back = useSwipe({ onRight: () => router.push("/train") });
+
   return (
-    <main className={PAGE}>
+    <main className={cn(PAGE, "touch-pan-y")} {...back}>
       <header className="flex items-center gap-1 px-1 py-1">
         <Button size="icon-xl" variant="ghost" aria-label="Back to training" asChild>
           <Link href="/train">

@@ -56,6 +56,8 @@ import {
   TableRow,
 } from "@/components/ui/table";
 import { ConfirmAction } from "@/components/confirm-action";
+import { SwipeToDelete } from "@/components/swipe-to-delete";
+import { useSwipe } from "@/lib/swipe";
 import { Collapsible, CollapsibleContent, CollapsibleTrigger } from "@/components/ui/collapsible";
 import {
   Empty,
@@ -155,9 +157,13 @@ export function TrainScreen({
     0,
   );
 
+  // The back chevron as a gesture, and it carries ?browse=1 for the same reason
+  // the chevron does: /train sends you straight back into an open session.
+  const back = useSwipe({ onRight: () => router.push("/train?browse=1") });
+
   return (
     <>
-      <main className={PAGE}>
+      <main className={cn(PAGE, "touch-pan-y")} {...back}>
         <header className="flex items-center gap-1 px-1 py-1">
           <Button size="icon-xl" variant="ghost" aria-label="All sessions" asChild>
             {/* ?browse=1, because /train sends you back into an open session on
@@ -353,58 +359,73 @@ function SlotSection({
 
   const suggestion = suggestFor(sets, last);
 
+  // One removal, reached from the X or from a swipe across the name strip.
+  const removeLabel = `Remove ${slot.name}?`;
+  const removeDescription =
+    sets.length === 0
+      ? "Nothing has been logged against it yet."
+      : `Its ${sets.length} logged ${sets.length === 1 ? "set goes" : "sets go"} with it. This cannot be undone.`;
+  function remove() {
+    startTransition(async () => {
+      onRemoving(slot.id);
+      const res = await removeWorkoutExercise(slot.id);
+      // On failure the row comes back with the transition, which is the
+      // honest outcome: it was not removed.
+      if (res.error) toast.error(res.error);
+    });
+  }
+
   return (
     <Card className={SURFACE}>
-      <div className="flex items-center justify-between gap-2 px-3.5 pb-2 pt-3">
-        <div className="min-w-0">
-          {/* The name is the way into this lift's history (S80): "is bench
-              moving" is asked while looking at bench, and the answer should not
-              be on another tab. A link rather than a button because it is
-              navigation, and it survives a long-press to open in a new tab. */}
-          <h2 className="truncate text-sm font-semibold">
-            <Link
-              href={`/exercise/${slot.exercise_id}`}
-              className="underline-offset-4 hover:underline"
-            >
-              {slot.name}
-            </Link>
-          </h2>
-          {/* What this lift actually trains, from the log's own classification
-              rather than the older single-value column beside it. Two copies of
-              one fact drift, and had: the deadlift displayed "Back" while
-              counting toward Glutes and Hamstrings. */}
-          <p className="text-xs text-muted-foreground">{slot.primary_muscles.join(" · ")}</p>
+      {/* The gesture is scoped to the name strip, not the whole card. A card
+          you are mid-set in is under a thumb constantly, and swiping the sets
+          table would put "remove the lift" one stray drag from a rep count. */}
+      <SwipeToDelete
+        title={removeLabel}
+        description={removeDescription}
+        confirmLabel="Remove"
+        onConfirm={remove}
+        disabled={pending}
+      >
+        <div className="flex items-center justify-between gap-2 px-3.5 pb-2 pt-3">
+          <div className="min-w-0">
+            {/* The name is the way into this lift's history (S80): "is bench
+                moving" is asked while looking at bench, and the answer should not
+                be on another tab. A link rather than a button because it is
+                navigation, and it survives a long-press to open in a new tab. */}
+            <h2 className="truncate text-sm font-semibold">
+              <Link
+                href={`/exercise/${slot.exercise_id}`}
+                className="underline-offset-4 hover:underline"
+              >
+                {slot.name}
+              </Link>
+            </h2>
+            {/* What this lift actually trains, from the log's own classification
+                rather than the older single-value column beside it. Two copies of
+                one fact drift, and had: the deadlift displayed "Back" while
+                counting toward Glutes and Hamstrings. */}
+            <p className="text-xs text-muted-foreground">{slot.primary_muscles.join(" · ")}</p>
+          </div>
+          <ConfirmAction
+            title={removeLabel}
+            description={removeDescription}
+            confirmLabel="Remove"
+            onConfirm={remove}
+            trigger={
+              <Button
+                size="icon-xl"
+                variant="ghost"
+                className="shrink-0 text-muted-foreground"
+                aria-label={`Remove ${slot.name}`}
+                disabled={pending}
+              >
+                <X className="size-4" />
+              </Button>
+            }
+          />
         </div>
-        <ConfirmAction
-          title={`Remove ${slot.name}?`}
-          description={
-            sets.length === 0
-              ? "Nothing has been logged against it yet."
-              : `Its ${sets.length} logged ${sets.length === 1 ? "set goes" : "sets go"} with it. This cannot be undone.`
-          }
-          confirmLabel="Remove"
-          onConfirm={() =>
-            startTransition(async () => {
-              onRemoving(slot.id);
-              const res = await removeWorkoutExercise(slot.id);
-              // On failure the row comes back with the transition, which is the
-              // honest outcome: it was not removed.
-              if (res.error) toast.error(res.error);
-            })
-          }
-          trigger={
-            <Button
-              size="icon-xl"
-              variant="ghost"
-              className="shrink-0 text-muted-foreground"
-              aria-label={`Remove ${slot.name}`}
-              disabled={pending}
-            >
-              <X className="size-4" />
-            </Button>
-          }
-        />
-      </div>
+      </SwipeToDelete>
 
       {/* Rows of the same four measurements, which is what a table is for --
           and it keeps the columns aligned down the session the way the food
