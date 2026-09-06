@@ -48,6 +48,7 @@ import { EditFoodSheet } from "@/components/edit-food-sheet";
 import { FoodSourceBadge } from "@/components/food-source-badge";
 import { CalorieRing } from "@/components/calorie-ring";
 import { toast } from "sonner";
+import { PAGE, SURFACE, SURFACE_PAD } from "@/lib/ui";
 
 type Entry = IntakeEntry;
 
@@ -171,7 +172,7 @@ export function LogScreen({
 
   return (
     <>
-      <main className="mx-auto w-full max-w-md flex-1 space-y-3 px-4 pb-[calc(6rem+env(safe-area-inset-bottom))] pt-2">
+      <main className={PAGE}>
         <header className="flex items-center gap-1 px-1 py-1">
           <Button
             size="icon-xl"
@@ -214,34 +215,44 @@ export function LogScreen({
           </div>
         </header>
 
-        <Card className="gap-0 border border-border/60 py-0 shadow-[var(--shadow-card)] ring-0 backdrop-blur-xl px-4 py-4">
-          <CalorieRing consumed={totals.kcal} goal={calorieGoal} finished={finished} tone={tone} />
-
-          <div className="mt-4 grid grid-cols-3 gap-2">
-            <MacroMeter
-              label="Protein"
-              metric="protein"
-              value={totals.protein_g}
-              goal={goals?.protein_goal_g ?? null}
-              finished={finished}
-              tone={tone}
-            />
-            <MacroMeter
-              label="Carbs"
-              metric="carbs"
-              value={totals.carb_g}
-              goal={goals?.carb_goal_g ?? null}
-              finished={finished}
-              tone={tone}
-            />
-            <MacroMeter
-              label="Fat"
-              metric="fat"
-              value={totals.fat_g}
-              goal={goals?.fat_goal_g ?? null}
-              finished={finished}
-              tone={tone}
-            />
+        <Card className={cn(SURFACE, SURFACE_PAD)}>
+          {/* Stacked macros beside the ring rather than under it, so both fit
+              on one line at the page's 375px floor. */}
+          <div className="flex items-center gap-4">
+            <div className="shrink-0">
+              <CalorieRing
+                consumed={totals.kcal}
+                goal={calorieGoal}
+                finished={finished}
+                tone={tone}
+              />
+            </div>
+            <div className="flex min-w-0 flex-1 flex-col gap-2">
+              <MacroMeter
+                label="Protein"
+                metric="protein"
+                value={totals.protein_g}
+                goal={goals?.protein_goal_g ?? null}
+                finished={finished}
+                tone={tone}
+              />
+              <MacroMeter
+                label="Carbs"
+                metric="carbs"
+                value={totals.carb_g}
+                goal={goals?.carb_goal_g ?? null}
+                finished={finished}
+                tone={tone}
+              />
+              <MacroMeter
+                label="Fat"
+                metric="fat"
+                value={totals.fat_g}
+                goal={goals?.fat_goal_g ?? null}
+                finished={finished}
+                tone={tone}
+              />
+            </div>
           </div>
         </Card>
 
@@ -250,8 +261,8 @@ export function LogScreen({
           const mealKcal = items.reduce((sum, e) => sum + e.kcal, 0);
 
           return (
-            <Card key={meal} className="gap-0 border border-border/60 py-0 shadow-[var(--shadow-card)] ring-0 backdrop-blur-xl">
-              <div className="flex items-baseline justify-between px-5 pb-2 pt-4">
+            <Card key={meal} className={SURFACE}>
+              <div className="flex items-baseline justify-between px-3.5 pb-2 pt-3">
                 <h2 className="text-[17px] font-semibold tracking-[-0.01em]">{meal}</h2>
                 <span className="text-[15px] tabular-nums text-muted-foreground">
                   {withCommas(mealKcal)}
@@ -265,7 +276,7 @@ export function LogScreen({
                       <Item
                         asChild
                         size="sm"
-                        className="rounded-none px-4 py-2 active:bg-accent"
+                        className="rounded-none px-3.5 py-2 active:bg-accent"
                       >
                         <button onClick={() => setDetail(e)} className="text-left">
                           <ItemContent className="min-w-0">
@@ -289,12 +300,13 @@ export function LogScreen({
                   screen is four calls to action of equal weight, which leaves the
                   meal headings with no rank of their own -- and an empty day read
                   as a form rather than as a day. */}
-              <button
+              <Button
+                variant="ghost"
+                className="h-10 w-full justify-start px-3.5 text-sm font-normal text-muted-foreground"
                 onClick={() => setAddingTo(meal)}
-                className="flex w-full items-center gap-2 px-4 pb-3 pt-1 text-sm text-muted-foreground active:text-foreground"
               >
                 <Plus className="size-4" /> Add food
-              </button>
+              </Button>
             </Card>
           );
         })}
@@ -387,29 +399,23 @@ function MacroMeter({
   const said = PAINT[paint];
 
   return (
-    // A TILE, not a line. Label-left value-right across a third of the width put
-    // two 12px words at opposite ends of a cell with nothing between them, so
-    // the three of them read across as one run-on string rather than as three
-    // separate figures. Bounds and a stack are what separate them.
-    <div className="py-1 text-center">
-      <div className="text-[11px] uppercase tracking-[0.06em] text-muted-foreground">
+    // Label left, figure right on one line: three of these stack beside the
+    // ring, in the width left over next to it.
+    <div className="flex items-baseline justify-between gap-2">
+      <span className="text-[11px] uppercase tracking-[0.06em] text-muted-foreground">
         {label}
-      </div>
-      <div className={cn("mt-1 text-xl font-semibold leading-none tabular-nums", said.text)}>
+      </span>
+      <span className={cn("text-lg font-semibold whitespace-nowrap tabular-nums", said.text)}>
         {round(value)}
         {against === null ? (
           <span className="text-xs font-normal text-muted-foreground">g</span>
         ) : (
           <span className="text-xs font-normal text-muted-foreground">/{round(against)}g</span>
         )}
-      </div>
-      {/* S76 IN THE MACROS, WHICH ONLY THE RING WAS HONOURING. A 1px bar was
-          the whole of the signal, its track sat at 1.1:1 against the tile, and
-          the colour said nothing to anybody reading in greyscale or listening.
-          The word carries it now, and the number carries the hue. */}
-      {said.word && (
-        <div className={cn("mt-0.5 text-[10px] font-medium", said.text)}>{said.word}</div>
-      )}
+        {/* S76. Colour is never the only carrier, so the state is said in a word
+            as well: greyscale, colour blindness and a screen reader all get it. */}
+        {said.word && <span className="ml-1 text-[10px] font-medium">{said.word}</span>}
+      </span>
     </div>
   );
 }

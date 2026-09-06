@@ -86,10 +86,10 @@ export function CalorieRing({
             r={RING_RADIUS}
             fill="none"
             strokeWidth={RING_STROKE}
-            // Not plain --muted: the ring sits on a translucent card over a
-            // tinted page, and the untouched token is close enough to that
-            // ground to disappear into it.
-            className="stroke-[color-mix(in_oklch,var(--muted),var(--foreground)_45%)]"
+            // Mixed toward --muted-foreground rather than plain --muted or
+            // raw --foreground, so the track stays visible on a translucent
+            // card while still carrying the theme's own hue.
+            className="stroke-[color-mix(in_oklch,var(--muted),var(--muted-foreground)_35%)]"
           />
           <circle
             cx={RING_SIZE / 2}
