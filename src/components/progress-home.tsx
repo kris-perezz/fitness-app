@@ -53,6 +53,8 @@ import {
 } from "@/components/ui/empty";
 import { InputGroup, InputGroupInput, InputGroupAddon, InputGroupText } from "@/components/ui/input-group";
 import { Item, ItemActions, ItemContent, ItemTitle } from "@/components/ui/item";
+import { cn } from "@/lib/utils";
+import { PAGE, SURFACE, SURFACE_PAD } from "@/lib/ui";
 
 /**
  * S54-S59. The weight log, which is the training log with one number instead of
@@ -191,14 +193,12 @@ export function ProgressHome({
 
   return (
     <>
-      <main className="mx-auto w-full max-w-md flex-1 space-y-3 px-4 pb-[calc(6rem+env(safe-area-inset-bottom))] pt-2">
+      <main className={PAGE}>
         {/* The primary action sits above everything, same as the train tab: the
             thing you came to do is not reachable only by scrolling past what you
-            have already done. A pill in the title row rather than a filled bar:
-            a slab across the screen outranked the trend weight, which is the one
-            number this tab exists to show. */}
-        <header className="flex items-center justify-end px-1 pt-1">
-          <Button size="sm" className="h-9 rounded-full px-4" onClick={() => setEditing(today)}>
+            have already done. */}
+        <header className="pt-1">
+          <Button className="h-12 w-full text-base" onClick={() => setEditing(today)}>
             <Scale className="size-4" /> Weigh in
           </Button>
         </header>
@@ -237,7 +237,7 @@ export function ProgressHome({
 
         <PinnedLiftBlock pinned={pinned} />
 
-        <Card className="gap-0 border border-border/60 py-0 shadow-[var(--shadow-card)] ring-0 backdrop-blur-xl items-center px-1 py-2">
+        <Card className={cn(SURFACE, "items-center px-1 py-2")}>
           <Calendar
             month={toDate(`${month}-01`)}
             onMonthChange={(next) => setMonth(monthKey(next))}
@@ -255,7 +255,7 @@ export function ProgressHome({
             }}
             onSelect={(day) => day && setEditing(dateKey(day))}
             mode="single"
-            className="bg-transparent p-0 [--cell-size:--spacing(11)]"
+            className="bg-transparent p-0 [--cell-size:--spacing(10)]"
           />
         </Card>
 
@@ -276,7 +276,7 @@ export function ProgressHome({
           <ul className="divide-y divide-border">
             {monthEntries.map((e) => (
               <li key={e.date}>
-                <Item size="sm" className="rounded-none px-5 py-3 active:bg-accent">
+                <Item size="sm" className="rounded-none px-3.5 py-3 active:bg-accent">
                   <ItemContent className="min-w-0">
                     <ItemTitle className="font-normal">{shortDate(e.date)}</ItemTitle>
                   </ItemContent>
@@ -371,7 +371,7 @@ function Headline({
   if (head.trendLb === null) {
     const need = MIN_TREND_ENTRIES - head.entryCount;
     return (
-      <Card className="gap-0 border border-border/60 py-0 shadow-[var(--shadow-card)] ring-0 backdrop-blur-xl px-4 py-3.5">
+      <Card className={cn(SURFACE, SURFACE_PAD)}>
         {/* Labelled for the same reason the trend is, and labelled DIFFERENTLY:
             below the floor this is the scale, not a trend, and the two states
             must not look like the same number changing its mind. */}
@@ -391,7 +391,7 @@ function Headline({
   }
 
   return (
-    <Card className="gap-0 border border-border/60 py-0 shadow-[var(--shadow-card)] ring-0 backdrop-blur-xl px-4 py-3.5">
+    <Card className={cn(SURFACE, SURFACE_PAD)}>
       {/* The big number is the trend, so it SAYS "trend". Unlabelled, a 163.0
           sitting beside a 161.8 reads as two scale readings and invites the one
           question this tab exists to answer -- which of these am I? The word
@@ -544,7 +544,12 @@ function WeighInSheet({
   }
 
   return (
-    <Drawer open={date !== null} onOpenChange={onOpenChange}>
+    // repositionInputs={false}: the layout viewport already shrinks for the
+    // keyboard (see interactiveWidget in app/layout.tsx), so vaul's own lift
+    // on focus is a second response to the same event -- it shoves the sheet
+    // against the notch and, with no snapPoints here, takes the drag height
+    // with it. The field still clears the keyboard; the viewport does that part.
+    <Drawer open={date !== null} onOpenChange={onOpenChange} repositionInputs={false}>
       <DrawerContent>
         <DrawerHeader className="px-5 pb-2 pt-0">
           <DrawerTitle className="text-base">
@@ -618,7 +623,7 @@ function PinnedLiftBlock({ pinned }: { pinned: PinnedLift | null }) {
   if (!pinned) return null;
 
   return (
-    <Card className="gap-0 border border-border/60 py-0 shadow-[var(--shadow-card)] ring-0 backdrop-blur-xl px-4 py-3.5">
+    <Card className={cn(SURFACE, SURFACE_PAD)}>
       <div className="flex items-baseline justify-between gap-2">
         <h2 className="text-[17px] font-semibold tracking-[-0.01em]">
           <Link href={`/exercise/${pinned.id}`} className="underline-offset-4 hover:underline">
@@ -709,7 +714,7 @@ function WeightChart({
   if (entries.length < MIN_TREND_ENTRIES) return null;
 
   return (
-    <Card className="gap-0 border border-border/60 py-0 shadow-[var(--shadow-card)] ring-0 backdrop-blur-xl px-4 py-3.5">
+    <Card className={cn(SURFACE, SURFACE_PAD)}>
       <div className="flex items-center justify-between gap-3">
         <h2 className="text-[11px] font-semibold uppercase tracking-[0.08em] text-muted-foreground">
           {chartWindow(windowKey).title}

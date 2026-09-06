@@ -39,6 +39,8 @@ import {
   EmptyTitle,
 } from "@/components/ui/empty";
 import { toast } from "sonner";
+import { cn } from "@/lib/utils";
+import { PAGE, SURFACE, SURFACE_PAD } from "@/lib/ui";
 
 /** S32. One day's credit to one muscle, straight off the muscle_volume view. */
 export type DayVolume = { date: string; muscle: string; sets: number };
@@ -201,37 +203,31 @@ export function TrainHome({
 
   return (
     <>
-      <main className="mx-auto w-full max-w-md flex-1 space-y-3 px-4 pb-[calc(6rem+env(safe-area-inset-bottom))] pt-2">
-        {/* The primary action sits ABOVE the calendar and the list. It was under
-            the list until a month with thirty sessions made the point: the one
+      <main className={PAGE}>
+        {/* The primary action sits ABOVE the calendar and the list: the one
             thing you came here to do should not be reachable only by scrolling
             past everything you have already done. Resuming beats browsing, so an
-            open session takes the slot when there is one.
-            
-            It is a pill in the title row rather than a filled bar across the
-            screen: a full-width slab under the notch is the loudest thing on a
-            tab whose subject is the month below it, and it left the tab with no
-            title at all. */}
-        <header className="flex items-center justify-end px-1 pt-1">
+            open session takes the slot when there is one. */}
+        <header className="pt-1">
           {openSession ? (
-            <Button size="sm" className="h-9 rounded-full px-4" asChild>
+            <Button className="h-12 w-full text-base" asChild>
               {/* Full prefetch, not the default. A dynamic route prefetched
                   the ordinary way only fetches as far as its loading boundary,
                   so the skeleton arrives instantly and the DATA still lands on
                   tap -- the same wait, better dressed. prefetch={true} pulls the
                   whole thing and holds it under the static stale time. */}
               <Link href={`/train/${openSession.id}`} prefetch>
-                <Play className="size-4" /> Resume
+                <Play className="size-4" /> Resume session
               </Link>
             </Button>
           ) : (
-            <Button size="sm" className="h-9 rounded-full px-4" onClick={() => setAdding(true)}>
+            <Button className="h-12 w-full text-base" onClick={() => setAdding(true)}>
               <CalendarPlus className="size-4" /> Add session
             </Button>
           )}
         </header>
 
-        <Card className="gap-0 border border-border/60 py-0 shadow-[var(--shadow-card)] ring-0 backdrop-blur-xl items-center px-1 py-2">
+        <Card className={cn(SURFACE, "items-center px-1 py-2")}>
           <Calendar
             month={toDate(`${month}-01`)}
             // Straight to state. There is nothing to fetch, so there is
@@ -275,7 +271,7 @@ export function TrainHome({
             }}
             onSelect={(day) => day && open(dateKey(day))}
             mode="single"
-            className="bg-transparent p-0 [--cell-size:--spacing(11)]"
+            className="bg-transparent p-0 [--cell-size:--spacing(10)]"
           />
         </Card>
 
@@ -300,7 +296,7 @@ export function TrainHome({
           <ul className="divide-y divide-border">
             {monthSessions.map((s) => (
               <li key={s.id}>
-                <Item asChild size="sm" className="rounded-none px-5 py-3 active:bg-accent">
+                <Item asChild size="sm" className="rounded-none px-3.5 py-3 active:bg-accent">
                   {/* Full prefetch -- see the resume link above. */}
                   <Link href={`/train/${s.id}`} prefetch>
                     <ItemContent className="min-w-0">
@@ -460,7 +456,7 @@ function MonthVolume({
   const total = volume.reduce((t, v) => t + v.sets, 0);
 
   return (
-    <Card className="gap-0 border border-border/60 py-0 shadow-[var(--shadow-card)] ring-0 backdrop-blur-xl px-4 py-3.5">
+    <Card className={cn(SURFACE, SURFACE_PAD)}>
       <div className="flex items-baseline justify-between gap-2">
         <h2 className="text-[11px] font-semibold uppercase tracking-[0.08em] text-muted-foreground">
           Sets per muscle
