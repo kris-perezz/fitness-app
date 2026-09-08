@@ -11,6 +11,7 @@
 import { revalidatePath } from "next/cache";
 import { createClient } from "@/lib/supabase/server";
 import { todayDate } from "@/lib/food";
+import { clearOpenWorkoutCookie, setOpenWorkoutCookie } from "@/lib/open-workout-cookie";
 import type { Exercise, SetType } from "@/lib/training";
 
 type ServerClient = Awaited<ReturnType<typeof createClient>>;
@@ -53,7 +54,10 @@ export async function openWorkoutOn(
     .eq("log_date", date)
     .maybeSingle();
   if (findError) return { id: null, error: findError.message };
-  if (existing) return { id: existing.id as string, error: null };
+  if (existing) {
+    if (date === today) await setOpenWorkoutCookie(existing.id as string);
+    return { id: existing.id as string, error: null };
+  }
 
   const { data, error } = await supabase
     .from("workouts")
@@ -66,6 +70,7 @@ export async function openWorkoutOn(
     .single();
   if (error) return { id: null, error: error.message };
 
+  if (date === today) await setOpenWorkoutCookie(data.id as string);
   revalidatePath("/train", "layout");
   return { id: data.id as string, error: null };
 }
@@ -104,6 +109,7 @@ export async function finishWorkout(id: string) {
   const failed = await closeWorkout(supabase, id, user.id);
   if (failed) return { error: failed };
 
+  await clearOpenWorkoutCookie(id);
   revalidatePath("/train", "layout");
   return { error: null };
 }
@@ -123,6 +129,7 @@ export async function discardWorkout(id: string) {
   const { error } = await supabase.from("workouts").delete().eq("id", id).eq("user_id", user.id);
   if (error) return { error: error.message };
 
+  await clearOpenWorkoutCookie(id);
   revalidatePath("/train", "layout");
   return { error: null };
 }
@@ -374,7 +381,9 @@ async function closeStaleWorkout(
   if (error) return error.message;
   if (!data || data.log_date === today) return null;
 
-  return closeWorkout(supabase, data.id as string, userId);
+  const failed = await closeWorkout(supabase, data.id as string, userId);
+  if (!failed) await clearOpenWorkoutCookie(data.id as string);
+  return failed;
 }
 
 /**

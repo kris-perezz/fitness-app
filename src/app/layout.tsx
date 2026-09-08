@@ -1,10 +1,13 @@
 import type { Metadata, Viewport } from "next";
+import { cookies } from "next/headers";
 import { Geist, Geist_Mono } from "next/font/google";
 import { BottomNav } from "@/components/bottom-nav";
 import { StrawberryOrbs } from "@/components/strawberry-orbs";
 import { ThemeColor } from "@/components/theme-color";
 import { ThemeProvider } from "@/components/theme-provider";
 import { Toaster } from "@/components/ui/sonner";
+import { OPEN_WORKOUT_COOKIE } from "@/lib/open-workout-cookie";
+import { StartupSplash } from "@/components/startup-splash";
 import "./globals.css";
 
 const geistSans = Geist({
@@ -46,15 +49,22 @@ export const viewport: Viewport = {
   // zooming on focus.
 };
 
-export default function RootLayout({ children }: LayoutProps<"/">) {
+export default async function RootLayout({ children }: LayoutProps<"/">) {
+  const openWorkoutId = (await cookies()).get(OPEN_WORKOUT_COOKIE)?.value ?? null;
+
   return (
     <html lang="en" suppressHydrationWarning className={`${geistSans.variable} ${geistMono.variable} h-full antialiased`}>
       <body className="flex min-h-full flex-col">
         <ThemeProvider>
           <ThemeColor />
           <StrawberryOrbs />
-          {children}
-          <BottomNav />
+          <StartupSplash />
+          {/* md:pl-20 clears the desktop rail BottomNav draws at that width --
+              one offset here rather than one in every screen's own PAGE
+              container, so a screen that forgets it is not a screen that
+              renders under the rail. */}
+          <div className="flex min-h-full flex-1 flex-col md:pl-20">{children}</div>
+          <BottomNav openWorkoutId={openWorkoutId} />
           <Toaster position="top-center" />
         </ThemeProvider>
       </body>
