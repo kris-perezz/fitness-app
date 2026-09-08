@@ -151,18 +151,26 @@ export function chartSeries(entries: WeighIn[], fromDate?: string): ChartPoint[]
 
   const byDate = new Map(series.map((p) => [p.date, p]));
   const out: ChartPoint[] = [];
+  const lastDay = series[series.length - 1].date;
 
-  for (
-    let day = series[0].date;
-    day <= series[series.length - 1].date;
-    day = shiftDays(day, 1)
-  ) {
+  // ONE Date, mutated in place, rather than `shiftDays` per iteration -- that
+  // reparses a string into a fresh Date on every step. A log spanning years
+  // walks this loop day by day (S61's whole point, since a chart of "All time"
+  // must show its real gaps), so the allocation this avoids is the difference
+  // between a fast window toggle and a visibly janky one.
+  const cursor = new Date(`${series[0].date}T12:00:00`);
+  let day = series[0].date;
+  while (day <= lastDay) {
     const point = byDate.get(day);
     out.push({
       date: day,
       weightLb: point?.weightLb ?? null,
       trendLb: point?.trendLb ?? null,
     });
+    cursor.setDate(cursor.getDate() + 1);
+    day = `${cursor.getFullYear()}-${String(cursor.getMonth() + 1).padStart(2, "0")}-${String(
+      cursor.getDate(),
+    ).padStart(2, "0")}`;
   }
 
   return out;
