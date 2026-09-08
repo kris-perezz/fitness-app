@@ -1,9 +1,28 @@
 "use client";
 
+import { useSyncExternalStore } from "react";
 import Link from "next/link";
 import { usePathname } from "next/navigation";
 import { Dumbbell, TrendingUp, User, UtensilsCrossed } from "lucide-react";
+import { OPEN_WORKOUT_COOKIE } from "@/lib/open-workout-cookie.shared";
 import { cn } from "@/lib/utils";
+
+/**
+ * `document.cookie` has no change event, so there is nothing to subscribe to
+ * -- the point of reading it through `useSyncExternalStore` rather than an
+ * effect is not to be notified of a write, it is to have a snapshot function
+ * React already calls on every render (a route change included) with no
+ * hydration mismatch, since the SSR pass gets `getServerSnapshot` instead of
+ * touching `document` at all.
+ */
+function subscribeToNothing() {
+  return () => {};
+}
+
+function readOpenWorkoutCookie(): string | null {
+  const match = document.cookie.match(new RegExp(`(?:^|; )${OPEN_WORKOUT_COOKIE}=([^;]*)`));
+  return match ? decodeURIComponent(match[1]) : null;
+}
 
 /**
  * Top-level navigation.
@@ -34,8 +53,26 @@ const TABS = [
 /** Routes that are not part of the signed-in app shell. */
 const CHROMELESS = ["/login", "/auth"];
 
-export function BottomNav({ openWorkoutId }: { openWorkoutId?: string | null }) {
+export function BottomNav({ openWorkoutId: fromServer }: { openWorkoutId?: string | null }) {
   const pathname = usePathname();
+
+  /**
+   * `fromServer` is only ever right on the very first paint. This nav is
+   * mounted once by the root layout and never remounts on a client-side tab
+   * switch, so a prop is a snapshot of whatever the layout's last SERVER
+   * render happened to see -- and opening or finishing a session never
+   * triggers one of those, it is entirely a client-side navigation plus a
+   * cookie write. Reading the cookie live keeps this correct across a
+   * session's whole lifetime instead of just its first ten seconds; React
+   * re-invokes the snapshot on every render this component takes, and a route
+   * change (below) is one -- so the moment you land somewhere else, the NEXT
+   * tap of Train already has the right target.
+   */
+  const openWorkoutId = useSyncExternalStore(
+    subscribeToNothing,
+    readOpenWorkoutCookie,
+    () => fromServer ?? null,
+  );
 
   // Sign-in is not a section, and a nav bar there would offer four dead links.
   if (CHROMELESS.some((route) => pathname.startsWith(route))) return null;
