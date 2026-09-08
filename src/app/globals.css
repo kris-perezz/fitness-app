@@ -444,3 +444,17 @@
     @apply font-sans;
   }
 }
+
+/* startup-splash.tsx. Unlayered so it isn't at the mercy of layer order the
+   way the nav background above already had to work around. */
+@keyframes app-splash-out {
+  to {
+    opacity: 0;
+    visibility: hidden;
+  }
+}
+@keyframes app-splash-pulse {
+  50% {
+    opacity: 0.5;
+  }
+}
