@@ -10,6 +10,7 @@ import {
   ChevronLeft,
   ChevronRight,
   CookingPot,
+  Package,
   Pencil,
   Plus,
 } from "lucide-react";
@@ -247,11 +248,16 @@ export function LogScreen({
             >
               <ChevronRight className="size-5" />
             </Button>
-            {/* Recipes and Trends are Food-section destinations with no tab of
-                their own (see bottom-nav.tsx), so this header is the way in.
-                They sit after the day arrows because they are not part of them
-                -- and Trends sits last because it is the one that leaves
+            {/* Foods, Recipes and Trends are Food-section destinations with no
+                tab of their own (see bottom-nav.tsx), so this header is the way
+                in. They sit after the day arrows because they are not part of
+                them -- and Trends sits last because it is the one that leaves
                 today behind entirely. */}
+            <Button size="icon-xl" variant="ghost" aria-label="Foods" asChild>
+              <Link href="/foods" prefetch>
+                <Package className="size-5" />
+              </Link>
+            </Button>
             <Button size="icon-xl" variant="ghost" aria-label="Recipes" asChild>
               <Link href="/recipes">
                 <CookingPot className="size-5" />
