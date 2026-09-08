@@ -56,7 +56,7 @@ import {
 import { InputGroup, InputGroupInput, InputGroupAddon, InputGroupText } from "@/components/ui/input-group";
 import { Item, ItemActions, ItemContent, ItemTitle } from "@/components/ui/item";
 import { cn } from "@/lib/utils";
-import { PAGE, SURFACE, SURFACE_PAD } from "@/lib/ui";
+import { PAGE_SPLIT, SURFACE, SURFACE_PAD } from "@/lib/ui";
 
 /**
  * S54-S59. The weight log, which is the training log with one number instead of
@@ -217,11 +217,12 @@ export function ProgressHome({
 
   return (
     <>
-      <main className={PAGE}>
+      <main className={PAGE_SPLIT}>
         {/* The primary action sits above everything, same as the train tab: the
             thing you came to do is not reachable only by scrolling past what you
-            have already done. */}
-        <header className="pt-1">
+            have already done. Spans both desktop columns -- it is not the
+            trend's action or the calendar's, it is the screen's. */}
+        <header className="pt-1 lg:col-span-2">
           <Button className="h-12 w-full text-base" onClick={() => setEditing(today)}>
             <Scale className="size-4" /> Weigh in
           </Button>
@@ -234,7 +235,7 @@ export function ProgressHome({
             version of this screen -- and the action is already at the top, so
             the Empty does not need to repeat it. */}
         {entries.length === 0 ? (
-          <Empty className="py-14">
+          <Empty className="py-14 lg:col-span-2">
             <EmptyHeader>
               <EmptyMedia variant="icon">
                 <Scale />
@@ -248,6 +249,11 @@ export function ProgressHome({
           </Empty>
         ) : (
           <>
+        {/* THE TREND COLUMN. On a phone this is just the top of the page; from
+            `lg` it is the left column, sized `1fr` against the calendar's
+            fixed 22rem so the chart is what claims the extra width a wide
+            screen offers. */}
+        <div className="space-y-2">
         <Headline head={head} rate={rate} goal={goal} unit={unit} />
 
         <WeightChart
@@ -261,7 +267,12 @@ export function ProgressHome({
         />
 
         <PinnedLiftBlock pinned={pinned} />
+        </div>
 
+        {/* THE CALENDAR COLUMN. Fixed-width by design (PAGE_SPLIT's 22rem):
+            a day grid does not get more useful by getting wider, so the room
+            a desktop screen adds all goes to the trend column beside it. */}
+        <div className="space-y-2">
         <Card className={cn(SURFACE, "items-center px-1 py-2", "touch-pan-y")} {...monthSwipe}>
           <Calendar
             month={toDate(`${month}-01`)}
@@ -349,6 +360,7 @@ export function ProgressHome({
             ))}
           </ul>
         )}
+        </div>
           </>
         )}
       </main>
