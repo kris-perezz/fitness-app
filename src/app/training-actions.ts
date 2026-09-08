@@ -55,7 +55,14 @@ export async function openWorkoutOn(
     .maybeSingle();
   if (findError) return { id: null, error: findError.message };
   if (existing) {
-    if (date === today) await setOpenWorkoutCookie(existing.id as string);
+    if (date === today) {
+      await setOpenWorkoutCookie(existing.id as string);
+      // The INSERT branch below already does this; this branch -- reopening
+      // a day that already has a session -- did not, which is a real gap
+      // even if it was not the cause of the slow reopen this was chasing
+      // (that was the cookie's missing maxAge, see open-workout-cookie.ts).
+      revalidatePath("/train", "layout");
+    }
     return { id: existing.id as string, error: null };
   }
 

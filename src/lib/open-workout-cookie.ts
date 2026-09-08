@@ -18,7 +18,12 @@ export const OPEN_WORKOUT_COOKIE = "open_workout_id";
 
 export async function setOpenWorkoutCookie(id: string) {
   const store = await cookies();
-  store.set(OPEN_WORKOUT_COOKIE, id, { path: "/", sameSite: "lax" });
+  // A real maxAge, not a session cookie. Without one this is dropped the
+  // moment the browser/PWA process is killed -- which on a phone is most of
+  // the time between sets, not just at midnight -- so a session opened at the
+  // gym had no cookie left by the time the app was reopened to resume it, and
+  // every "did the nav fix work" check landed back on the slow path.
+  store.set(OPEN_WORKOUT_COOKIE, id, { path: "/", sameSite: "lax", maxAge: 60 * 60 * 24 });
 }
 
 export async function clearOpenWorkoutCookie(id: string) {
