@@ -21,6 +21,8 @@ import {
 } from "@/app/actions";
 import { IngredientSheet } from "@/components/ingredient-sheet";
 import { ConfirmAction } from "@/components/confirm-action";
+import { SwipeToDelete } from "@/components/swipe-to-delete";
+import { useSwipe } from "@/lib/swipe";
 import { Button } from "@/components/ui/button";
 import { ButtonGroup } from "@/components/ui/button-group";
 import { Card } from "@/components/ui/card";
@@ -125,9 +127,14 @@ export function RecipeEditor({
     });
   }
 
+  // The back arrow in the header, as a gesture. Installed to a home screen
+  // there is no browser edge-swipe to fall back on, so a stacked screen that
+  // cannot be swiped back can only be left by aiming at the corner.
+  const back = useSwipe({ onRight: () => router.push("/recipes") });
+
   return (
     <>
-      <main className={PAGE}>
+      <main className={cn(PAGE, "touch-pan-y")} {...back}>
         <header className="flex items-center gap-1 px-1 py-1">
           <Button size="icon-xl" variant="ghost" aria-label="All recipes" asChild>
             <Link href="/recipes">
@@ -387,45 +394,55 @@ function IngredientRow({ line, onChanged }: { line: EditorLine; onChanged: () =>
 
   return (
     <li>
-      <Item size="sm" className="rounded-none px-3.5 py-2.5">
-        <ItemContent className="min-w-0">
-          <ItemTitle className="font-normal">{line.food.name}</ItemTitle>
-          <ItemDescription className="text-xs">
-            {show(macros.kcal)} cal · {show(macros.protein_g)}g protein
-          </ItemDescription>
-        </ItemContent>
-        <ItemActions className="shrink-0 gap-1">
-          <Input
-            type="number"
-            inputMode="decimal"
-            aria-label={`Amount of ${line.food.name}`}
-            value={qty}
-            disabled={pending}
-            onChange={(e) => setQty(e.target.value)}
-            onBlur={commit}
-            onKeyDown={(e) => e.key === "Enter" && e.currentTarget.blur()}
-            className="h-9 w-16 text-base tabular-nums"
-          />
-          <span className="w-8 shrink-0 text-xs text-muted-foreground">{unit}</span>
-          <ConfirmAction
-            title={`Remove ${line.food.name}?`}
-            description="It comes out of the recipe's totals. Portions already logged keep the numbers they were logged with."
-            confirmLabel="Remove"
-            onConfirm={remove}
-            trigger={
-              <Button
-                size="icon-xl"
-                variant="ghost"
-                className="text-muted-foreground"
-                aria-label={`Remove ${line.food.name}`}
-                disabled={pending}
-              >
-                <Trash2 className="size-4" />
-              </Button>
-            }
-          />
-        </ItemActions>
-      </Item>
+      {/* The Trash button on the right stays exactly where it was; this is the
+          gesture path to the same question. */}
+      <SwipeToDelete
+        title={`Remove ${line.food.name}?`}
+        description="It comes out of the recipe's totals. Portions already logged keep the numbers they were logged with."
+        confirmLabel="Remove"
+        onConfirm={remove}
+        disabled={pending}
+      >
+        <Item size="sm" className="rounded-none px-3.5 py-2.5">
+          <ItemContent className="min-w-0">
+            <ItemTitle className="font-normal">{line.food.name}</ItemTitle>
+            <ItemDescription className="text-xs">
+              {show(macros.kcal)} cal · {show(macros.protein_g)}g protein
+            </ItemDescription>
+          </ItemContent>
+          <ItemActions className="shrink-0 gap-1">
+            <Input
+              type="number"
+              inputMode="decimal"
+              aria-label={`Amount of ${line.food.name}`}
+              value={qty}
+              disabled={pending}
+              onChange={(e) => setQty(e.target.value)}
+              onBlur={commit}
+              onKeyDown={(e) => e.key === "Enter" && e.currentTarget.blur()}
+              className="h-9 w-16 text-base tabular-nums"
+            />
+            <span className="w-8 shrink-0 text-xs text-muted-foreground">{unit}</span>
+            <ConfirmAction
+              title={`Remove ${line.food.name}?`}
+              description="It comes out of the recipe's totals. Portions already logged keep the numbers they were logged with."
+              confirmLabel="Remove"
+              onConfirm={remove}
+              trigger={
+                <Button
+                  size="icon-xl"
+                  variant="ghost"
+                  className="text-muted-foreground"
+                  aria-label={`Remove ${line.food.name}`}
+                  disabled={pending}
+                >
+                  <Trash2 className="size-4" />
+                </Button>
+              }
+            />
+          </ItemActions>
+        </Item>
+      </SwipeToDelete>
     </li>
   );
 }

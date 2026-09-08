@@ -37,6 +37,8 @@ import { Calendar } from "@/components/ui/calendar";
 import { ChartContainer, type ChartConfig } from "@/components/ui/chart";
 import { CHART_CLASS, SERIES, X_AXIS, Y_AXIS, dayTick } from "@/lib/chart";
 import { ConfirmAction } from "@/components/confirm-action";
+import { SwipeToDelete } from "@/components/swipe-to-delete";
+import { useSwipe } from "@/lib/swipe";
 import {
   Drawer,
   DrawerContent,
@@ -191,6 +193,28 @@ export function ProgressHome({
     return map;
   }, [entries]);
 
+  // What the calendar's own two nav arrows do, from anywhere on the grid. The
+  // list under it follows the month, so this pages both.
+  const monthSwipe = useSwipe({
+    onLeft: () => setMonth(shiftMonth(month, 1)),
+    onRight: () => setMonth(shiftMonth(month, -1)),
+  });
+
+  // The gesture's own path to the same delete the weigh-in sheet offers. It
+  // drops the row from the window in place, exactly as the sheet's `onDeleted`
+  // does, so the chart and the calendar follow without a refetch.
+  const [, startRowDelete] = useTransition();
+  function removeWeighIn(date: string) {
+    startRowDelete(async () => {
+      const res = await deleteWeighIn(date);
+      if (res.error) {
+        toast.error(res.error);
+        return;
+      }
+      setEntries((prev) => prev.filter((e) => e.date !== date));
+    });
+  }
+
   return (
     <>
       <main className={PAGE}>
@@ -238,7 +262,7 @@ export function ProgressHome({
 
         <PinnedLiftBlock pinned={pinned} />
 
-        <Card className={cn(SURFACE, "items-center px-1 py-2")}>
+        <Card className={cn(SURFACE, "items-center px-1 py-2", "touch-pan-y")} {...monthSwipe}>
           <Calendar
             month={toDate(`${month}-01`)}
             onMonthChange={(next) => setMonth(monthKey(next))}
@@ -281,38 +305,46 @@ export function ProgressHome({
           <ul className="divide-y divide-border">
             {monthEntries.map((e) => (
               <li key={e.date}>
-                <Item size="sm" className="rounded-none px-3.5 py-3 active:bg-accent">
-                  <ItemContent className="min-w-0">
-                    <ItemTitle className="font-normal">{shortDate(e.date)}</ItemTitle>
-                  </ItemContent>
-                  <ItemActions className="shrink-0 gap-3 text-right tabular-nums">
-                    <button
-                      type="button"
-                      onClick={() => setEditing(e.date)}
-                      className="text-left"
-                      aria-label={`Edit ${shortDate(e.date)}`}
-                    >
-                      <span className="text-sm">
-                        {trim(toDisplay(e.weightLb, unit))} {unit}
-                      </span>{" "}
-                      {/* The delta is why the list is worth reading rather than
-                          the chart: the chart shows the shape, these are the
-                          numbers that made it. Muted, never coloured -- a gain
-                          is not a failure and red would say it was (S78). */}
-                      <span className="ml-1 text-xs text-muted-foreground">
-                        {/* Converted BEFORE the subtraction, not after: a
-                            difference of pounds relabelled kg would be wrong by
-                            the conversion factor. */}
-                        {deltaLabel(
-                          toDisplay(e.weightLb, unit),
-                          previousOf.get(e.date) != null
-                            ? toDisplay(previousOf.get(e.date)!, unit)
-                            : null,
-                        ) ?? "—"}
-                      </span>
-                    </button>
-                  </ItemActions>
-                </Item>
+                {/* The weigh-in sheet keeps the Delete button it always had;
+                    this is the shortcut past it for a reading typed wrong. */}
+                <SwipeToDelete
+                  title={`Delete ${shortDate(e.date)}?`}
+                  description="That reading comes off the chart and the trend. This cannot be undone."
+                  onConfirm={() => removeWeighIn(e.date)}
+                >
+                  <Item size="sm" className="rounded-none px-3.5 py-3 active:bg-accent">
+                    <ItemContent className="min-w-0">
+                      <ItemTitle className="font-normal">{shortDate(e.date)}</ItemTitle>
+                    </ItemContent>
+                    <ItemActions className="shrink-0 gap-3 text-right tabular-nums">
+                      <button
+                        type="button"
+                        onClick={() => setEditing(e.date)}
+                        className="text-left"
+                        aria-label={`Edit ${shortDate(e.date)}`}
+                      >
+                        <span className="text-sm">
+                          {trim(toDisplay(e.weightLb, unit))} {unit}
+                        </span>{" "}
+                        {/* The delta is why the list is worth reading rather than
+                            the chart: the chart shows the shape, these are the
+                            numbers that made it. Muted, never coloured -- a gain
+                            is not a failure and red would say it was (S78). */}
+                        <span className="ml-1 text-xs text-muted-foreground">
+                          {/* Converted BEFORE the subtraction, not after: a
+                              difference of pounds relabelled kg would be wrong by
+                              the conversion factor. */}
+                          {deltaLabel(
+                            toDisplay(e.weightLb, unit),
+                            previousOf.get(e.date) != null
+                              ? toDisplay(previousOf.get(e.date)!, unit)
+                              : null,
+                          ) ?? "—"}
+                        </span>
+                      </button>
+                    </ItemActions>
+                  </Item>
+                </SwipeToDelete>
               </li>
             ))}
           </ul>
@@ -712,45 +744,17 @@ function WeightChart({
   /**
    * A swipe across the chart is a second way to reach the window toggle above
    * it, not a replacement -- the ToggleGroup stays the keyboard/AT path and
-   * drives the same `onWindowChange`. Read on the container's own pointer
-   * events rather than a gesture library: this is one axis, one threshold and
-   * one step, which does not earn a dependency.
+   * drives the same `onWindowChange`.
    *
-   * The gesture is judged on its own displacement, not on which element it
-   * started or ended over, so the start point is all that has to be kept
-   * between pointerdown and the move that crosses the threshold.
+   * Left moves to the next LONGER window, matching the ToggleGroup's own
+   * left-to-right order (1M -> 3M -> ...). Clamped rather than wrapped: a
+   * swipe past either end has nowhere further to go, not back to the start.
    */
-  const swipeStart = useRef<{ x: number; y: number } | null>(null);
-  const swiped = useRef(false);
-  const SWIPE_PX = 40;
-
-  function onSwipeStart(e: React.PointerEvent<HTMLDivElement>) {
-    swipeStart.current = { x: e.clientX, y: e.clientY };
-    swiped.current = false;
-    e.currentTarget.setPointerCapture(e.pointerId);
-  }
-
-  function onSwipeMove(e: React.PointerEvent<HTMLDivElement>) {
-    if (!swipeStart.current || swiped.current) return;
-    const dx = e.clientX - swipeStart.current.x;
-    const dy = e.clientY - swipeStart.current.y;
-    // Horizontal enough, and past the threshold -- short of both, this is a
-    // vertical scroll or a tap, and `touch-pan-y` on the container already
-    // leaves the scroll itself to the browser.
-    if (Math.abs(dx) < SWIPE_PX || Math.abs(dx) < Math.abs(dy)) return;
-    swiped.current = true;
-
-    const index = CHART_WINDOWS.findIndex((w) => w.key === windowKey);
-    // Left moves to the next LONGER window, matching the ToggleGroup's own
-    // left-to-right order (1M -> 3M -> ...). Clamped rather than wrapped: a
-    // swipe past either end has nowhere further to go, not back to the start.
-    const next = CHART_WINDOWS[index + (dx < 0 ? 1 : -1)];
+  const step = (by: number) => {
+    const next = CHART_WINDOWS[CHART_WINDOWS.findIndex((w) => w.key === windowKey) + by];
     if (next) onWindowChange(next.key);
-  }
-
-  function onSwipeEnd() {
-    swipeStart.current = null;
-  }
+  };
+  const swipe = useSwipe({ onLeft: () => step(1), onRight: () => step(-1) });
 
   // Thin data is a sentence, not a chart (S79). Below the trend floor there is
   // nothing to draw that would not be a two-point line dressed up as a shape,
@@ -797,10 +801,7 @@ function WeightChart({
           "touch-pan-y",
           extending ? "opacity-50 transition-opacity" : "transition-opacity",
         )}
-        onPointerDown={onSwipeStart}
-        onPointerMove={onSwipeMove}
-        onPointerUp={onSwipeEnd}
-        onPointerCancel={onSwipeEnd}
+        {...swipe}
       >
 
       <ChartContainer config={weightConfig} className={`mt-3 ${CHART_CLASS}`}>

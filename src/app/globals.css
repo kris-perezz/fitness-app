@@ -60,13 +60,26 @@
   /* S104's four macro rings. Not the chart series: those are greyscale in
      light and dark by design, and matcha's are pastels tuned to sit behind
      type -- neither can carry four marks that have to be told apart at 48px.
-     Four hues, one per macro, saturated enough that a filled arc separates
-     from its track at a glance in every theme. */
-  --macro-calories: oklch(0.6 0.2 25);
-  --macro-protein: oklch(0.55 0.16 152);
-  --macro-carbs: oklch(0.55 0.17 255);
-  --macro-fat: oklch(0.68 0.16 70);
-  --macro-track: oklch(0.88 0.01 90);
+     Hues sit a quadrant apart -- red, amber, teal, indigo -- rather than
+     bunched in the warm half, and no pair straddles the red/green axis a
+     deuteranope loses: at a 3px stroke two neighbouring hues are one smudge.
+     Chroma is set past the sRGB edge on purpose. A phone with a P3 screen
+     paints these as written, which is the whole of what makes an arc this
+     thin read as neon rather than merely coloured; anything narrower gets
+     mapped back into its own gamut by the browser, which is the sRGB value
+     that used to be hardcoded here. The track is neutral, so an empty groove
+     reads as absence rather than as a fifth value. */
+  --macro-calories: oklch(0.62 0.29 25);
+  --macro-protein: oklch(0.7 0.21 172);
+  --macro-carbs: oklch(0.56 0.3 275);
+  --macro-fat: oklch(0.78 0.21 85);
+  --macro-track: oklch(0.93 0 0);
+  /* Not a colour of its own: mixed into a macro's hue to sit the COMPLETED
+     lap back once a second one is winding over it. The new lap keeps the
+     undimmed colour, so depth only ever moves one way -- darken the top lap
+     instead and the ring reads as fading rather than as coiling. Small on
+     purpose: the shadow under the coiled lap does the rest of the work. */
+  --macro-under: oklch(0.2 0 0);
 
   /* iOS paints the strip above and below the page with `theme-color`, so it has
      to be a plain colour a meta tag can carry -- oklch() and a translucent
@@ -114,13 +127,20 @@
   /* S104's four macro rings. Not the chart series: those are greyscale in
      light and dark by design, and matcha's are pastels tuned to sit behind
      type -- neither can carry four marks that have to be told apart at 48px.
-     Four hues, one per macro, saturated enough that a filled arc separates
-     from its track at a glance in every theme. */
-  --macro-calories: oklch(0.7 0.19 25);
-  --macro-protein: oklch(0.72 0.17 152);
-  --macro-carbs: oklch(0.68 0.16 255);
-  --macro-fat: oklch(0.78 0.15 70);
-  --macro-track: oklch(0.32 0.01 90);
+     Same four hues as light, lifted above the card rather than dropped onto
+     it -- a dark ground reverses which end of the lightness scale an arc has
+     to leave to be seen, and a light-mode value carried over here reads as a
+     hole in the ring. This is where the saturation reads as neon rather than
+     merely bright, so the track goes nearly neutral and stays low. */
+  --macro-calories: oklch(0.7 0.28 25);
+  --macro-protein: oklch(0.84 0.21 172);
+  --macro-carbs: oklch(0.66 0.3 275);
+  --macro-fat: oklch(0.87 0.21 85);
+  --macro-track: oklch(0.33 0 0);
+  /* Darkening here too, not lightening: the lap underneath is read against
+     the one over it, never against the page, so it moves the same way in
+     both modes. */
+  --macro-under: oklch(0.2 0 0);
 
   --theme-color: #0a0a0a;
   --shadow-card: 0 1px 2px oklch(0 0 0 / 30%), 0 8px 24px -8px oklch(0 0 0 / 45%);
@@ -183,6 +203,7 @@
   --macro-carbs: oklch(0.64 0.14 58);
   --macro-fat: oklch(0.5 0.14 335);
   --macro-track: oklch(0.87 0.02 74);
+  --macro-under: oklch(0.239 0 90);
 
   /* Native controls and scrollbars have no CSS variables to read; without this
      they paint themselves dark on a system set to dark. */

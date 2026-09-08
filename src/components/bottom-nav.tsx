@@ -16,7 +16,7 @@ const TABS = [
   // `also` keeps a tab lit on the section's other routes. Recipes are part of
   // Food, not a fifth destination: you go there to define a dish, and the dish
   // then shows up in the food list like anything else (S16).
-  { href: "/log", label: "Food", icon: UtensilsCrossed, also: ["/recipes"] },
+  { href: "/log", label: "Food", icon: UtensilsCrossed, also: ["/recipes", "/foods"] },
   { href: "/train", label: "Train", icon: Dumbbell, also: [] },
   { href: "/progress", label: "Progress", icon: TrendingUp, also: [] },
   { href: "/goals", label: "Profile", icon: User, also: [] },

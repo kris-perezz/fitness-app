@@ -31,24 +31,77 @@ import type { DayGoal } from "@/lib/goals";
  * compatible rather than in tension).
  */
 const RING_ORDER = [
-  { key: "calories", label: "Calories", stroke: "stroke-macro-calories", dot: "bg-macro-calories" },
-  { key: "protein", label: "Protein", stroke: "stroke-macro-protein", dot: "bg-macro-protein" },
-  { key: "carbs", label: "Carbs", stroke: "stroke-macro-carbs", dot: "bg-macro-carbs" },
-  { key: "fat", label: "Fat", stroke: "stroke-macro-fat", dot: "bg-macro-fat" },
+  {
+    key: "calories",
+    label: "Calories",
+    color: "var(--macro-calories)",
+    dot: "bg-macro-calories",
+  },
+  {
+    key: "protein",
+    label: "Protein",
+    color: "var(--macro-protein)",
+    dot: "bg-macro-protein",
+  },
+  {
+    key: "carbs",
+    label: "Carbs",
+    color: "var(--macro-carbs)",
+    dot: "bg-macro-carbs",
+  },
+  { key: "fat", label: "Fat", color: "var(--macro-fat)", dot: "bg-macro-fat" },
 ] as const;
 type RingKey = (typeof RING_ORDER)[number]["key"];
+
+/** How far back a lap sits once a second one is wound over it. */
+const DEPTH = "15%";
+
+/** The empty groove, the same on every ring. */
+const TRACK = "var(--macro-track)";
+
+/**
+ * FLAT ARCS, NO SWEEP. A gradient that travels around a circumference is what
+ * Apple's rings do and what this drew for a while, via a conic gradient masked
+ * into a ring -- SVG has no angular gradient, so that was the only way to get
+ * one without cutting every arc into a few dozen segments.
+ *
+ * It is off because there is not enough arc here for depth to read as depth.
+ * At 48px across, four rings deep, a 3px stroke, the shading landed as noise:
+ * a hard seam at twelve o'clock where the sweep wrapped, and a cap that had to
+ * be drawn as a separate dot because a mask has no `strokeLinecap`. Apple's
+ * grid rings are about twice this across and there are three of them.
+ */
+function shades(color: string) {
+  return {
+    lit: color,
+    /** The lap underneath, once there is one over it. */
+    dimmed: `color-mix(in oklch, ${color}, var(--macro-under) ${DEPTH})`,
+  };
+}
+
+/**
+ * The coil's edge, where a second lap crosses the first. Two flat shades meet
+ * cleanly enough at the tail but not under the leading cap, where they are the
+ * same colour on both sides of the join.
+ */
+const OVER_SHADOW = "drop-shadow(0 0 1.5px rgb(0 0 0 / 0.55))";
 
 /** The legend above the grid: same order, same tokens, as a row of dots. */
 export const RING_LEGEND = RING_ORDER;
 
 /**
- * ~44px mark in a ~48px-wide, 64px-tall cell (see month-log.tsx for the
- * layout arithmetic this size comes from), 4px stroke so four rings read as
- * four rings rather than a smudge, 1.5px clear between one ring and the next.
+ * A 48px mark in a 52px-wide, 68px-tall cell -- see month-log.tsx for the
+ * layout arithmetic that size comes from.
+ *
+ * The stroke is what four rings have to be paid for out of 24px of radius,
+ * and the innermost ring is what a thick one costs: at 4px and a 1.5px gap it
+ * had a 7px hole, which is not a ring but a dot with a dimple. 3px and a 1px
+ * gap opens that to 18px and still leaves the outer ring landing exactly on
+ * the mark's edge -- 22.5 + 1.5 = 24.
  */
 const MARK_SIZE = 48;
-const MARK_STROKE = 4;
-const MARK_GAP = 1.5;
+const MARK_STROKE = 3;
+const MARK_GAP = 1;
 
 /**
  * What one day needs to draw its rings: the totals it actually logged, and
@@ -65,42 +118,75 @@ export type DayRingInfo = {
 };
 
 /**
- * A value against its goal, clamped to a fraction of the ring -- and clamped
- * at ZERO true zero, never the floor: this is what lets a day with a goal but
+ * A value against its goal, as a ratio free to pass 1 -- and pinned to ZERO at
+ * a true zero, never to the floor: this is what lets a day with a goal but
  * nothing logged draw four empty tracks rather than four slivers that would
  * misreport a gap as a measurement.
  */
-function fractionOf(value: number, goal: number): number {
+function ratioOf(value: number, goal: number): number {
   if (goal <= 0 || value <= 0) return 0;
-  // Every ring fills to the same place whether the day ran over or under --
-  // this mark shows the shape of a month, not thirty scored days.
-  return Math.min(1, Math.max(RING_MIN_FRACTION, value / goal));
+  return Math.max(RING_MIN_FRACTION, value / goal);
 }
 
-function fractionsOf(info: DayRingInfo | undefined): Record<RingKey, number> | null {
+function ratiosOf(info: DayRingInfo | undefined): Record<RingKey, number> | null {
   if (!info?.goal) return null;
   return {
-    calories: fractionOf(info.kcal, info.goal.calorie_goal),
-    protein: fractionOf(info.protein_g, info.goal.protein_goal_g),
-    carbs: fractionOf(info.carb_g, info.goal.carb_goal_g),
-    fat: fractionOf(info.fat_g, info.goal.fat_goal_g),
+    calories: ratioOf(info.kcal, info.goal.calorie_goal),
+    protein: ratioOf(info.protein_g, info.goal.protein_goal_g),
+    carbs: ratioOf(info.carb_g, info.goal.carb_goal_g),
+    fat: ratioOf(info.fat_g, info.goal.fat_goal_g),
   };
 }
 
 /** "Wednesday, September 3: calories 62% of goal, protein 40%, carbs 71%,
  * fat 55%" -- words carry the same identity the ring positions and colours
- * do, so the mark survives a screen reader as well as greyscale. */
-function ringsLabel(date: Date, fractions: Record<RingKey, number> | null): string {
+ * do, so the mark survives a screen reader as well as greyscale. Uncapped,
+ * and the only place the exact size of an overshoot is stated: the mark itself
+ * stops separating them once the second lap is round. */
+function ringsLabel(date: Date, ratios: Record<RingKey, number> | null): string {
   const base = date.toLocaleDateString(undefined, {
     weekday: "long",
     month: "long",
     day: "numeric",
   });
-  if (!fractions) return base;
+  if (!ratios) return base;
   const pct = (f: number) => `${Math.round(f * 100)}%`;
   return (
-    `${base}: calories ${pct(fractions.calories)} of goal, ` +
-    `protein ${pct(fractions.protein)}, carbs ${pct(fractions.carbs)}, fat ${pct(fractions.fat)}`
+    `${base}: calories ${pct(ratios.calories)} of goal, ` +
+    `protein ${pct(ratios.protein)}, carbs ${pct(ratios.carbs)}, fat ${pct(ratios.fat)}`
+  );
+}
+
+/** One arc, from twelve o'clock clockwise, with a round end at each stop. */
+function Arc({
+  radius,
+  circumference,
+  fraction,
+  color,
+  coiled = false,
+}: {
+  /** Centre of the stroke, as `ringGeometry` returns it. */
+  radius: number;
+  circumference: number;
+  /** How far round, 0 to 1. */
+  fraction: number;
+  color: string;
+  /** A lap wound over one already full, which needs an edge to sit on. */
+  coiled?: boolean;
+}) {
+  return (
+    <circle
+      cx={MARK_SIZE / 2}
+      cy={MARK_SIZE / 2}
+      r={radius}
+      fill="none"
+      strokeWidth={MARK_STROKE}
+      strokeLinecap="round"
+      strokeDasharray={circumference}
+      strokeDashoffset={circumference * (1 - fraction)}
+      stroke={color}
+      style={coiled ? { filter: OVER_SHADOW } : undefined}
+    />
   );
 }
 
@@ -116,7 +202,7 @@ export function DayRingsButton({
     if (modifiers.focused) ref.current?.focus();
   }, [modifiers.focused]);
 
-  const fractions = fractionsOf(info);
+  const ratios = ratiosOf(info);
 
   return (
     <Button
@@ -124,7 +210,7 @@ export function DayRingsButton({
       variant="ghost"
       size="icon"
       data-day={day.date.toISOString()}
-      aria-label={ringsLabel(day.date, fractions)}
+      aria-label={ringsLabel(day.date, ratios)}
       // NUMERAL ABOVE, RING BELOW, stacked rather than stacked-on: the two
       // shared one centre point at the mark's original size and the numeral
       // always lost that fight. A column has room for both because this
@@ -142,7 +228,7 @@ export function DayRingsButton({
       <span aria-hidden className="text-[11px] leading-none tabular-nums text-muted-foreground">
         {day.date.getDate()}
       </span>
-      {fractions && (
+      {ratios && (
         <svg
           aria-hidden
           width={MARK_SIZE}
@@ -154,36 +240,33 @@ export function DayRingsButton({
           // Start every ring at 12 o'clock, matching the calorie ring.
           className="size-12 shrink-0 -rotate-90"
         >
-          {RING_ORDER.map(({ key, stroke }, i) => {
-            const { radius, circumference } = ringGeometry(MARK_SIZE, i, 4, MARK_STROKE, MARK_GAP);
-            const fraction = fractions[key];
+          {RING_ORDER.map(({ key, color }, i) => {
+            const { radius, circumference } = ringGeometry(
+              MARK_SIZE,
+              i,
+              RING_ORDER.length,
+              MARK_STROKE,
+              MARK_GAP,
+            );
+            const { lit, dimmed } = shades(color);
+            const ratio = ratios[key];
+            // Under the goal the arc is the whole reading. At or past it the
+            // ring is full and the reading moves to the lap wound ON TOP of
+            // it, so a day that overshot cannot be read as one that landed
+            // exactly on target.
+            const fill = Math.min(1, ratio);
+            const over = Math.min(1, Math.max(0, ratio - 1));
+            const arc = { radius, circumference };
             return (
-              <g key={key}>
-                {/* Muted and visible even at a 20% fill -- the track is what
-                    keeps a lightly-filled ring reading as a ring rather than
-                    fading into a smudge against the card. */}
-                <circle
-                  cx={MARK_SIZE / 2}
-                  cy={MARK_SIZE / 2}
-                  r={radius}
-                  fill="none"
-                  strokeWidth={MARK_STROKE}
-                  className="stroke-macro-track"
-                />
-                {fraction > 0 && (
-                  <circle
-                    cx={MARK_SIZE / 2}
-                    cy={MARK_SIZE / 2}
-                    r={radius}
-                    fill="none"
-                    strokeWidth={MARK_STROKE}
-                    strokeLinecap="round"
-                    strokeDasharray={circumference}
-                    strokeDashoffset={circumference * (1 - fraction)}
-                    className={stroke}
-                  />
-                )}
-              </g>
+              <React.Fragment key={key}>
+                {/* Neutral, and the same groove on all four rings: a tinted
+                    one reads as a fifth value on the day rather than as the
+                    absence of this one. Position is what says which macro an
+                    empty ring belongs to. */}
+                <Arc {...arc} fraction={1} color={TRACK} />
+                {fill > 0 && <Arc {...arc} fraction={fill} color={over > 0 ? dimmed : lit} />}
+                {over > 0 && <Arc {...arc} fraction={over} color={lit} coiled />}
+              </React.Fragment>
             );
           })}
         </svg>

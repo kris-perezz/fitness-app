@@ -34,6 +34,7 @@ import {
 } from "@/components/ui/empty";
 import { liftForKeyboard } from "@/lib/sheet";
 import { toast } from "sonner";
+import { useSwipe } from "@/lib/swipe";
 
 /** Same snap behaviour as the add sheet, for the same reasons (add-sheet.tsx). */
 const SNAP_POINTS = [0.6, 1] as const;
@@ -273,8 +274,12 @@ function CreateStep({
     });
   }
 
+  // The Back button as a gesture. A sheet step is a stacked screen like any
+  // other, and the drawer's own drag is vertical, so the axis is free.
+  const back = useSwipe({ onRight: onBack });
+
   return (
-    <div className="flex min-h-0 flex-1 flex-col">
+    <div className="flex min-h-0 flex-1 flex-col touch-pan-y" {...back}>
       <div className="min-h-0 flex-1 overflow-y-auto overscroll-contain px-5 pb-4">
         <Button
           variant="ghost"
