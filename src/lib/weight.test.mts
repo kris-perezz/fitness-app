@@ -19,7 +19,6 @@ import {
   axisDomain,
   chartSeries,
   MIN_TREND_ENTRIES,
-  MAX_TREND_BRIDGE,
   daysBetween,
   fromDisplay,
   rateToDisplay,
@@ -231,15 +230,21 @@ test("the bridged trend moves monotonically toward the next reading", () => {
   }
 });
 
-test("the trend still breaks across a gap longer than the model reaches", () => {
-  const limit = HALF_LIFE_DAYS * MAX_TREND_BRIDGE;
+test("the trend crosses even a long absence, and crosses it straight", () => {
   const points = chartSeries([
     { date: "2026-08-01", weightLb: 200, note: null },
-    { date: shiftDays("2026-08-01", limit + 1), weightLb: 195, note: null },
+    { date: shiftDays("2026-08-01", 90), weightLb: 195, note: null },
   ]);
-  // Past a couple of half lives the curve has closed most of the distance and
-  // the rest of the hole would be a flat line on a weight nobody measured.
-  assert.equal(points.filter((p) => p.trendLb === null).length, limit);
+  assert.ok(points.every((p) => p.trendLb !== null), "the trend has no holes");
+
+  // A random walk pinned at both ends has a straight line for its expected
+  // path, so every step across the gap is the same size. The filter's own
+  // shape would ease most of the way in the first week and then sit flat.
+  const values = points.map((p) => p.trendLb as number);
+  const first = values[1] - values[0];
+  for (let i = 1; i < values.length; i += 1) {
+    assert.ok(Math.abs(values[i] - values[i - 1] - first) < 1e-9, `step ${i} was uneven`);
+  }
 });
 
 test("a fortnight unweighed is a fortnight of gaps, not a straight line", () => {

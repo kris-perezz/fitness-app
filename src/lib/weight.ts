@@ -135,7 +135,7 @@ export function trendSeries(entries: WeighIn[], halfLife = HALF_LIFE_DAYS): Tren
  * drawing a straight line across a fortnight you never stood on a scale and
  * presenting it as a measurement (S61, S79).
  *
- * THE READINGS BREAK. THE TREND DOES NOT, up to a limit.
+ * THE READINGS BREAK. THE TREND DOES NOT.
  *
  * Nulling the trend on every unweighed day made it break wherever the readings
  * did, which is only invisible if you weigh daily -- weigh every third day and
@@ -144,31 +144,15 @@ export function trendSeries(entries: WeighIn[], halfLife = HALF_LIFE_DAYS): Tren
  *
  * The two series are not the same kind of thing, which is what the earlier
  * reading of rule 2 missed. A reading is an observation and there either is one
- * or there is not. The trend is a MODEL of those observations with a stated
- * half life, and a model has a value between its inputs -- that is what makes
- * it a model. `trendSeries` already computes the gap-weighted step from one
- * reading to the next; `bridge` below evaluates that same expression at each
- * day inside the gap, so the daily curve passes exactly through every value
- * `trendSeries` produces. It is the identical model sampled more often, not a
- * second smoothing laid over the first.
- */
-
-/**
- * How long a hole the trend will cross, in days.
+ * or there is not. The trend is a MODEL of those observations, and a model has
+ * a value between its inputs -- that is what makes it a model.
  *
- * Rule 2 is still right about long absences, just not about short ones. Inside
- * a couple of half lives the curve is doing real work -- it is still visibly
- * moving toward the next reading, and the shape between the two is the model's
- * own answer. Past that it has closed three quarters of the distance and the
- * rest of the gap is a flat line sitting on a weight nobody measured, which is
- * exactly the invented measurement S61 rules out. So the trend breaks there and
- * resumes on the far side.
- *
- * Expressed as a multiple of the half life rather than as a number of days,
- * because it is a statement about the model: change `HALF_LIFE_DAYS` and this
- * follows it instead of quietly meaning something else.
+ * The gap is not left to say so on its own, because it does not have to: the
+ * readings are drawn as dots on the same axes, so a stretch of line with no
+ * dots beneath it already reads as "nothing was measured here". A second
+ * encoding of the same fact -- a break, a dash, a widening band -- costs a
+ * legend and buys nothing the chart was not already showing.
  */
-export const MAX_TREND_BRIDGE = 2;
 export type ChartPoint = {
   date: string;
   weightLb: number | null;
@@ -186,7 +170,7 @@ export function chartSeries(
   const byDate = new Map(series.map((p) => [p.date, p]));
   const firstDay = series[0].date;
   const lastDay = series[series.length - 1].date;
-  const trend = bridge(series, halfLife);
+  const trend = bridge(series);
   const out: ChartPoint[] = [];
 
   // ONE Date, mutated in place, rather than `shiftDays` per iteration -- that
@@ -214,38 +198,48 @@ export function chartSeries(
 }
 
 /**
- * The trend at every calendar day, indexed by days from the first reading, or
- * null on a day the trend does not reach.
+ * The trend at every calendar day, indexed by days from the first reading.
  *
- * The expression is `trendSeries`'s own, with the elapsed days as the variable
- * instead of the whole gap:
+ * STRAIGHT BETWEEN THE TWO TREND VALUES, which is not the obvious choice and is
+ * the defensible one.
  *
- *     T(d) = T0 + (1 - 0.5 ^ (d / halfLife)) * (W1 - T0)
+ * The obvious choice is to run `trendSeries`'s own step day by day across the
+ * gap, so the curve eases toward the next reading on the half life. That is the
+ * FILTER -- an estimate built from the past alone, which is all you have while
+ * the gap is still running. On a chart of history it is the wrong estimator:
+ * the reading on the far side has already happened, and a line drawn today may
+ * use it. Running the filter shape anyway closes most of the distance in the
+ * first week and then holds flat for the rest of the gap, drawing a fortnight
+ * of plateau at a weight that was not measured until the end of it.
  *
- * At `d = gap` that IS the step `trendSeries` takes, so the curve lands on each
- * of its points exactly rather than near them. The half life keeps its plain
- * meaning between readings as well as at them.
+ * With both ends known, the weight in between is a random walk pinned at two
+ * points -- a Brownian bridge, whose expected path is the straight line joining
+ * them. So the interpolation is linear, and it is linear for a reason rather
+ * than for want of anything better. (The same reason a Kalman SMOOTHER differs
+ * from the filter: a second pass backwards revises every past estimate with
+ * what has been measured since.)
+ *
+ * It still lands on `trendSeries`'s value at every reading, so sampling the
+ * model more often never moves it.
  *
  * Indexed by offset rather than keyed by date so filling a gap costs no date
  * parsing -- `daysBetween` runs once per READING here, never once per day.
  */
-function bridge(series: TrendPoint[], halfLife: number): (number | null)[] {
+function bridge(series: TrendPoint[]): number[] {
   const start = series[0].date;
   const span = daysBetween(start, series[series.length - 1].date);
-  const days: (number | null)[] = new Array(span + 1).fill(null);
+  const days: number[] = new Array(span + 1).fill(0);
   for (const p of series) days[daysBetween(start, p.date)] = p.trendLb;
 
-  const limit = halfLife * MAX_TREND_BRIDGE;
   for (let i = 0; i + 1 < series.length; i += 1) {
     const from = series[i];
     const to = series[i + 1];
     const gap = daysBetween(from.date, to.date);
-    if (gap <= 1 || gap > limit) continue;
+    if (gap <= 1) continue;
 
     const base = daysBetween(start, from.date);
-    for (let d = 1; d < gap; d += 1) {
-      days[base + d] = from.trendLb + (1 - Math.pow(0.5, d / halfLife)) * (to.weightLb - from.trendLb);
-    }
+    const perDay = (to.trendLb - from.trendLb) / gap;
+    for (let d = 1; d < gap; d += 1) days[base + d] = from.trendLb + perDay * d;
   }
 
   return days;
