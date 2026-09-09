@@ -210,6 +210,10 @@ export function FoodShelf({ foods }: { foods: Food[] }) {
           setEditing(null);
           router.refresh();
         }}
+        onDeleted={() => {
+          setEditing(null);
+          router.refresh();
+        }}
       />
     </>
   );
