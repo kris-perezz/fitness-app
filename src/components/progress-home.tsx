@@ -96,7 +96,7 @@ export function ProgressHome({
    */
   unit: DisplayUnit;
   /** S81. Exactly one lift, or none -- which is a normal state, not an empty one. */
-  pinned: PinnedLift | null;
+  pinned: PinnedLift[];
 }) {
   const [entries, setEntries] = useState(initialEntries);
   const [from, setFrom] = useState(loadedFrom);
@@ -236,7 +236,7 @@ export function ProgressHome({
             thing you came to do is not reachable only by scrolling past what you
             have already done. Spans both desktop columns -- it is not the
             trend's action or the calendar's, it is the screen's. */}
-        <header className="pt-1 lg:col-span-2">
+        <header className="pt-1 lg:order-1 lg:col-span-2">
           <Button className="h-12 w-full text-base" onClick={() => setEditing(today)}>
             <Scale className="size-4" /> Weigh in
           </Button>
@@ -249,7 +249,7 @@ export function ProgressHome({
             version of this screen -- and the action is already at the top, so
             the Empty does not need to repeat it. */}
         {entries.length === 0 ? (
-          <Empty className="py-14 lg:col-span-2">
+          <Empty className="py-14 lg:order-2 lg:col-span-2">
             <EmptyHeader>
               <EmptyMedia variant="icon">
                 <Scale />
@@ -263,13 +263,22 @@ export function ProgressHome({
           </Empty>
         ) : (
           <>
-        {/* THE TREND COLUMN. On a phone this is just the top of the page; from
-            `lg` it is the left column, sized `1fr` against the calendar's
-            fixed 22rem so the chart is what claims the extra width a wide
-            screen offers. */}
-        <div className="space-y-2">
-        <Headline head={head} rate={rate} goal={goal} unit={unit} />
+        {/* DESKTOP ORDER IS NOT DOM ORDER, and the markup keeps the phone's.
+            A phone reads trend, pinned lifts, calendar, month list, top to
+            bottom, and that sequence is the designed one. From `lg` the chart
+            wants both columns and the list wants the wide one beside the
+            calendar, which `order` arranges without moving a line of markup --
+            so the small screen, which is the one this app is for, never pays
+            for the large one's layout. */}
+        <div className="lg:order-2 lg:col-span-2">
+          <Headline head={head} rate={rate} goal={goal} unit={unit} />
+        </div>
 
+        {/* BOTH COLUMNS from `lg`. Of everything on this tab the time series
+            is the only block that gets better with every pixel: the calendar
+            is seven fixed columns and the list is a column of numbers, and
+            neither reads any better at twice the width. */}
+        <div className="lg:order-3 lg:col-span-2">
         <WeightChart
           entries={entries}
           unit={unit}
@@ -279,14 +288,23 @@ export function ProgressHome({
           extending={chartUnderCovered}
           goal={goal}
         />
-
-        <PinnedLiftBlock pinned={pinned} />
         </div>
 
-        {/* THE CALENDAR COLUMN. Fixed-width by design (PAGE_SPLIT's 22rem):
-            a day grid does not get more useful by getting wider, so the room
-            a desktop screen adds all goes to the trend column beside it. */}
-        <div className="space-y-2">
+        {/* Last, and full width for the same reason as the weight chart. The
+            conditional is out here rather than inside the block so that no
+            pins leaves no grid item -- an empty one would still claim a row. */}
+        {pinned.length > 0 && (
+          <div className="space-y-2 lg:order-6 lg:col-span-2">
+            {pinned.map((lift) => (
+              <PinnedLiftBlock key={lift.id} pinned={lift} />
+            ))}
+          </div>
+        )}
+
+        {/* THE CALENDAR. Fixed-width by design (PAGE_SPLIT's 22rem): a day
+            grid does not get more useful by getting wider, so the room a wide
+            screen offers goes to the chart above and the list beside it. */}
+        <div className="lg:order-5">
         <Card className={cn(SURFACE, "items-center px-1 py-2", "touch-pan-y")} {...monthSwipe}>
           <Calendar
             month={toDate(`${month}-01`)}
@@ -312,7 +330,12 @@ export function ProgressHome({
             className="bg-transparent p-0 [--cell-size:--spacing(8)]"
           />
         </Card>
+        </div>
 
+        {/* The month list takes the WIDE column on desktop: it is the only
+            block here with a row per day, so it is the one that runs out of
+            vertical room first. */}
+        <div className="lg:order-4">
         {monthEntries.length === 0 ? (
           <Empty className="py-12">
             <EmptyHeader>
@@ -668,13 +691,11 @@ export type PinnedLift = { id: string; name: string; points: LiftPoint[] };
  * statement of what this block is for, and a list of every exercise charted is
  * the catalog again.
  *
- * No pin renders NOTHING -- not an empty state inviting one. An unpinned tab is
+ * No pins render NOTHING -- not an empty state inviting one. An unpinned tab is
  * complete, and a prompt to pin something would be the tab asking for work
  * rather than answering a question.
  */
-function PinnedLiftBlock({ pinned }: { pinned: PinnedLift | null }) {
-  if (!pinned) return null;
-
+function PinnedLiftBlock({ pinned }: { pinned: PinnedLift }) {
   return (
     <Card className={cn(SURFACE, SURFACE_PAD)}>
       <div className="flex items-baseline justify-between gap-2">
