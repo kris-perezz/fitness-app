@@ -29,6 +29,7 @@
   --color-macro-carbs: var(--macro-carbs);
   --color-macro-fat: var(--macro-fat);
   --color-macro-track: var(--macro-track);
+  --color-calorie-track: var(--calorie-track);
   --color-ring: var(--ring);
   --color-input: var(--input);
   --color-border: var(--border);
@@ -74,6 +75,12 @@
   --macro-carbs: oklch(0.56 0.3 275);
   --macro-fat: oklch(0.78 0.21 85);
   --macro-track: oklch(0.93 0 0);
+  /* The single ring's groove, which is a wider stroke than the four concentric
+     ones and sits on a card rather than in a calendar cell -- so it is mixed
+     toward --muted-foreground rather than sharing --macro-track, which would
+     vanish against the card at that width. Themes whose neutrals already carry
+     a hue restate this outright instead. */
+  --calorie-track: color-mix(in oklch, var(--muted), var(--muted-foreground) 35%);
   /* Not a colour of its own: mixed into a macro's hue to sit the COMPLETED
      lap back once a second one is winding over it. The new lap keeps the
      undimmed colour, so depth only ever moves one way -- darken the top lap
@@ -203,6 +210,11 @@
   --macro-carbs: oklch(0.64 0.14 58);
   --macro-fat: oklch(0.5 0.14 335);
   --macro-track: oklch(0.87 0.02 74);
+  /* The button and toggle ground, not a mixed neutral. Every other theme's
+     --muted is grey enough that darkening it reads as a groove; this one's is
+     a warm cream, and pulling --muted-foreground through it turned the ring's
+     track the one grey object on a page that has no other. */
+  --calorie-track: var(--secondary);
   --macro-under: oklch(0.239 0 90);
 
   /* Native controls and scrollbars have no CSS variables to read; without this

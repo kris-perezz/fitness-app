@@ -29,6 +29,22 @@ const SAID: Record<Paint, string> = {
   bad: "text-destructive",
 };
 
+/**
+ * The figure in the middle, per status. It follows the arc wherever the arc is
+ * reporting a problem, so "why is the ring yellow" is answered by the thing
+ * you are already looking at rather than by the caption underneath it.
+ *
+ * `good` stays plain, which is the one place this parts from the arc: a day
+ * that went well does not need its own number to say so, and turning the
+ * largest text on the card green makes a fine day look like an event.
+ */
+const FIGURE: Record<Paint, string> = {
+  none: "",
+  good: "",
+  warn: "text-warning",
+  bad: "text-destructive",
+};
+
 const ARC: Record<Paint, string> = {
   none: "stroke-primary",
   good: "stroke-success",
@@ -61,7 +77,6 @@ export function CalorieRing({
   // (S73), which is not this.
   const status = statusOf("calories", consumed, goal, finished);
   const paint = toneOf("calories", status, tone);
-  const alarming = paint === "bad";
   // S79. Calm shows what was eaten; only strict counts down. And past the goal
   // neither of them subtracts (S78) -- strict says it in the red line below.
   const { value: figure, caption } = ringFigure(consumed, goal, tone);
@@ -87,10 +102,10 @@ export function CalorieRing({
             r={RING_RADIUS}
             fill="none"
             strokeWidth={RING_STROKE}
-            // Mixed toward --muted-foreground rather than plain --muted or
-            // raw --foreground, so the track stays visible on a translucent
-            // card while still carrying the theme's own hue.
-            className="stroke-[color-mix(in_oklch,var(--muted),var(--muted-foreground)_35%)]"
+            // A theme token rather than a mix written here: a palette whose
+            // neutrals carry a hue needs to name its own groove, and a mix in
+            // the class list is not something a palette can reach.
+            className="stroke-calorie-track"
           />
           <circle
             cx={RING_SIZE / 2}
@@ -111,9 +126,7 @@ export function CalorieRing({
 
         <div className="absolute inset-0 flex flex-col items-center justify-center">
           <span
-            className={`leading-none font-semibold tabular-nums ${
-              alarming ? "text-destructive" : ""
-            }`}
+            className={cn("leading-none font-semibold tabular-nums", FIGURE[paint])}
             // Sized to the string rather than by a type scale: five figures
             // reach the arc at the size four figures sit comfortably at, and
             // the circle around them cannot grow to make room.
