@@ -33,6 +33,11 @@ export const PAGE =
  * `space-y-2` still runs the phone's single column, `grid` only takes over
  * once there is room for two.
  *
+ * Wider than `PAGE` at `lg`, and Profile is not the reason to hold it back --
+ * that screen is `PAGE`, which stops at `md` and never reaches this cap. The
+ * calendar column is a fixed 22rem, so every pixel added here goes to the
+ * chart beside it, which is the half that gets better with room.
+ *
  * `content-start` alongside `items-start`, and they are not the same rule.
  * `flex-1` makes this element as tall as the viewport, and a grid with room
  * to spare stretches its ROWS to fill it -- so a full-width action in row one
@@ -41,7 +46,7 @@ export const PAGE =
  * row; `content-start` is what stops the rows being handed the slack.
  */
 export const PAGE_SPLIT =
-  "mx-auto w-full max-w-md flex-1 space-y-2 px-2 pb-[calc(6rem+env(safe-area-inset-bottom))] pt-1 md:max-w-3xl md:px-6 md:pb-10 md:pt-8 lg:grid lg:max-w-5xl lg:grid-cols-[minmax(0,1fr)_22rem] lg:content-start lg:items-start lg:gap-6 lg:space-y-0";
+  "mx-auto w-full max-w-md flex-1 space-y-2 px-2 pb-[calc(6rem+env(safe-area-inset-bottom))] pt-1 md:max-w-3xl md:px-6 md:pb-10 md:pt-8 lg:grid lg:max-w-6xl lg:grid-cols-[minmax(0,1fr)_22rem] lg:content-start lg:items-start lg:gap-6 lg:space-y-0";
 
 /** Padding inside a surface that holds a block of content rather than a list. */
 export const SURFACE_PAD = "px-3.5 py-3";
