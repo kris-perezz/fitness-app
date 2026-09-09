@@ -144,14 +144,28 @@ export function ProgressHome({
     const calendarNeed =
       month > shiftMonth(from, WINDOW_BUFFER_MONTHS) ? null : shiftMonth(from, -WINDOW_MONTHS);
     const chartNeed = chartUnderCovered ? chartFrom.slice(0, 7) : null;
-    if (!calendarNeed && !chartNeed) return;
+    /**
+     * The rest of the log, fetched on arrival rather than when a toggle asks
+     * for it.
+     *
+     * A window toggle used to BE the trigger, so every first tap of 6M or All
+     * dimmed the chart for a round trip -- the wait was paid in the one place
+     * it is visible, on a control that otherwise redraws instantly. Nothing
+     * about a weigh-in makes it worth windowing the way a session is: three
+     * columns, one row per day, and this tab exists to show all of them.
+     *
+     * So the window survives only as the shape of the FIRST paint, which still
+     * comes from the server without waiting on years of history. Everything
+     * behind it arrives in the background while you are reading the headline.
+     */
+    const warmNeed = earliest && earliest.slice(0, 7) < from ? earliest.slice(0, 7) : null;
+    if (!calendarNeed && !chartNeed && !warmNeed) return;
 
-    const nextFrom =
-      calendarNeed && chartNeed
-        ? calendarNeed < chartNeed
-          ? calendarNeed
-          : chartNeed
-        : (calendarNeed ?? chartNeed)!;
+    // The earliest of whatever is being asked for: one request to the far end
+    // rather than one per reason to go there.
+    const nextFrom = [calendarNeed, chartNeed, warmNeed]
+      .filter((m): m is string => m !== null)
+      .reduce((a, b) => (a < b ? a : b));
 
     loading.current = true;
     void loadWeighInWindow(nextFrom, shiftMonth(from, -1)).then((res) => {
@@ -160,7 +174,7 @@ export function ProgressHome({
       setEntries((prev) => [...prev, ...res.entries]);
       setFrom(nextFrom);
     });
-  }, [month, from, chartFrom, chartUnderCovered]);
+  }, [month, from, chartFrom, chartUnderCovered, earliest]);
 
   /**
    * The headline is computed over the WHOLE window, not the month on screen.
