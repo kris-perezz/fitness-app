@@ -149,9 +149,13 @@ export function FoodShelf({ foods }: { foods: Food[] }) {
 
             <Card className={cn(SURFACE, "overflow-hidden")}>
               {results.length === 0 && (
-                <p className="px-3.5 py-6 text-center text-sm text-muted-foreground">
-                  No match for &ldquo;{query}&rdquo;.
-                </p>
+                <Empty className="py-6">
+                  <EmptyHeader>
+                    <EmptyTitle className="text-sm font-normal text-muted-foreground">
+                      No match for &ldquo;{query}&rdquo;.
+                    </EmptyTitle>
+                  </EmptyHeader>
+                </Empty>
               )}
               <ul className="divide-y divide-border">
                 {results.map((f) => (
