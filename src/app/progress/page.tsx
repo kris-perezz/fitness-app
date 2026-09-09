@@ -44,7 +44,7 @@ export default async function ProgressPage() {
     supabase
       .from("nutrition_settings")
       .select(
-        "goal_weight_lb, goal_rate_lb_per_week, display_weight_unit, pinned_exercise_id, strict_mode",
+        "goal_weight_lb, goal_rate_lb_per_week, display_weight_unit, strict_mode",
       )
       .maybeSingle(),
     // The first day in the log, which is what bounds S62's All. One row, and
@@ -61,12 +61,15 @@ export default async function ProgressPage() {
   const weighIns = (data ?? []).map(toWeighIn);
 
   /**
-   * S81. The pinned lift, fetched SECOND because the pin is only known after
-   * the settings row arrives. One extra round trip, and only when a pin exists
-   * -- no pin is a normal state and costs nothing.
+   * S81/0033. The pinned lifts, oldest pin first so adding one never shuffles
+   * the block somebody has been watching.
+   *
+   * Fetched in one round trip rather than one per pin: the slots for every
+   * pinned exercise come back together and are split by id here, so a third
+   * pin costs rows and not latency. No pins is a normal state and skips both
+   * queries.
    */
-  const pinnedId = (settings?.pinned_exercise_id as string | null | undefined) ?? null;
-  const pinned = pinnedId ? await loadPinnedLift(supabase, pinnedId) : null;
+  const pinned = await loadPinnedLifts(supabase);
 
   return (
     <ProgressHome
@@ -101,23 +104,55 @@ export default async function ProgressPage() {
   );
 }
 
-/** The pinned exercise and its history, or null if it has been deleted since. */
-async function loadPinnedLift(
-  supabase: Awaited<ReturnType<typeof createClient>>,
-  exerciseId: string,
-) {
-  const [{ data: exercise }, { data: slots }] = await Promise.all([
-    supabase.from("exercises").select("id, name").eq("id", exerciseId).maybeSingle(),
+/**
+ * Every pinned exercise and its history, in the order the pins were made.
+ *
+ * Three queries whatever the number of pins: the pin ids, the names, and every
+ * slot for all of them at once. Grouping the slots here rather than asking the
+ * database once per exercise is the same call `top_foods` makes in the other
+ * direction -- the work is trivial and the round trips are not.
+ *
+ * An exercise deleted since it was pinned drops out silently. The pin row goes
+ * with it by cascade (0033), so this only ever covers the gap between the two.
+ */
+async function loadPinnedLifts(supabase: Awaited<ReturnType<typeof createClient>>) {
+  const { data: pins } = await supabase
+    .from("pinned_exercises")
+    .select("exercise_id")
+    .order("created_at", { ascending: true });
+
+  const ids = (pins ?? []).map((p) => p.exercise_id as string);
+  if (ids.length === 0) return [];
+
+  const [{ data: exercises }, { data: slots }] = await Promise.all([
+    supabase.from("exercises").select("id, name").in("id", ids),
     supabase
       .from("workout_exercises")
-      .select("workout:workouts!inner(log_date), sets:workout_sets(*)")
-      .eq("exercise_id", exerciseId),
+      .select("exercise_id, workout:workouts!inner(log_date), sets:workout_sets(*)")
+      .in("exercise_id", ids),
   ]);
-  if (!exercise) return null;
 
-  const rows = (slots ?? []) as unknown as { workout: { log_date: string }; sets: WorkoutSet[] }[];
-  const { points } = liftHistory(
-    rows.map((row) => ({ log_date: row.workout.log_date, sets: row.sets ?? [] })),
-  );
-  return { id: exercise.id as string, name: exercise.name as string, points };
+  const rows = (slots ?? []) as unknown as {
+    exercise_id: string;
+    workout: { log_date: string };
+    sets: WorkoutSet[];
+  }[];
+
+  const byExercise = new Map<string, { log_date: string; sets: WorkoutSet[] }[]>();
+  for (const row of rows) {
+    const list = byExercise.get(row.exercise_id) ?? [];
+    list.push({ log_date: row.workout.log_date, sets: row.sets ?? [] });
+    byExercise.set(row.exercise_id, list);
+  }
+
+  const named = new Map((exercises ?? []).map((e) => [e.id as string, e.name as string]));
+
+  // Driven by `ids` rather than by `exercises`, because the pin order is the
+  // display order and a `select ... in (...)` makes no promise about either.
+  return ids.flatMap((id) => {
+    const name = named.get(id);
+    if (!name) return [];
+    const { points } = liftHistory(byExercise.get(id) ?? []);
+    return [{ id, name, points }];
+  });
 }
