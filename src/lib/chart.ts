@@ -19,6 +19,11 @@
  *    and hiding it exaggerates every difference above it.
  * 2. GAPS STAY GAPS. `connectNulls: false` everywhere -- see `SERIES`. A line
  *    drawn across a fortnight you did not log is a measurement you did not take.
+ *    This binds OBSERVATIONS. A series that is a model of observations rather
+ *    than the observations themselves has a defined value between them, and
+ *    plotting it there is showing the model, not inventing a reading -- the
+ *    weight trend does this within a couple of half lives and breaks beyond
+ *    them (`MAX_TREND_BRIDGE`). The raw readings it smooths still break.
  * 3. NO HOVER TOOLTIPS. There is no hover on a phone, and a touch tooltip
  *    needing a long-press is a feature nobody discovers. Either the exact
  *    numbers are already on the screen -- labelled on the bar, listed under the

@@ -135,45 +135,120 @@ export function trendSeries(entries: WeighIn[], halfLife = HALF_LIFE_DAYS): Tren
  * drawing a straight line across a fortnight you never stood on a scale and
  * presenting it as a measurement (S61, S79).
  *
- * Both series break together. The trend has no more claim to continuity than
- * the readings do -- it is derived from them -- so it "simply resumes" on the
- * far side of the hole rather than gliding across it.
+ * THE READINGS BREAK. THE TREND DOES NOT, up to a limit.
+ *
+ * Nulling the trend on every unweighed day made it break wherever the readings
+ * did, which is only invisible if you weigh daily -- weigh every third day and
+ * `connectNulls={false}` has a two-day hole to honour between every pair, so
+ * the stroke arrives as a row of disconnected stubs.
+ *
+ * The two series are not the same kind of thing, which is what the earlier
+ * reading of rule 2 missed. A reading is an observation and there either is one
+ * or there is not. The trend is a MODEL of those observations with a stated
+ * half life, and a model has a value between its inputs -- that is what makes
+ * it a model. `trendSeries` already computes the gap-weighted step from one
+ * reading to the next; `bridge` below evaluates that same expression at each
+ * day inside the gap, so the daily curve passes exactly through every value
+ * `trendSeries` produces. It is the identical model sampled more often, not a
+ * second smoothing laid over the first.
  */
+
+/**
+ * How long a hole the trend will cross, in days.
+ *
+ * Rule 2 is still right about long absences, just not about short ones. Inside
+ * a couple of half lives the curve is doing real work -- it is still visibly
+ * moving toward the next reading, and the shape between the two is the model's
+ * own answer. Past that it has closed three quarters of the distance and the
+ * rest of the gap is a flat line sitting on a weight nobody measured, which is
+ * exactly the invented measurement S61 rules out. So the trend breaks there and
+ * resumes on the far side.
+ *
+ * Expressed as a multiple of the half life rather than as a number of days,
+ * because it is a statement about the model: change `HALF_LIFE_DAYS` and this
+ * follows it instead of quietly meaning something else.
+ */
+export const MAX_TREND_BRIDGE = 2;
 export type ChartPoint = {
   date: string;
   weightLb: number | null;
   trendLb: number | null;
 };
 
-export function chartSeries(entries: WeighIn[], fromDate?: string): ChartPoint[] {
-  const series = trendSeries(entries).filter((p) => (fromDate ? p.date >= fromDate : true));
+export function chartSeries(
+  entries: WeighIn[],
+  fromDate?: string,
+  halfLife = HALF_LIFE_DAYS,
+): ChartPoint[] {
+  const series = trendSeries(entries, halfLife).filter((p) => (fromDate ? p.date >= fromDate : true));
   if (series.length === 0) return [];
 
   const byDate = new Map(series.map((p) => [p.date, p]));
-  const out: ChartPoint[] = [];
+  const firstDay = series[0].date;
   const lastDay = series[series.length - 1].date;
+  const trend = bridge(series, halfLife);
+  const out: ChartPoint[] = [];
 
   // ONE Date, mutated in place, rather than `shiftDays` per iteration -- that
   // reparses a string into a fresh Date on every step. A log spanning years
   // walks this loop day by day (S61's whole point, since a chart of "All time"
   // must show its real gaps), so the allocation this avoids is the difference
   // between a fast window toggle and a visibly janky one.
-  const cursor = new Date(`${series[0].date}T12:00:00`);
-  let day = series[0].date;
+  const cursor = new Date(`${firstDay}T12:00:00`);
+  let day = firstDay;
+  let offset = 0;
   while (day <= lastDay) {
-    const point = byDate.get(day);
     out.push({
       date: day,
-      weightLb: point?.weightLb ?? null,
-      trendLb: point?.trendLb ?? null,
+      weightLb: byDate.get(day)?.weightLb ?? null,
+      trendLb: trend[offset] ?? null,
     });
     cursor.setDate(cursor.getDate() + 1);
+    offset += 1;
     day = `${cursor.getFullYear()}-${String(cursor.getMonth() + 1).padStart(2, "0")}-${String(
       cursor.getDate(),
     ).padStart(2, "0")}`;
   }
 
   return out;
+}
+
+/**
+ * The trend at every calendar day, indexed by days from the first reading, or
+ * null on a day the trend does not reach.
+ *
+ * The expression is `trendSeries`'s own, with the elapsed days as the variable
+ * instead of the whole gap:
+ *
+ *     T(d) = T0 + (1 - 0.5 ^ (d / halfLife)) * (W1 - T0)
+ *
+ * At `d = gap` that IS the step `trendSeries` takes, so the curve lands on each
+ * of its points exactly rather than near them. The half life keeps its plain
+ * meaning between readings as well as at them.
+ *
+ * Indexed by offset rather than keyed by date so filling a gap costs no date
+ * parsing -- `daysBetween` runs once per READING here, never once per day.
+ */
+function bridge(series: TrendPoint[], halfLife: number): (number | null)[] {
+  const start = series[0].date;
+  const span = daysBetween(start, series[series.length - 1].date);
+  const days: (number | null)[] = new Array(span + 1).fill(null);
+  for (const p of series) days[daysBetween(start, p.date)] = p.trendLb;
+
+  const limit = halfLife * MAX_TREND_BRIDGE;
+  for (let i = 0; i + 1 < series.length; i += 1) {
+    const from = series[i];
+    const to = series[i + 1];
+    const gap = daysBetween(from.date, to.date);
+    if (gap <= 1 || gap > limit) continue;
+
+    const base = daysBetween(start, from.date);
+    for (let d = 1; d < gap; d += 1) {
+      days[base + d] = from.trendLb + (1 - Math.pow(0.5, d / halfLife)) * (to.weightLb - from.trendLb);
+    }
+  }
+
+  return days;
 }
 
 /**
