@@ -14,9 +14,12 @@ import {
   type MuscleVolume,
 } from "@/lib/training";
 import { Bar, BarChart, LabelList, XAxis, YAxis } from "recharts";
-import { AXIS_TICK, countDomain } from "@/lib/chart";
+import { AXIS_TICK, TOOLTIP, countDomain } from "@/lib/chart";
+import { useFinePointer } from "@/lib/pointer";
 import {
   ChartContainer,
+  ChartTooltip,
+  ChartTooltipContent,
   type ChartConfig,
 } from "@/components/ui/chart";
 import { closeStaleWorkouts, loadTrainingWindow, openWorkoutOn } from "@/app/training-actions";
@@ -501,6 +504,7 @@ function MonthVolume({
   scale: number;
 }) {
   const total = volume.reduce((t, v) => t + v.sets, 0);
+  const hoverable = useFinePointer();
 
   return (
     <Card className={cn(SURFACE, SURFACE_PAD)}>
@@ -588,6 +592,19 @@ function MonthVolume({
                 className="fill-muted-foreground tabular-nums"
               />
             </Bar>
+
+            {/* Rule 3, on a pointer that hovers. The LabelList already puts
+                every figure on screen, so this is a convenience rather than
+                the route to a number -- which is the only footing on which
+                the rule allows one at all. A FILL cursor here, not the line
+                the time series use: the thing under the pointer is a band. */}
+            {hoverable && (
+              <ChartTooltip
+                {...TOOLTIP}
+                cursor={{ fill: "var(--muted)", fillOpacity: 0.4 }}
+                content={<ChartTooltipContent hideIndicator />}
+              />
+            )}
           </BarChart>
         </ChartContainer>
       )}

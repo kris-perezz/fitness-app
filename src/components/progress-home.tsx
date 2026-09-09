@@ -34,8 +34,14 @@ import { Button } from "@/components/ui/button";
 import { Card } from "@/components/ui/card";
 import { ToggleGroup, ToggleGroupItem } from "@/components/ui/toggle-group";
 import { Calendar } from "@/components/ui/calendar";
-import { ChartContainer, type ChartConfig } from "@/components/ui/chart";
-import { CHART_CLASS, SERIES, X_AXIS, Y_AXIS, dayTick } from "@/lib/chart";
+import {
+  ChartContainer,
+  ChartTooltip,
+  ChartTooltipContent,
+  type ChartConfig,
+} from "@/components/ui/chart";
+import { CHART_CLASS, SERIES, TOOLTIP, X_AXIS, Y_AXIS, dayTick } from "@/lib/chart";
+import { useFinePointer } from "@/lib/pointer";
 import { ConfirmAction } from "@/components/confirm-action";
 import { SwipeToDelete } from "@/components/swipe-to-delete";
 import { useSwipe } from "@/lib/swipe";
@@ -787,6 +793,7 @@ function WeightChart({
   // Converted once, here, same as every other weight on this chart (S69).
   const goalWeight = goal.weightLb === null ? null : toDisplay(goal.weightLb, unit);
   const domain = useMemo(() => axisDomain(points, goalWeight), [points, goalWeight]);
+  const hoverable = useFinePointer();
 
   /**
    * A swipe across the chart is a second way to reach the window toggle above
@@ -881,9 +888,37 @@ function WeightChart({
             />
           )}
 
-          {/* No ChartTooltip. There is no hover on a phone, and S79 rules out a
-              touch tooltip nobody discovers -- the exact numbers are in the
-              list underneath, which is the "or nothing" half of that rule. */}
+          {/* Only where a pointer can hover (S79 rule 3). The list underneath
+              is still the route to an exact number, and remains the only one
+              on a phone; this saves a mouse the trip. A day with no reading
+              shows the trend alone -- the formatter drops the null rather
+              than printing a label with nothing beside it. */}
+          {hoverable && (
+            <ChartTooltip
+              {...TOOLTIP}
+              content={
+                <ChartTooltipContent
+                  labelFormatter={(value) => dayTick(String(value))}
+                  formatter={(value, name, item) =>
+                    value == null ? null : (
+                      <>
+                        <div
+                          className="h-2.5 w-2.5 shrink-0 rounded-[2px]"
+                          style={{ background: item.color }}
+                        />
+                        <span className="text-muted-foreground">
+                          {weightConfig[name as keyof typeof weightConfig]?.label ?? name}
+                        </span>
+                        <span className="ml-auto font-mono font-medium tabular-nums text-foreground">
+                          {trim(Number(value))} {unit}
+                        </span>
+                      </>
+                    )
+                  }
+                />
+              }
+            />
+          )}
 
           {/* Readings first so the trend paints over them. Dots with no
               connecting line: the raw series is a scatter of observations, and

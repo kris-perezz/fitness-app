@@ -25,11 +25,13 @@
  *    gap. What keeps that honest is that the readings it smooths are drawn on
  *    the same axes and still break, so a stretch of line with no dots beneath
  *    it already says nothing was measured there. One encoding, not two.
- * 3. NO HOVER TOOLTIPS. There is no hover on a phone, and a touch tooltip
- *    needing a long-press is a feature nobody discovers. Either the exact
- *    numbers are already on the screen -- labelled on the bar, listed under the
- *    chart -- or the chart offers tap-to-inspect. Hover is never the only way to
- *    a number.
+ * 3. HOVER IS NEVER THE ONLY WAY TO A NUMBER. There is no hover on a phone,
+ *    and a touch tooltip needing a long-press is a feature nobody discovers,
+ *    so the exact numbers must already be on the screen -- labelled on the
+ *    bar, listed under the chart -- or reachable by tap. Where a pointer CAN
+ *    hover, a tooltip is the cheapest read there is, so charts add one behind
+ *    `useFinePointer` (`lib/pointer.ts`): the rule asks the question rather
+ *    than assuming every device answers it the phone's way.
  * 4. THIN DATA IS A SENTENCE. Under a chart's own minimum, render an `Empty`
  *    saying what is missing rather than a two-point line dressed up as a trend.
  *    `enoughToPlot` is the check; the minimum belongs to the story.
@@ -117,6 +119,18 @@ export function countDomain(values: number[], step = 10, min = step): [number, n
 export function enoughToPlot(values: (number | null)[], min: number): boolean {
   return values.filter((v) => v !== null && Number.isFinite(v)).length >= min;
 }
+
+/**
+ * Tooltip defaults, for the pointers that have one (rule 3).
+ *
+ * A hairline cursor rather than recharts' default filled band: the band is a
+ * grey block dropped over the data at the moment a reader is trying to see it,
+ * which on a dark theme reads as a selection they did not make.
+ */
+export const TOOLTIP = {
+  cursor: { stroke: "var(--border)", strokeWidth: 1 },
+  isAnimationActive: false,
+} as const;
 
 /** A date-only string as an axis tick: "3 Sep". */
 export function dayTick(date: string): string {
