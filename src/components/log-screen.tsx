@@ -24,8 +24,9 @@ import {
   type IntakeEntry,
   type Meal,
 } from "@/lib/food";
-import { deleteEntry, loadIntakeWindow, saveEntryAsFood } from "@/app/actions";
+import { deleteEntry, loadIntakeWindow, saveEntryAsFood, updateEntryQty } from "@/app/actions";
 import { Button } from "@/components/ui/button";
+import { Input } from "@/components/ui/input";
 import { Card } from "@/components/ui/card";
 import { ButtonGroup } from "@/components/ui/button-group";
 import {
@@ -46,7 +47,6 @@ import { cn } from "@/lib/utils";
 import { statusOf, toneOf, type Metric, type Paint, type Tone } from "@/lib/tone";
 import { AddSheet } from "@/components/add-sheet";
 import { ConfirmAction } from "@/components/confirm-action";
-import { EditFoodSheet } from "@/components/edit-food-sheet";
 import { FoodSourceBadge } from "@/components/food-source-badge";
 import { CalorieRing } from "@/components/calorie-ring";
 import { toast } from "sonner";
@@ -88,7 +88,6 @@ export function LogScreen({
   const router = useRouter();
   const [addingTo, setAddingTo] = useState<Meal | null>(null);
   const [detail, setDetail] = useState<Entry | null>(null);
-  const [editing, setEditing] = useState<Food | null>(null);
 
   // The day is state, not a URL parameter and not a server round trip. Every
   // entry in the window is already here, so an arrow is a filter rather than a
@@ -382,23 +381,12 @@ export function LogScreen({
         food={detail?.food_id ? (foods.find((f) => f.id === detail.food_id) ?? null) : null}
         onClose={() => setDetail(null)}
         onDeleted={(id) => setEntries((prev) => prev.filter((e) => e.id !== id))}
-        onEditFood={(food) => {
-          // Close the entry first: two stacked drawers fight over the scroll
-          // lock, and the detail has nothing left to say once the form is up.
-          setDetail(null);
-          setEditing(food);
-        }}
+        onUpdated={(updated) =>
+          setEntries((prev) => prev.map((e) => (e.id === updated.id ? updated : e)))
+        }
         // S99. The new row has to reach the catalog this screen was rendered
         // with, or the food you just saved is missing from the next search.
         onSavedAsFood={() => router.refresh()}
-      />
-      <EditFoodSheet
-        food={editing}
-        onOpenChange={(open) => !open && setEditing(null)}
-        // The corrected row (or its fork) has to reach the catalog this screen
-        // was rendered with, and a fork is a new row entirely -- a refresh is
-        // the honest way to get both.
-        onSaved={() => router.refresh()}
       />
     </>
   );
@@ -484,7 +472,7 @@ function EntryDetail({
   food,
   onClose,
   onDeleted,
-  onEditFood,
+  onUpdated,
   onSavedAsFood,
 }: {
   entry: Entry | null;
@@ -492,7 +480,7 @@ function EntryDetail({
   food: Food | null;
   onClose: () => void;
   onDeleted: (id: string) => void;
-  onEditFood: (food: Food) => void;
+  onUpdated: (entry: Entry) => void;
   onSavedAsFood: () => void;
 }) {
   // One transition per action, not one for the sheet: a shared flag makes the
@@ -500,6 +488,37 @@ function EntryDetail({
   const [saving, startSave] = useTransition();
   const [deleting, startDelete] = useTransition();
   const pending = saving || deleting;
+  // The amount being typed, or null when the sheet is just reading. Keyed by
+  // the entry so opening a second one never inherits the first one's edit.
+  const [amount, setAmount] = useState<string | null>(null);
+  const [editingId, setEditingId] = useState<string | null>(null);
+  if (entry && entry.id !== editingId) {
+    setEditingId(entry.id);
+    setAmount(null);
+  }
+
+  const typed = Number(amount);
+  // What the row would become. Scaling the entry rather than re-reading the
+  // catalog is what keeps a one-off, an estimate and a corrected food all
+  // editable by the same control.
+  const factor =
+    entry && amount !== null && Number.isFinite(typed) && typed > 0 && entry.qty > 0
+      ? typed / entry.qty
+      : null;
+  const shown = factor ?? 1;
+
+  function save() {
+    if (!entry || factor === null) return;
+    startSave(async () => {
+      const res = await updateEntryQty(entry.id, typed);
+      if (res.error || !res.entry) {
+        toast.error(res.error ?? "Could not change that.");
+        return;
+      }
+      onUpdated(res.entry);
+      onClose();
+    });
+  }
 
   return (
     <Drawer open={entry !== null} onOpenChange={(o) => !o && onClose()}>
@@ -517,9 +536,32 @@ function EntryDetail({
                 {food && <FoodSourceBadge source={food.source} />}
               </div>
               <p className="mt-0.5 text-sm text-muted-foreground">
-                {entry.qty} {entry.unit} · {entry.meal}
+                {/* The amount moves into the field while it is being changed,
+                    so the old figure is not sitting beside the new one. */}
+                {amount === null && `${entry.qty} ${entry.unit} · `}
+                {entry.meal}
                 {entry.estimate && " · estimate"}
               </p>
+
+              {/* S7's other half. What is usually wrong with an entry is the
+                  amount, not the food: two cups where one was logged. Changing
+                  it scales this entry alone and leaves the catalog untouched. */}
+              {amount !== null && (
+                <div className="mt-4 flex items-center gap-2">
+                  <Input
+                    autoFocus
+                    type="number"
+                    inputMode="decimal"
+                    enterKeyHint="done"
+                    aria-label={`Amount in ${entry.unit}`}
+                    value={amount}
+                    onChange={(e) => setAmount(e.target.value)}
+                    onKeyDown={(e) => e.key === "Enter" && save()}
+                    className="h-11 w-28 text-base tabular-nums"
+                  />
+                  <span className="text-sm text-muted-foreground">{entry.unit}</span>
+                </div>
+              )}
 
               {/* S100. The longer sentence the name was titled from, kept out
                   of the list and shown only here, where there is room to read
@@ -534,12 +576,12 @@ function EntryDetail({
                   numbers. */}
               <dl className="mt-6 grid grid-cols-3 gap-y-5 border-t border-border pt-5">
                 {[
-                  ["Calories", withCommas(entry.kcal)],
-                  ["Protein", `${round(entry.protein_g)}g`],
-                  ["Carbs", `${round(entry.carb_g)}g`],
-                  ["Fat", `${round(entry.fat_g)}g`],
-                  ["Fibre", `${round(entry.fiber_g)}g`],
-                  ["Sodium", `${withCommas(entry.sodium_mg)}mg`],
+                  ["Calories", withCommas(entry.kcal * shown)],
+                  ["Protein", `${round(entry.protein_g * shown)}g`],
+                  ["Carbs", `${round(entry.carb_g * shown)}g`],
+                  ["Fat", `${round(entry.fat_g * shown)}g`],
+                  ["Fibre", `${round(entry.fiber_g * shown)}g`],
+                  ["Sodium", `${withCommas(entry.sodium_mg * shown)}mg`],
                 ].map(([label, value]) => (
                   <div key={label}>
                     <dt className="text-xs text-muted-foreground">{label}</dt>
@@ -556,14 +598,22 @@ function EntryDetail({
                   under a thumb should not need a second menu inside it.
                   Offered only when there is a catalog row to correct. */}
               <ButtonGroup className="w-full">
-                {food && (
+                {amount === null ? (
                   <Button
                     variant="outline"
                     className="h-11 flex-1"
                     disabled={pending}
-                    onClick={() => onEditFood(food)}
+                    onClick={() => setAmount(String(entry.qty))}
                   >
-                    <Pencil className="size-4" /> Edit food
+                    <Pencil className="size-4" /> Edit amount
+                  </Button>
+                ) : (
+                  <Button
+                    className="h-11 flex-1"
+                    disabled={pending || factor === null}
+                    onClick={save}
+                  >
+                    {saving ? "Saving" : "Save"}
                   </Button>
                 )}
                 {/* S99. The other half of the same slot: an entry with a

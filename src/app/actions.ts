@@ -16,7 +16,7 @@ import {
   type Macros,
   type Meal,
 } from "@/lib/food";
-import type { Micros } from "@/lib/micros";
+import { scaleMicros, toMicros, type Micros } from "@/lib/micros";
 import { toDayGoal, type DayGoal } from "@/lib/goals";
 import { serverToday } from "@/lib/server-time";
 
@@ -224,6 +224,56 @@ export async function loadIntakeDaysWindow(
     dayGoals: goalsResult.error ? [] : (goalsResult.data ?? []).map(toDayGoal),
     error: null,
   };
+}
+
+/**
+ * S7's other half: correcting WHAT WAS EATEN rather than what the food is.
+ *
+ * Everything on the row scales by the ratio of the new amount to the old one --
+ * macros, micros and sugar together -- so the entry stays the portion it always
+ * was, at a different size. Nothing here reads the catalog: an entry keeps the
+ * numbers it was logged with (S38), and a one-off with no food behind it can be
+ * corrected the same way as anything else.
+ */
+export async function updateEntryQty(
+  id: string,
+  qty: number,
+): Promise<{ entry: IntakeEntry | null; error: string | null }> {
+  if (!Number.isFinite(qty) || qty <= 0) return { entry: null, error: "Enter an amount" };
+
+  const supabase = await createClient();
+  const { data: current, error: readError } = await supabase
+    .from("intake_entries")
+    .select("qty, kcal, protein_g, fat_g, carb_g, fiber_g, sodium_mg, sugar_g, micros")
+    .eq("id", id)
+    .single();
+  if (readError || !current) return { entry: null, error: readError?.message ?? "Entry not found" };
+
+  // An entry stored with no amount has no ratio to scale by, and dividing by it
+  // would write NaN across the row.
+  if (!current.qty || current.qty <= 0) return { entry: null, error: "Could not change that." };
+  const factor = qty / current.qty;
+
+  const { data, error } = await supabase
+    .from("intake_entries")
+    .update({
+      qty,
+      kcal: current.kcal * factor,
+      protein_g: current.protein_g * factor,
+      fat_g: current.fat_g * factor,
+      carb_g: current.carb_g * factor,
+      fiber_g: current.fiber_g * factor,
+      sodium_mg: current.sodium_mg * factor,
+      sugar_g: current.sugar_g === null ? null : current.sugar_g * factor,
+      micros: scaleMicros(toMicros(current.micros), factor),
+    })
+    .eq("id", id)
+    .select(ENTRY_COLUMNS)
+    .single();
+  if (error) return { entry: null, error: error.message };
+
+  revalidatePath("/log");
+  return { entry: data as unknown as IntakeEntry, error: null };
 }
 
 export async function deleteEntry(id: string) {
