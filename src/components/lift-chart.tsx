@@ -2,9 +2,15 @@
 
 import { CartesianGrid, Line, LineChart, XAxis, YAxis } from "recharts";
 
-import { CHART_CLASS, SERIES, X_AXIS, Y_AXIS, dayTick, measureDomain } from "@/lib/chart";
+import { CHART_CLASS, SERIES, TOOLTIP, X_AXIS, Y_AXIS, dayTick, measureDomain } from "@/lib/chart";
+import { useFinePointer } from "@/lib/pointer";
 import { MIN_LIFT_SESSIONS, hasRepBand, type LiftPoint } from "@/lib/training";
-import { ChartContainer, type ChartConfig } from "@/components/ui/chart";
+import {
+  ChartContainer,
+  ChartTooltip,
+  ChartTooltipContent,
+  type ChartConfig,
+} from "@/components/ui/chart";
 
 /**
  * One lift's estimated max over time (S80), shared by the exercise screen and
@@ -21,6 +27,7 @@ const liftConfig = {
 
 export function LiftChart({ points, compact = false }: { points: LiftPoint[]; compact?: boolean }) {
   const showRepBand = hasRepBand(points);
+  const hoverable = useFinePointer();
   const domain = measureDomain(
     points.flatMap((p) => [p.e1rm, p.repBand]),
     // Pounds, so a pound of air either side is invisible. Five gives the line
@@ -46,6 +53,14 @@ export function LiftChart({ points, compact = false }: { points: LiftPoint[]; co
 
         <Line
           {...SERIES}
+          // CONNECTED ACROSS THE HOLES, unlike the raw series on the weight
+          // chart and for the same reason the trend there is. A null here is a
+          // session with no set in this rep band -- not a session where the
+          // lift got weaker, and not a day that did not happen. Strength is the
+          // hidden thing each session measures once, so the line between two
+          // estimates is the model, and the dots below say which days were
+          // actually sessions.
+          connectNulls
           dataKey="e1rm"
           type="monotone"
           stroke="var(--color-e1rm)"
@@ -54,7 +69,12 @@ export function LiftChart({ points, compact = false }: { points: LiftPoint[]; co
           // Dots ON, unlike the weight chart: a lift has one point per session
           // rather than one per day, so the points are sparse enough to mark and
           // a reader wants to know which days were sessions at all.
-          dot={compact ? false : { r: 2, fill: "var(--color-e1rm)", strokeWidth: 0 }}
+          //
+          // The compact version keeps them, smaller. It used to drop them to
+          // save ink, which was fine while the line broke at every hole and
+          // stopped being fine when it started crossing them -- the dots are
+          // now the only thing saying which points were measured.
+          dot={{ r: compact ? 1.5 : 2, fill: "var(--color-e1rm)", strokeWidth: 0 }}
         />
 
         {/* A SECOND SERIES, never merged into the first. S33 keeps the bands
@@ -64,12 +84,43 @@ export function LiftChart({ points, compact = false }: { points: LiftPoint[]; co
         {showRepBand && (
           <Line
             {...SERIES}
+            connectNulls
             dataKey="repBand"
             type="monotone"
             stroke="var(--color-repBand)"
             strokeWidth={1.5}
             strokeDasharray="4 3"
-            dot={compact ? false : { r: 1.6, fill: "var(--color-repBand)", strokeWidth: 0 }}
+            dot={{ r: compact ? 1.2 : 1.6, fill: "var(--color-repBand)", strokeWidth: 0 }}
+          />
+        )}
+
+        {/* Rule 3 asks whether the pointer can hover, and this one can. The
+            exercise screen lists every session underneath, so on a phone the
+            numbers were never behind a gesture. */}
+        {hoverable && (
+          <ChartTooltip
+            {...TOOLTIP}
+            content={
+              <ChartTooltipContent
+                labelFormatter={(value) => dayTick(String(value))}
+                formatter={(value, name, item) =>
+                  value == null ? null : (
+                    <>
+                      <div
+                        className="h-2.5 w-2.5 shrink-0 rounded-[2px]"
+                        style={{ background: item.color }}
+                      />
+                      <span className="text-muted-foreground">
+                        {liftConfig[name as keyof typeof liftConfig]?.label ?? name}
+                      </span>
+                      <span className="ml-auto font-mono font-medium tabular-nums text-foreground">
+                        {Number(value)} lb
+                      </span>
+                    </>
+                  )
+                }
+              />
+            }
           />
         )}
       </LineChart>

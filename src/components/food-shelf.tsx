@@ -55,7 +55,14 @@ export function FoodShelf({ foods }: { foods: Food[] }) {
   const [editing, setEditing] = useState<Food | null>(null);
   const [, startSave] = useTransition();
 
-  const results = useMemo(() => searchFoods(foods, query), [foods, query]);
+  // Unfiltered, the shelf is a LIST rather than a search: `searchNamed` scores
+  // nothing against an empty query and returns nothing, which is right where a
+  // sheet should stay quiet until you type and wrong here, where the whole
+  // point is seeing what you have saved.
+  const results = useMemo(
+    () => (query.trim() === "" ? foods : searchFoods(foods, query)),
+    [foods, query],
+  );
   const mine = useMemo(() => new Set(foods.map((f) => f.id)), [foods]);
 
   function open() {
@@ -149,9 +156,13 @@ export function FoodShelf({ foods }: { foods: Food[] }) {
 
             <Card className={cn(SURFACE, "overflow-hidden")}>
               {results.length === 0 && (
-                <p className="px-3.5 py-6 text-center text-sm text-muted-foreground">
-                  No match for &ldquo;{query}&rdquo;.
-                </p>
+                <Empty className="py-6">
+                  <EmptyHeader>
+                    <EmptyTitle className="text-sm font-normal text-muted-foreground">
+                      No match for &ldquo;{query}&rdquo;.
+                    </EmptyTitle>
+                  </EmptyHeader>
+                </Empty>
               )}
               <ul className="divide-y divide-border">
                 {results.map((f) => (
@@ -203,6 +214,10 @@ export function FoodShelf({ foods }: { foods: Food[] }) {
         food={editing}
         onOpenChange={(isOpen) => !isOpen && setEditing(null)}
         onSaved={() => {
+          setEditing(null);
+          router.refresh();
+        }}
+        onDeleted={() => {
           setEditing(null);
           router.refresh();
         }}

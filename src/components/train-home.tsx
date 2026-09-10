@@ -14,9 +14,12 @@ import {
   type MuscleVolume,
 } from "@/lib/training";
 import { Bar, BarChart, LabelList, XAxis, YAxis } from "recharts";
-import { AXIS_TICK, countDomain } from "@/lib/chart";
+import { AXIS_TICK, TOOLTIP, countDomain } from "@/lib/chart";
+import { useFinePointer } from "@/lib/pointer";
 import {
   ChartContainer,
+  ChartTooltip,
+  ChartTooltipContent,
   type ChartConfig,
 } from "@/components/ui/chart";
 import { closeStaleWorkouts, loadTrainingWindow, openWorkoutOn } from "@/app/training-actions";
@@ -40,7 +43,7 @@ import {
 } from "@/components/ui/empty";
 import { toast } from "sonner";
 import { cn } from "@/lib/utils";
-import { PAGE, SURFACE, SURFACE_PAD } from "@/lib/ui";
+import { PAGE_SPLIT, SURFACE, SURFACE_PAD } from "@/lib/ui";
 import { useSwipe } from "@/lib/swipe";
 
 /** S32. One day's credit to one muscle, straight off the muscle_volume view. */
@@ -212,12 +215,13 @@ export function TrainHome({
 
   return (
     <>
-      <main className={PAGE}>
+      <main className={PAGE_SPLIT}>
         {/* The primary action sits ABOVE the calendar and the list: the one
             thing you came here to do should not be reachable only by scrolling
             past everything you have already done. Resuming beats browsing, so an
-            open session takes the slot when there is one. */}
-        <header className="pt-1">
+            open session takes the slot when there is one. Spans both desktop
+            columns -- it belongs to the screen, not to either side of it. */}
+        <header className="pt-1 lg:col-span-2">
           {openSession ? (
             <Button className="h-12 w-full text-base" asChild>
               {/* Full prefetch, not the default. A dynamic route prefetched
@@ -236,6 +240,19 @@ export function TrainHome({
           )}
         </header>
 
+        {/* THE VOLUME COLUMN. Wide on desktop (PAGE_SPLIT's `1fr`): the bar
+            chart is the one block on this screen that actually uses extra
+            width, the same role the trend chart plays on the progress tab. */}
+        <div className="space-y-2">
+        <MonthVolume volume={monthVolume} month={month} scale={volumeScale} />
+        </div>
+
+        {/* THE CALENDAR COLUMN. Fixed-width on desktop (PAGE_SPLIT's 22rem),
+            same call as the progress tab's calendar: a month grid does not
+            get more useful by getting wider, and the session list belongs
+            beside it rather than under the chart, so both fit one screen's
+            height without a scroll on most months. */}
+        <div className="space-y-2">
         <Card className={cn(SURFACE, "items-center px-1 py-2", "touch-pan-y")} {...monthSwipe}>
           <Calendar
             month={toDate(`${month}-01`)}
@@ -288,8 +305,6 @@ export function TrainHome({
           />
         </Card>
 
-        <MonthVolume volume={monthVolume} month={month} scale={volumeScale} />
-
         {monthSessions.length === 0 && (
           <Empty className="py-12">
             <EmptyHeader>
@@ -331,7 +346,7 @@ export function TrainHome({
             ))}
           </ul>
         )}
-
+        </div>
       </main>
 
       <PickDay open={adding} onOpenChange={setAdding} today={today} />
@@ -489,6 +504,7 @@ function MonthVolume({
   scale: number;
 }) {
   const total = volume.reduce((t, v) => t + v.sets, 0);
+  const hoverable = useFinePointer();
 
   return (
     <Card className={cn(SURFACE, SURFACE_PAD)}>
@@ -576,6 +592,19 @@ function MonthVolume({
                 className="fill-muted-foreground tabular-nums"
               />
             </Bar>
+
+            {/* Rule 3, on a pointer that hovers. The LabelList already puts
+                every figure on screen, so this is a convenience rather than
+                the route to a number -- which is the only footing on which
+                the rule allows one at all. A FILL cursor here, not the line
+                the time series use: the thing under the pointer is a band. */}
+            {hoverable && (
+              <ChartTooltip
+                {...TOOLTIP}
+                cursor={{ fill: "var(--muted)", fillOpacity: 0.4 }}
+                content={<ChartTooltipContent hideIndicator />}
+              />
+            )}
           </BarChart>
         </ChartContainer>
       )}

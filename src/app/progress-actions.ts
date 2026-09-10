@@ -9,8 +9,8 @@
 
 import { revalidatePath } from "next/cache";
 import { createClient } from "@/lib/supabase/server";
-import { todayDate } from "@/lib/food";
 import { toWeighIn, type WeighIn } from "@/lib/weight";
+import { serverToday } from "@/lib/server-time";
 
 /**
  * Record or correct the weigh-in for a day (S54, S55, S56).
@@ -41,7 +41,7 @@ export async function saveWeighIn(
   // A weight you have not stood for is not a measurement. The picker does not
   // offer future dates (S55); this is what makes that a rule rather than a
   // convention, exactly as it is on the training side.
-  if (date > todayDate()) return { error: "That day has not happened yet" };
+  if (date > (await serverToday())) return { error: "That day has not happened yet" };
 
   // Matches the column's own check. A zero is a mistyped entry every time.
   if (!Number.isFinite(weightLb) || weightLb <= 0) return { error: "Enter a weight" };
@@ -126,28 +126,35 @@ function lastDayOfMonth(month: string): string {
 }
 
 /**
- * Pin or unpin the one lift shown on the progress tab (S81).
+ * Pin a lift to the progress tab, or unpin it (S81, 0033).
  *
- * Upsert rather than update: a user who has never opened Goals has no settings
- * row yet, and pinning a lift should not be the one action that fails because
- * of that.
- *
- * `null` unpins, and is the normal state rather than an error -- Progress omits
- * the block entirely when nothing is pinned.
+ * A row per pin rather than a column, so `pinned` is a set and the toggle is
+ * an insert or a delete rather than a read-modify-write. The composite primary
+ * key means pinning something already pinned is not an error worth reporting,
+ * which is why the insert ignores a duplicate instead of failing.
  */
-export async function pinExercise(exerciseId: string | null): Promise<{ error: string | null }> {
+export async function pinExercise(
+  exerciseId: string,
+  pinned: boolean,
+): Promise<{ error: string | null }> {
   const supabase = await createClient();
   const {
     data: { user },
   } = await supabase.auth.getUser();
   if (!user) return { error: "Not signed in" };
 
-  const { error } = await supabase
-    .from("nutrition_settings")
-    .upsert({ user_id: user.id, pinned_exercise_id: exerciseId });
+  const { error } = pinned
+    ? await supabase
+        .from("pinned_exercises")
+        .upsert({ user_id: user.id, exercise_id: exerciseId }, { onConflict: "user_id,exercise_id" })
+    : await supabase
+        .from("pinned_exercises")
+        .delete()
+        .eq("user_id", user.id)
+        .eq("exercise_id", exerciseId);
   if (error) return { error: error.message };
 
   revalidatePath("/progress");
-  revalidatePath(`/exercise/${exerciseId ?? ""}`);
+  revalidatePath(`/exercise/${exerciseId}`);
   return { error: null };
 }

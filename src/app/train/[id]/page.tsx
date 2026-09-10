@@ -1,16 +1,17 @@
 import { notFound } from "next/navigation";
 import { createClient } from "@/lib/supabase/server";
-import { todayDate } from "@/lib/food";
-import { NO_BESTS } from "@/lib/training";
+import { NO_BESTS, NO_HISTORY } from "@/lib/training";
 import type {
   Bests,
   Exercise,
   LastSession,
+  SlotHistory,
   Workout,
   WorkoutSet,
   WorkoutSlot,
 } from "@/lib/training";
 import { TrainScreen } from "@/components/train-screen";
+import { serverToday } from "@/lib/server-time";
 
 export const dynamic = "force-dynamic";
 
@@ -58,16 +59,28 @@ export default async function WorkoutPage({ params }: PageProps<"/train/[id]">) 
     sets: ((r.sets ?? []) as WorkoutSet[]).sort((a, b) => a.set_index - b.set_index),
   }));
 
-  const history = await historyFor(supabase, workout, slots);
+  /**
+   * Deliberately NOT awaited. The two history RPCs need the slots' exercise
+   * ids, and the sets query needs what those RPCs return, so this is three
+   * Supabase round trips in sequence -- and awaiting it here put all three in
+   * front of the first byte, which is most of what you sit through behind the
+   * skeleton on a cold render.
+   *
+   * None of it gates logging a set. The sets already in the session come from
+   * `slots`, which is in the wave above; last time's numbers and the all-time
+   * bests are what the screen fills in around them. So the promise is handed
+   * to the client and streams in behind the page.
+   */
+  const history = historyFor(supabase, workout, slots);
+  const today = await serverToday();
 
   return (
     <TrainScreen
       workout={workout}
       slots={slots}
-      lastSessions={history.lastSessions}
-      bests={history.bests}
+      history={history}
       exercises={(exercises ?? []) as Exercise[]}
-      today={todayDate()}
+      today={today}
       recentExerciseIds={recent}
     />
   );
@@ -97,9 +110,9 @@ async function historyFor(
   supabase: Awaited<ReturnType<typeof createClient>>,
   workout: Workout,
   slots: WorkoutSlot[],
-): Promise<{ lastSessions: Record<string, LastSession>; bests: Record<string, Bests> }> {
+): Promise<SlotHistory> {
   const exerciseIds = [...new Set(slots.map((s) => s.exercise_id))];
-  if (exerciseIds.length === 0) return { lastSessions: {}, bests: {} };
+  if (exerciseIds.length === 0) return NO_HISTORY;
 
   const args = {
     p_exercise_ids: exerciseIds,

@@ -335,6 +335,22 @@ export function prMessage(kind: PrKind, exerciseName: string): string {
 export type LastSession = { sets: WorkoutSet[]; date: string };
 
 /**
+ * Everything a session screen knows about what came before, keyed by SLOT --
+ * so the same lift twice in one session gets the same history in both places
+ * without the caller re-mapping it.
+ *
+ * Fetched as a unit because it is displayed as a unit: the suggestion a set
+ * form opens with and the bar a PR is measured against are the same question
+ * asked twice, and neither of them gates logging a set.
+ */
+export type SlotHistory = {
+  lastSessions: Record<string, LastSession>;
+  bests: Record<string, Bests>;
+};
+
+export const NO_HISTORY: SlotHistory = { lastSessions: {}, bests: {} };
+
+/**
  * The set to open with: the heaviest one, ties broken by more reps (S45).
  *
  * No estimated 1RM anywhere in this path, and that is deliberate. Converting a

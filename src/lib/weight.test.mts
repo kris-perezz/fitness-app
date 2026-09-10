@@ -199,12 +199,52 @@ test("the chart series fills calendar days and marks the holes as absent", () =>
     points.map((p) => p.weightLb),
     [200, null, null, 199],
   );
-  // The trend breaks with the readings. It is derived from them and has no
-  // more claim to continuity, so it must not glide across the hole (S61).
-  assert.deepEqual(
-    points.map((p) => p.trendLb === null),
-    [false, true, true, false],
-  );
+  // The READINGS break. The trend is a model of them and has a value between
+  // them, so it crosses a hole this short rather than arriving as stubs.
+  assert.ok(points.every((p) => p.trendLb !== null));
+});
+
+test("the bridged trend lands exactly on the trend of every reading", () => {
+  const entries = [
+    { date: "2026-08-01", weightLb: 200, note: null },
+    { date: "2026-08-04", weightLb: 199, note: null },
+    { date: "2026-08-09", weightLb: 197.5, note: null },
+  ];
+  const points = chartSeries(entries);
+  // Sampling the model more often must not move it: every day that has a
+  // reading carries the same trend the per-entry series computed for it.
+  for (const p of trendSeries(entries)) {
+    const day = points.find((q) => q.date === p.date);
+    assert.equal(day?.trendLb, p.trendLb, p.date);
+  }
+});
+
+test("the bridged trend moves monotonically toward the next reading", () => {
+  const points = chartSeries([
+    { date: "2026-08-01", weightLb: 200, note: null },
+    { date: "2026-08-06", weightLb: 195, note: null },
+  ]);
+  const values = points.map((p) => p.trendLb as number);
+  for (let i = 1; i < values.length; i += 1) {
+    assert.ok(values[i] < values[i - 1], `day ${i} went the wrong way`);
+  }
+});
+
+test("the trend crosses even a long absence, and crosses it straight", () => {
+  const points = chartSeries([
+    { date: "2026-08-01", weightLb: 200, note: null },
+    { date: shiftDays("2026-08-01", 90), weightLb: 195, note: null },
+  ]);
+  assert.ok(points.every((p) => p.trendLb !== null), "the trend has no holes");
+
+  // A random walk pinned at both ends has a straight line for its expected
+  // path, so every step across the gap is the same size. The filter's own
+  // shape would ease most of the way in the first week and then sit flat.
+  const values = points.map((p) => p.trendLb as number);
+  const first = values[1] - values[0];
+  for (let i = 1; i < values.length; i += 1) {
+    assert.ok(Math.abs(values[i] - values[i - 1] - first) < 1e-9, `step ${i} was uneven`);
+  }
 });
 
 test("a fortnight unweighed is a fortnight of gaps, not a straight line", () => {

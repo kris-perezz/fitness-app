@@ -135,9 +135,23 @@ export function trendSeries(entries: WeighIn[], halfLife = HALF_LIFE_DAYS): Tren
  * drawing a straight line across a fortnight you never stood on a scale and
  * presenting it as a measurement (S61, S79).
  *
- * Both series break together. The trend has no more claim to continuity than
- * the readings do -- it is derived from them -- so it "simply resumes" on the
- * far side of the hole rather than gliding across it.
+ * THE READINGS BREAK. THE TREND DOES NOT.
+ *
+ * Nulling the trend on every unweighed day made it break wherever the readings
+ * did, which is only invisible if you weigh daily -- weigh every third day and
+ * `connectNulls={false}` has a two-day hole to honour between every pair, so
+ * the stroke arrives as a row of disconnected stubs.
+ *
+ * The two series are not the same kind of thing, which is what the earlier
+ * reading of rule 2 missed. A reading is an observation and there either is one
+ * or there is not. The trend is a MODEL of those observations, and a model has
+ * a value between its inputs -- that is what makes it a model.
+ *
+ * The gap is not left to say so on its own, because it does not have to: the
+ * readings are drawn as dots on the same axes, so a stretch of line with no
+ * dots beneath it already reads as "nothing was measured here". A second
+ * encoding of the same fact -- a break, a dash, a widening band -- costs a
+ * legend and buys nothing the chart was not already showing.
  */
 export type ChartPoint = {
   date: string;
@@ -145,27 +159,90 @@ export type ChartPoint = {
   trendLb: number | null;
 };
 
-export function chartSeries(entries: WeighIn[], fromDate?: string): ChartPoint[] {
-  const series = trendSeries(entries).filter((p) => (fromDate ? p.date >= fromDate : true));
+export function chartSeries(
+  entries: WeighIn[],
+  fromDate?: string,
+  halfLife = HALF_LIFE_DAYS,
+): ChartPoint[] {
+  const series = trendSeries(entries, halfLife).filter((p) => (fromDate ? p.date >= fromDate : true));
   if (series.length === 0) return [];
 
   const byDate = new Map(series.map((p) => [p.date, p]));
+  const firstDay = series[0].date;
+  const lastDay = series[series.length - 1].date;
+  const trend = bridge(series);
   const out: ChartPoint[] = [];
 
-  for (
-    let day = series[0].date;
-    day <= series[series.length - 1].date;
-    day = shiftDays(day, 1)
-  ) {
-    const point = byDate.get(day);
+  // ONE Date, mutated in place, rather than `shiftDays` per iteration -- that
+  // reparses a string into a fresh Date on every step. A log spanning years
+  // walks this loop day by day (S61's whole point, since a chart of "All time"
+  // must show its real gaps), so the allocation this avoids is the difference
+  // between a fast window toggle and a visibly janky one.
+  const cursor = new Date(`${firstDay}T12:00:00`);
+  let day = firstDay;
+  let offset = 0;
+  while (day <= lastDay) {
     out.push({
       date: day,
-      weightLb: point?.weightLb ?? null,
-      trendLb: point?.trendLb ?? null,
+      weightLb: byDate.get(day)?.weightLb ?? null,
+      trendLb: trend[offset] ?? null,
     });
+    cursor.setDate(cursor.getDate() + 1);
+    offset += 1;
+    day = `${cursor.getFullYear()}-${String(cursor.getMonth() + 1).padStart(2, "0")}-${String(
+      cursor.getDate(),
+    ).padStart(2, "0")}`;
   }
 
   return out;
+}
+
+/**
+ * The trend at every calendar day, indexed by days from the first reading.
+ *
+ * STRAIGHT BETWEEN THE TWO TREND VALUES, which is not the obvious choice and is
+ * the defensible one.
+ *
+ * The obvious choice is to run `trendSeries`'s own step day by day across the
+ * gap, so the curve eases toward the next reading on the half life. That is the
+ * FILTER -- an estimate built from the past alone, which is all you have while
+ * the gap is still running. On a chart of history it is the wrong estimator:
+ * the reading on the far side has already happened, and a line drawn today may
+ * use it. Running the filter shape anyway closes most of the distance in the
+ * first week and then holds flat for the rest of the gap, drawing a fortnight
+ * of plateau at a weight that was not measured until the end of it.
+ *
+ * With both ends known, the weight in between is a random walk pinned at two
+ * points -- a Brownian bridge, whose expected path is the straight line joining
+ * them. So the interpolation is linear, and it is linear for a reason rather
+ * than for want of anything better. (The same reason a Kalman SMOOTHER differs
+ * from the filter: a second pass backwards revises every past estimate with
+ * what has been measured since.)
+ *
+ * It still lands on `trendSeries`'s value at every reading, so sampling the
+ * model more often never moves it.
+ *
+ * Indexed by offset rather than keyed by date so filling a gap costs no date
+ * parsing -- `daysBetween` runs once per READING here, never once per day.
+ */
+function bridge(series: TrendPoint[]): number[] {
+  const start = series[0].date;
+  const span = daysBetween(start, series[series.length - 1].date);
+  const days: number[] = new Array(span + 1).fill(0);
+  for (const p of series) days[daysBetween(start, p.date)] = p.trendLb;
+
+  for (let i = 0; i + 1 < series.length; i += 1) {
+    const from = series[i];
+    const to = series[i + 1];
+    const gap = daysBetween(from.date, to.date);
+    if (gap <= 1) continue;
+
+    const base = daysBetween(start, from.date);
+    const perDay = (to.trendLb - from.trendLb) / gap;
+    for (let d = 1; d < gap; d += 1) days[base + d] = from.trendLb + perDay * d;
+  }
+
+  return days;
 }
 
 /**

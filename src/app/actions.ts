@@ -7,10 +7,9 @@ import { fetchOffProduct, isBarcode, searchOff, type OffSearchResult } from "@/l
 import { fetchCnfFood, searchCnf, type CnfSearchResult } from "@/lib/cnf";
 import { extractLabel, type LabelDraft, type LabelResult } from "@/lib/label";
 import { estimateFromDescription, type DescribeResult } from "@/lib/describe";
-import { generatedFood, type RecipeDetails, type RecipeLine } from "@/lib/recipe";
+import { generatedFood, recipeFoodId, type RecipeDetails, type RecipeLine } from "@/lib/recipe";
 import {
   sourceRank,
-  todayDate,
   type Food,
   type FoodSource,
   type IntakeEntry,
@@ -19,6 +18,7 @@ import {
 } from "@/lib/food";
 import type { Micros } from "@/lib/micros";
 import { toDayGoal, type DayGoal } from "@/lib/goals";
+import { serverToday } from "@/lib/server-time";
 
 export type NewEntry = Macros & {
   /**
@@ -281,7 +281,7 @@ export async function saveGoals(goals: Goals) {
   const { error: dayError } = await supabase.from("day_goals").upsert(
     {
       user_id: user.id,
-      log_date: todayDate(),
+      log_date: await serverToday(),
       calorie_goal: goals.calorie_goal,
       protein_goal_g: goals.protein_goal_g,
       carb_goal_g: goals.carb_goal_g,
@@ -779,6 +779,69 @@ export async function updateFood(
 
   revalidatePath("/log");
   return { food: inserted as Food, error: null };
+}
+
+/**
+ * Take a food off your shelf (0032).
+ *
+ * Past portions are not disturbed: an entry carries its own name, macros and
+ * micros from the moment it was written, so the row going away costs it the
+ * pointer and nothing else (S7/S19). What it does cost is every FUTURE log --
+ * searching for the food will no longer find it -- which is the point.
+ */
+export async function deleteFood(id: string): Promise<{ error: string | null }> {
+  const supabase = await createClient();
+  const {
+    data: { user },
+  } = await supabase.auth.getUser();
+  if (!user) return { error: "Not signed in" };
+
+  const { data, error } = await supabase
+    .from("foods")
+    .select("id, source, created_by")
+    .eq("id", id)
+    .maybeSingle();
+  if (error) return { error: error.message };
+  if (!data) return { error: "Food not found" };
+
+  const food = data as { id: string; source: FoodSource; created_by: string | null };
+
+  // The shared half of the catalog belongs to everybody (0029). RLS refuses
+  // this too; saying so here means a readable message instead of a delete that
+  // reports success having matched no rows.
+  if (food.created_by !== user.id) {
+    return { error: "That food is not yours to delete." };
+  }
+
+  // A recipe's row is generated output, and the next save of the recipe would
+  // put it straight back (S19). Once the recipe is gone the row is an orphan
+  // nothing will ever regenerate, and clearing it out is exactly what the shelf
+  // is for -- so the guard asks whether the recipe still exists rather than
+  // refusing every `recipe` row the way `updateFood` does.
+  if (food.source === "recipe") {
+    const { data: recipes, error: recipeError } = await supabase
+      .from("recipes")
+      .select("id")
+      .eq("user_id", user.id);
+    if (recipeError) return { error: recipeError.message };
+    if ((recipes ?? []).some((r) => recipeFoodId(r.id as string) === food.id)) {
+      return { error: "Delete the recipe instead -- this row is its output." };
+    }
+  }
+
+  const { error: deleteError } = await supabase.from("foods").delete().eq("id", id);
+  if (deleteError) {
+    // `recipe_ingredients.food_id` stays RESTRICT (0032): a recipe missing an
+    // ingredient has no macros, so the ingredient has to come out first.
+    if (deleteError.code === "23503") {
+      return { error: "This food is an ingredient in a recipe. Remove it there first." };
+    }
+    return { error: deleteError.message };
+  }
+
+  revalidatePath("/foods");
+  revalidatePath("/log");
+  return { error: null };
 }
 
 function validateEdit(edit: FoodEdit): string | null {

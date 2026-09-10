@@ -34,8 +34,14 @@ import { Button } from "@/components/ui/button";
 import { Card } from "@/components/ui/card";
 import { ToggleGroup, ToggleGroupItem } from "@/components/ui/toggle-group";
 import { Calendar } from "@/components/ui/calendar";
-import { ChartContainer, type ChartConfig } from "@/components/ui/chart";
-import { CHART_CLASS, SERIES, X_AXIS, Y_AXIS, dayTick } from "@/lib/chart";
+import {
+  ChartContainer,
+  ChartTooltip,
+  ChartTooltipContent,
+  type ChartConfig,
+} from "@/components/ui/chart";
+import { CHART_CLASS, SERIES, TOOLTIP, X_AXIS, Y_AXIS, dayTick } from "@/lib/chart";
+import { useFinePointer } from "@/lib/pointer";
 import { ConfirmAction } from "@/components/confirm-action";
 import { SwipeToDelete } from "@/components/swipe-to-delete";
 import { useSwipe } from "@/lib/swipe";
@@ -56,7 +62,7 @@ import {
 import { InputGroup, InputGroupInput, InputGroupAddon, InputGroupText } from "@/components/ui/input-group";
 import { Item, ItemActions, ItemContent, ItemTitle } from "@/components/ui/item";
 import { cn } from "@/lib/utils";
-import { PAGE, SURFACE, SURFACE_PAD } from "@/lib/ui";
+import { PAGE_SPLIT, SURFACE, SURFACE_PAD } from "@/lib/ui";
 
 /**
  * S54-S59. The weight log, which is the training log with one number instead of
@@ -96,7 +102,7 @@ export function ProgressHome({
    */
   unit: DisplayUnit;
   /** S81. Exactly one lift, or none -- which is a normal state, not an empty one. */
-  pinned: PinnedLift | null;
+  pinned: PinnedLift[];
 }) {
   const [entries, setEntries] = useState(initialEntries);
   const [from, setFrom] = useState(loadedFrom);
@@ -144,14 +150,28 @@ export function ProgressHome({
     const calendarNeed =
       month > shiftMonth(from, WINDOW_BUFFER_MONTHS) ? null : shiftMonth(from, -WINDOW_MONTHS);
     const chartNeed = chartUnderCovered ? chartFrom.slice(0, 7) : null;
-    if (!calendarNeed && !chartNeed) return;
+    /**
+     * The rest of the log, fetched on arrival rather than when a toggle asks
+     * for it.
+     *
+     * A window toggle used to BE the trigger, so every first tap of 6M or All
+     * dimmed the chart for a round trip -- the wait was paid in the one place
+     * it is visible, on a control that otherwise redraws instantly. Nothing
+     * about a weigh-in makes it worth windowing the way a session is: three
+     * columns, one row per day, and this tab exists to show all of them.
+     *
+     * So the window survives only as the shape of the FIRST paint, which still
+     * comes from the server without waiting on years of history. Everything
+     * behind it arrives in the background while you are reading the headline.
+     */
+    const warmNeed = earliest && earliest.slice(0, 7) < from ? earliest.slice(0, 7) : null;
+    if (!calendarNeed && !chartNeed && !warmNeed) return;
 
-    const nextFrom =
-      calendarNeed && chartNeed
-        ? calendarNeed < chartNeed
-          ? calendarNeed
-          : chartNeed
-        : (calendarNeed ?? chartNeed)!;
+    // The earliest of whatever is being asked for: one request to the far end
+    // rather than one per reason to go there.
+    const nextFrom = [calendarNeed, chartNeed, warmNeed]
+      .filter((m): m is string => m !== null)
+      .reduce((a, b) => (a < b ? a : b));
 
     loading.current = true;
     void loadWeighInWindow(nextFrom, shiftMonth(from, -1)).then((res) => {
@@ -160,7 +180,7 @@ export function ProgressHome({
       setEntries((prev) => [...prev, ...res.entries]);
       setFrom(nextFrom);
     });
-  }, [month, from, chartFrom, chartUnderCovered]);
+  }, [month, from, chartFrom, chartUnderCovered, earliest]);
 
   /**
    * The headline is computed over the WHOLE window, not the month on screen.
@@ -217,11 +237,12 @@ export function ProgressHome({
 
   return (
     <>
-      <main className={PAGE}>
+      <main className={PAGE_SPLIT}>
         {/* The primary action sits above everything, same as the train tab: the
             thing you came to do is not reachable only by scrolling past what you
-            have already done. */}
-        <header className="pt-1">
+            have already done. Spans both desktop columns -- it is not the
+            trend's action or the calendar's, it is the screen's. */}
+        <header className="pt-1 lg:order-1 lg:col-span-2">
           <Button className="h-12 w-full text-base" onClick={() => setEditing(today)}>
             <Scale className="size-4" /> Weigh in
           </Button>
@@ -234,7 +255,7 @@ export function ProgressHome({
             version of this screen -- and the action is already at the top, so
             the Empty does not need to repeat it. */}
         {entries.length === 0 ? (
-          <Empty className="py-14">
+          <Empty className="py-14 lg:order-2 lg:col-span-2">
             <EmptyHeader>
               <EmptyMedia variant="icon">
                 <Scale />
@@ -248,8 +269,22 @@ export function ProgressHome({
           </Empty>
         ) : (
           <>
-        <Headline head={head} rate={rate} goal={goal} unit={unit} />
+        {/* DESKTOP ORDER IS NOT DOM ORDER, and the markup keeps the phone's.
+            A phone reads trend, pinned lifts, calendar, month list, top to
+            bottom, and that sequence is the designed one. From `lg` the chart
+            wants both columns and the list wants the wide one beside the
+            calendar, which `order` arranges without moving a line of markup --
+            so the small screen, which is the one this app is for, never pays
+            for the large one's layout. */}
+        <div className="lg:order-2 lg:col-span-2">
+          <Headline head={head} rate={rate} goal={goal} unit={unit} />
+        </div>
 
+        {/* BOTH COLUMNS from `lg`. Of everything on this tab the time series
+            is the only block that gets better with every pixel: the calendar
+            is seven fixed columns and the list is a column of numbers, and
+            neither reads any better at twice the width. */}
+        <div className="lg:order-3 lg:col-span-2">
         <WeightChart
           entries={entries}
           unit={unit}
@@ -259,9 +294,23 @@ export function ProgressHome({
           extending={chartUnderCovered}
           goal={goal}
         />
+        </div>
 
-        <PinnedLiftBlock pinned={pinned} />
+        {/* Last, and full width for the same reason as the weight chart. The
+            conditional is out here rather than inside the block so that no
+            pins leaves no grid item -- an empty one would still claim a row. */}
+        {pinned.length > 0 && (
+          <div className="space-y-2 lg:order-6 lg:col-span-2">
+            {pinned.map((lift) => (
+              <PinnedLiftBlock key={lift.id} pinned={lift} />
+            ))}
+          </div>
+        )}
 
+        {/* THE CALENDAR. Fixed-width by design (PAGE_SPLIT's 22rem): a day
+            grid does not get more useful by getting wider, so the room a wide
+            screen offers goes to the chart above and the list beside it. */}
+        <div className="lg:order-5">
         <Card className={cn(SURFACE, "items-center px-1 py-2", "touch-pan-y")} {...monthSwipe}>
           <Calendar
             month={toDate(`${month}-01`)}
@@ -287,7 +336,12 @@ export function ProgressHome({
             className="bg-transparent p-0 [--cell-size:--spacing(8)]"
           />
         </Card>
+        </div>
 
+        {/* The month list takes the WIDE column on desktop: it is the only
+            block here with a row per day, so it is the one that runs out of
+            vertical room first. */}
+        <div className="lg:order-4">
         {monthEntries.length === 0 ? (
           <Empty className="py-12">
             <EmptyHeader>
@@ -349,6 +403,7 @@ export function ProgressHome({
             ))}
           </ul>
         )}
+        </div>
           </>
         )}
       </main>
@@ -642,13 +697,11 @@ export type PinnedLift = { id: string; name: string; points: LiftPoint[] };
  * statement of what this block is for, and a list of every exercise charted is
  * the catalog again.
  *
- * No pin renders NOTHING -- not an empty state inviting one. An unpinned tab is
+ * No pins render NOTHING -- not an empty state inviting one. An unpinned tab is
  * complete, and a prompt to pin something would be the tab asking for work
  * rather than answering a question.
  */
-function PinnedLiftBlock({ pinned }: { pinned: PinnedLift | null }) {
-  if (!pinned) return null;
-
+function PinnedLiftBlock({ pinned }: { pinned: PinnedLift }) {
   return (
     <Card className={cn(SURFACE, SURFACE_PAD)}>
       <div className="flex items-baseline justify-between gap-2">
@@ -740,6 +793,7 @@ function WeightChart({
   // Converted once, here, same as every other weight on this chart (S69).
   const goalWeight = goal.weightLb === null ? null : toDisplay(goal.weightLb, unit);
   const domain = useMemo(() => axisDomain(points, goalWeight), [points, goalWeight]);
+  const hoverable = useFinePointer();
 
   /**
    * A swipe across the chart is a second way to reach the window toggle above
@@ -834,9 +888,37 @@ function WeightChart({
             />
           )}
 
-          {/* No ChartTooltip. There is no hover on a phone, and S79 rules out a
-              touch tooltip nobody discovers -- the exact numbers are in the
-              list underneath, which is the "or nothing" half of that rule. */}
+          {/* Only where a pointer can hover (S79 rule 3). The list underneath
+              is still the route to an exact number, and remains the only one
+              on a phone; this saves a mouse the trip. A day with no reading
+              shows the trend alone -- the formatter drops the null rather
+              than printing a label with nothing beside it. */}
+          {hoverable && (
+            <ChartTooltip
+              {...TOOLTIP}
+              content={
+                <ChartTooltipContent
+                  labelFormatter={(value) => dayTick(String(value))}
+                  formatter={(value, name, item) =>
+                    value == null ? null : (
+                      <>
+                        <div
+                          className="h-2.5 w-2.5 shrink-0 rounded-[2px]"
+                          style={{ background: item.color }}
+                        />
+                        <span className="text-muted-foreground">
+                          {weightConfig[name as keyof typeof weightConfig]?.label ?? name}
+                        </span>
+                        <span className="ml-auto font-mono font-medium tabular-nums text-foreground">
+                          {trim(Number(value))} {unit}
+                        </span>
+                      </>
+                    )
+                  }
+                />
+              }
+            />
+          )}
 
           {/* Readings first so the trend paints over them. Dots with no
               connecting line: the raw series is a scatter of observations, and

@@ -52,13 +52,13 @@ export function ExerciseScreen({
   const [pending, startTransition] = useTransition();
 
   /**
-   * ONE PIN, so pinning this lift replaces whatever was pinned before rather
-   * than adding to a list. The action takes an id and overwrites, which makes
-   * that the shape of the data rather than a rule the UI has to remember.
+   * MANY PINS since 0033, so this adds to the set rather than replacing it.
+   * The action takes the id and the state it should end in, which keeps the
+   * button a toggle over one lift and never a statement about the others.
    */
   function togglePin() {
     startTransition(async () => {
-      const res = await pinExercise(pinned ? null : exercise.id);
+      const res = await pinExercise(exercise.id, !pinned);
       if (res.error) {
         toast.error(res.error);
         return;

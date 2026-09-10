@@ -16,7 +16,7 @@ export default async function ExercisePage({ params }: PageProps<"/exercise/[id]
   const { id } = await params;
   const supabase = await createClient();
 
-  const [{ data: exercise }, { data: slots }, { data: settings }] = await Promise.all([
+  const [{ data: exercise }, { data: slots }, { data: pin }] = await Promise.all([
     supabase
       .from("exercises")
       .select("id, name, aliases, equipment, bodyweight_fraction, load_is_per_side, primary_muscles")
@@ -29,8 +29,9 @@ export default async function ExercisePage({ params }: PageProps<"/exercise/[id]
       .from("workout_exercises")
       .select("workout:workouts!inner(log_date), sets:workout_sets(*)")
       .eq("exercise_id", id),
-    // S81. One row, and the pin is the only column read from it here.
-    supabase.from("nutrition_settings").select("pinned_exercise_id").maybeSingle(),
+    // S81/0033. At most one row, and its existence IS the answer -- pins are
+    // a set now, so this asks about this lift rather than reading the pin.
+    supabase.from("pinned_exercises").select("exercise_id").eq("exercise_id", id).maybeSingle(),
   ]);
 
   if (!exercise) notFound();
@@ -49,7 +50,7 @@ export default async function ExercisePage({ params }: PageProps<"/exercise/[id]
       exercise={exercise as Exercise}
       points={points}
       sessions={sessions}
-      pinned={settings?.pinned_exercise_id === id}
+      pinned={pin != null}
     />
   );
 }

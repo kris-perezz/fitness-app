@@ -1,6 +1,6 @@
 "use client";
 
-import { useOptimistic, useState, useTransition } from "react";
+import { useEffect, useOptimistic, useState, useTransition } from "react";
 import { useRouter } from "next/navigation";
 import Link from "next/link";
 import { Check, ChevronLeft, Dumbbell, Flame, Pencil, Plus, Trash2, X } from "lucide-react";
@@ -21,7 +21,8 @@ import {
   type WorkoutSet,
   type WorkoutSlot,
 } from "@/lib/training";
-import type { Bests, LastSession } from "@/lib/training";
+import { NO_HISTORY } from "@/lib/training";
+import type { Bests, LastSession, SlotHistory } from "@/lib/training";
 import {
   addWorkoutExercise,
   deleteSet,
@@ -85,21 +86,21 @@ import { PAGE, SURFACE, SURFACE_PAD } from "@/lib/ui";
 export function TrainScreen({
   workout,
   slots,
-  lastSessions,
-  bests,
+  history,
   exercises,
   today,
   recentExerciseIds,
 }: {
   workout: Workout;
   slots: WorkoutSlot[];
-  lastSessions: Record<string, LastSession>;
-  bests: Record<string, Bests>;
+  /** Streamed, not awaited -- see `useStreamedHistory` below. */
+  history: Promise<SlotHistory>;
   exercises: Exercise[];
   today: string;
   recentExerciseIds: string[];
 }) {
   const router = useRouter();
+  const { lastSessions, bests } = useStreamedHistory(history);
   const [picking, setPicking] = useState(false);
   const [pending, startTransition] = useTransition();
 
@@ -300,6 +301,42 @@ export function TrainScreen({
       />
     </>
   );
+}
+
+/**
+ * Last time's numbers and the all-time bests, resolved as they arrive rather
+ * than before the screen renders.
+ *
+ * The server hands this down as an unresolved promise, so the three round
+ * trips behind it are no longer in front of the first byte. Resolved in an
+ * effect rather than with `use()` on purpose: `use()` suspends the component
+ * that calls it, and the component that needs this is the one drawing the sets
+ * you have already logged -- suspending it would put the whole session back
+ * behind the wait this exists to remove.
+ *
+ * Until it lands, the screen renders with no history: the sets are all there,
+ * the set form opens empty instead of pre-filled, and no PR badge shows. Each
+ * of those is a suggestion about the past, and none of them stops you logging.
+ */
+function useStreamedHistory(history: Promise<SlotHistory>): SlotHistory {
+  const [resolved, setResolved] = useState<SlotHistory | null>(null);
+
+  useEffect(() => {
+    let live = true;
+    history.then(
+      (value) => {
+        if (live) setResolved(value);
+      },
+      // Swallowed rather than surfaced: the screen is already usable without
+      // this, and a toast about missing suggestions mid-set is noise.
+      () => {},
+    );
+    return () => {
+      live = false;
+    };
+  }, [history]);
+
+  return resolved ?? NO_HISTORY;
 }
 
 /**

@@ -1,9 +1,11 @@
 "use client";
 
 import { useState, useTransition } from "react";
-import { updateFood, type FoodEdit } from "@/app/actions";
+import { Trash2 } from "lucide-react";
+import { deleteFood, updateFood, type FoodEdit } from "@/app/actions";
 import { basisLabel, countLabel, measureLabel, show, sourceHint, type Food } from "@/lib/food";
 import { FoodSourceBadge } from "@/components/food-source-badge";
+import { ConfirmAction } from "@/components/confirm-action";
 import {
   Drawer,
   DrawerContent,
@@ -39,10 +41,12 @@ export function EditFoodSheet({
   food,
   onOpenChange,
   onSaved,
+  onDeleted,
 }: {
   food: Food | null;
   onOpenChange: (open: boolean) => void;
   onSaved?: (food: Food) => void;
+  onDeleted?: (food: Food) => void;
 }) {
   return (
     <Drawer open={food !== null} onOpenChange={onOpenChange}>
@@ -59,6 +63,7 @@ export function EditFoodSheet({
             food={food}
             onOpenChange={onOpenChange}
             onSaved={onSaved}
+            onDeleted={onDeleted}
           />
         )}
       </DrawerContent>
@@ -70,10 +75,12 @@ function EditForm({
   food,
   onOpenChange,
   onSaved,
+  onDeleted,
 }: {
   food: Food;
   onOpenChange: (open: boolean) => void;
   onSaved?: (food: Food) => void;
+  onDeleted?: (food: Food) => void;
 }) {
   const [name, setName] = useState(food.name);
   const [serving, setServing] = useState(
@@ -122,6 +129,19 @@ function EditForm({
       }
       toast.success("Food updated");
       onSaved?.(res.food);
+      onOpenChange(false);
+    });
+  }
+
+  function remove() {
+    startTransition(async () => {
+      const res = await deleteFood(food.id);
+      if (res.error) {
+        toast.error(res.error);
+        return;
+      }
+      toast.success(`Removed ${food.name}`);
+      onDeleted?.(food);
       onOpenChange(false);
     });
   }
@@ -227,6 +247,16 @@ function EditForm({
         >
           {pending ? "Saving" : "Save changes"}
         </Button>
+        <ConfirmAction
+          trigger={
+            <Button variant="ghost" className="mt-1 h-11 w-full text-destructive" disabled={pending}>
+              <Trash2 className="size-4" /> Delete food
+            </Button>
+          }
+          title={`Delete ${food.name}?`}
+          description="It leaves your shelf and future searches. Portions already logged keep their numbers."
+          onConfirm={remove}
+        />
       </div>
     </div>
   );
