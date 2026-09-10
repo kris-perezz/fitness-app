@@ -68,18 +68,20 @@ export function CalorieRing({
 }) {
   // Only for the strict overshoot line below; the figure in the middle of the
   // ring is decided by `ringFigure`.
-  const remaining = goal - consumed;
+  const remaining = Math.round(goal) - Math.round(consumed);
   // S70/S74. The ring no longer decides what its own number means: calories are
   // a TARGET, and in calm mode going past one is a fact rather than an alarm.
   // What changes past the goal is the figure and its caption -- the ring turns
   // from what is left into what was eaten (S78) -- and not the colour. Red stays
   // reserved for destructive actions and for the one genuine health limit
   // (S73), which is not this.
-  const status = statusOf("calories", consumed, goal, finished);
+  // Graded on the rounded figure the ring prints: a hundredth of a calorie past
+  // the goal is not a day that went over.
+  const status = statusOf("calories", Math.round(consumed), Math.round(goal), finished);
   const paint = toneOf("calories", status, tone);
   // S79. Calm shows what was eaten; only strict counts down. And past the goal
   // neither of them subtracts (S78) -- strict says it in the red line below.
-  const { value: figure, caption } = ringFigure(consumed, goal, tone);
+  const { value: figure, caption } = ringFigure(Math.round(consumed), Math.round(goal), tone);
   const label = figure.toLocaleString();
   // Clamped so an overshoot fills the ring rather than winding past the start.
   const fraction = fillPercent(consumed, goal) / 100;

@@ -449,7 +449,13 @@ function MacroMeter({
   // S79. The goal is a strict-mode idea. Resolved HERE rather than at the three
   // call sites so there is one place that can ever decide to grade a macro.
   const against = tone === "strict" ? goal : null;
-  const paint = toneOf(metric, statusOf(metric, value, against, finished), tone);
+  // Graded on the rounded figures the tile prints, so 55.4 g against a 55 g
+  // share is not painted over a goal the reader can see it is sitting on.
+  const paint = toneOf(
+    metric,
+    statusOf(metric, round(value), against === null ? null : round(against), finished),
+    tone,
+  );
   const paintClass = PAINT[paint];
 
   return (
