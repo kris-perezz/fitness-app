@@ -1,8 +1,8 @@
 import { createClient } from "@/lib/supabase/server";
-import { todayDate } from "@/lib/food";
 import { WINDOW_MONTHS, shiftMonth } from "@/lib/training";
 import { loadIntakeDaysWindow } from "@/app/actions";
 import { MonthLog } from "@/components/month-log";
+import { serverToday } from "@/lib/server-time";
 
 export const dynamic = "force-dynamic";
 
@@ -20,7 +20,7 @@ export const dynamic = "force-dynamic";
  * paging it is a filter rather than a per-month round trip.
  */
 export default async function MonthLogPage() {
-  const today = todayDate();
+  const today = await serverToday();
   const supabase = await createClient();
 
   const { data: settings } = await supabase

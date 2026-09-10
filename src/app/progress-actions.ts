@@ -9,8 +9,8 @@
 
 import { revalidatePath } from "next/cache";
 import { createClient } from "@/lib/supabase/server";
-import { todayDate } from "@/lib/food";
 import { toWeighIn, type WeighIn } from "@/lib/weight";
+import { serverToday } from "@/lib/server-time";
 
 /**
  * Record or correct the weigh-in for a day (S54, S55, S56).
@@ -41,7 +41,7 @@ export async function saveWeighIn(
   // A weight you have not stood for is not a measurement. The picker does not
   // offer future dates (S55); this is what makes that a rule rather than a
   // convention, exactly as it is on the training side.
-  if (date > todayDate()) return { error: "That day has not happened yet" };
+  if (date > (await serverToday())) return { error: "That day has not happened yet" };
 
   // Matches the column's own check. A zero is a mistyped entry every time.
   if (!Number.isFinite(weightLb) || weightLb <= 0) return { error: "Enter a weight" };

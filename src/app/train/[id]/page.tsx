@@ -1,6 +1,5 @@
 import { notFound } from "next/navigation";
 import { createClient } from "@/lib/supabase/server";
-import { todayDate } from "@/lib/food";
 import { NO_BESTS, NO_HISTORY } from "@/lib/training";
 import type {
   Bests,
@@ -12,6 +11,7 @@ import type {
   WorkoutSlot,
 } from "@/lib/training";
 import { TrainScreen } from "@/components/train-screen";
+import { serverToday } from "@/lib/server-time";
 
 export const dynamic = "force-dynamic";
 
@@ -72,6 +72,7 @@ export default async function WorkoutPage({ params }: PageProps<"/train/[id]">) 
    * to the client and streams in behind the page.
    */
   const history = historyFor(supabase, workout, slots);
+  const today = await serverToday();
 
   return (
     <TrainScreen
@@ -79,7 +80,7 @@ export default async function WorkoutPage({ params }: PageProps<"/train/[id]">) 
       slots={slots}
       history={history}
       exercises={(exercises ?? []) as Exercise[]}
-      today={todayDate()}
+      today={today}
       recentExerciseIds={recent}
     />
   );

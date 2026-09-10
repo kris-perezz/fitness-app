@@ -1,9 +1,9 @@
 import { createClient } from "@/lib/supabase/server";
-import { todayDate } from "@/lib/food";
 import { WINDOW_MONTHS, shiftMonth } from "@/lib/training";
 import { toWeighIn } from "@/lib/weight";
 import { liftHistory, type WorkoutSet } from "@/lib/training";
 import { ProgressHome } from "@/components/progress-home";
+import { serverToday } from "@/lib/server-time";
 
 export const dynamic = "force-dynamic";
 
@@ -28,7 +28,7 @@ export const metadata = { title: "Progress" };
  * calendar are filtered to the month.
  */
 export default async function ProgressPage() {
-  const today = todayDate();
+  const today = await serverToday();
   const supabase = await createClient();
 
   const from = `${shiftMonth(today.slice(0, 7), -(WINDOW_MONTHS - 1))}-01`;

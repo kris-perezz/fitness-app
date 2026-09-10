@@ -4,6 +4,7 @@ import { Geist, Geist_Mono } from "next/font/google";
 import { BottomNav } from "@/components/bottom-nav";
 import { StrawberryOrbs } from "@/components/strawberry-orbs";
 import { ThemeColor } from "@/components/theme-color";
+import { TimeZoneCookie } from "@/components/time-zone-cookie";
 import { ThemeProvider } from "@/components/theme-provider";
 import { Toaster } from "@/components/ui/sonner";
 import { OPEN_WORKOUT_COOKIE } from "@/lib/open-workout-cookie";
@@ -57,6 +58,7 @@ export default async function RootLayout({ children }: LayoutProps<"/">) {
       <body className="flex min-h-full flex-col">
         <ThemeProvider>
           <ThemeColor />
+          <TimeZoneCookie />
           <StrawberryOrbs />
           <StartupSplash />
           {/* md:pl-20 clears the desktop rail BottomNav draws at that width --

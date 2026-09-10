@@ -288,12 +288,51 @@ export function searchFoods(foods: Food[], query: string): Food[] {
 }
 
 /**
- * Today, on the phone's own clock and in its own timezone. The day rolls at
- * midnight, which is the only boundary a reader does not have to be told about.
+ * Today, in the reader's own timezone. The day rolls at midnight, which is the
+ * only boundary a reader does not have to be told about.
+ *
+ * `timeZone` IS REQUIRED ON THE SERVER and must not be guessed there. Without
+ * it this reads the host clock, which is the right answer in a browser and UTC
+ * on Vercel -- so a page rendered after 18:00 in Edmonton called it tomorrow,
+ * and `saveGoals` wrote a dated row on a day that had not started. Server
+ * callers go through `serverToday()` in `lib/server-time.ts`, which knows where
+ * the zone comes from; client callers pass nothing and get the device.
+ *
+ * Built from `formatToParts` rather than from a formatted string: a locale that
+ * renders the date any other way would otherwise reorder the pieces silently,
+ * and this has to produce YYYY-MM-DD for a Postgres `date` column.
  */
-export function todayDate(now = new Date()): string {
-  const d = new Date(now);
-  return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}-${String(d.getDate()).padStart(2, "0")}`;
+export function todayDate(now = new Date(), timeZone?: string): string {
+  if (timeZone === undefined) {
+    const d = new Date(now);
+    return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}-${String(d.getDate()).padStart(2, "0")}`;
+  }
+
+  const parts = new Intl.DateTimeFormat("en-US", {
+    timeZone,
+    year: "numeric",
+    month: "2-digit",
+    day: "2-digit",
+  }).formatToParts(now);
+  const at = (type: string) => parts.find((p) => p.type === type)?.value ?? "";
+  return `${at("year")}-${at("month")}-${at("day")}`;
+}
+
+/**
+ * Is this a timezone the platform actually knows?
+ *
+ * The zone arrives from a cookie or a proxy header, so it is untrusted input
+ * heading for `Intl`, which throws on a name it does not recognise. A throw
+ * here would take down the page render rather than fall back to a sane day.
+ */
+export function isTimeZone(name: string | undefined | null): name is string {
+  if (!name) return false;
+  try {
+    new Intl.DateTimeFormat("en-US", { timeZone: name });
+    return true;
+  } catch {
+    return false;
+  }
 }
 
 /**

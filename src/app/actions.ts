@@ -10,7 +10,6 @@ import { estimateFromDescription, type DescribeResult } from "@/lib/describe";
 import { generatedFood, recipeFoodId, type RecipeDetails, type RecipeLine } from "@/lib/recipe";
 import {
   sourceRank,
-  todayDate,
   type Food,
   type FoodSource,
   type IntakeEntry,
@@ -19,6 +18,7 @@ import {
 } from "@/lib/food";
 import type { Micros } from "@/lib/micros";
 import { toDayGoal, type DayGoal } from "@/lib/goals";
+import { serverToday } from "@/lib/server-time";
 
 export type NewEntry = Macros & {
   /**
@@ -281,7 +281,7 @@ export async function saveGoals(goals: Goals) {
   const { error: dayError } = await supabase.from("day_goals").upsert(
     {
       user_id: user.id,
-      log_date: todayDate(),
+      log_date: await serverToday(),
       calorie_goal: goals.calorie_goal,
       protein_goal_g: goals.protein_goal_g,
       carb_goal_g: goals.carb_goal_g,

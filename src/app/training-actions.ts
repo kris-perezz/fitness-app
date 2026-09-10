@@ -10,9 +10,9 @@
 
 import { revalidatePath } from "next/cache";
 import { createClient } from "@/lib/supabase/server";
-import { todayDate } from "@/lib/food";
 import { clearOpenWorkoutCookie, setOpenWorkoutCookie } from "@/lib/open-workout-cookie";
 import type { Exercise, SetType } from "@/lib/training";
+import { serverToday } from "@/lib/server-time";
 
 type ServerClient = Awaited<ReturnType<typeof createClient>>;
 
@@ -38,7 +38,7 @@ export async function openWorkoutOn(
 
   if (!/^\d{4}-\d{2}-\d{2}$/.test(date)) return { id: null, error: "Not a valid date" };
 
-  const today = todayDate();
+  const today = await serverToday();
   // A workout you have not done yet is a plan, and planning is out of scope
   // (open decision 2). The picker does not offer future dates; this is what
   // makes that a rule rather than a convention.
@@ -99,7 +99,7 @@ export async function closeStaleWorkouts(): Promise<{ error: string | null }> {
   } = await supabase.auth.getUser();
   if (!user) return { error: "Not signed in" };
 
-  const failed = await closeStaleWorkout(supabase, user.id, todayDate());
+  const failed = await closeStaleWorkout(supabase, user.id, await serverToday());
   if (failed) return { error: failed };
 
   revalidatePath("/train", "layout");
