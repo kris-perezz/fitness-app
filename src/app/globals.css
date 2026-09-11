@@ -29,6 +29,10 @@
   --color-macro-carbs: var(--macro-carbs);
   --color-macro-fat: var(--macro-fat);
   --color-macro-track: var(--macro-track);
+  --color-lift-1: var(--lift-1);
+  --color-lift-2: var(--lift-2);
+  --color-lift-3: var(--lift-3);
+  --color-lift-4: var(--lift-4);
   --color-calorie-track: var(--calorie-track);
   --color-ring: var(--ring);
   --color-input: var(--input);
@@ -87,6 +91,13 @@
      instead and the ring reads as fading rather than as coiling. Small on
      purpose: the shadow under the coiled lap does the rest of the work. */
   --macro-under: oklch(0.2 0 0);
+
+  /* The pinned lifts, which share one chart and have to be told apart on it:
+     hues a quadrant apart, for the same colour-blind reason as the rings. */
+  --lift-1: oklch(0.55 0.2 255);
+  --lift-2: oklch(0.66 0.18 50);
+  --lift-3: oklch(0.6 0.14 190);
+  --lift-4: oklch(0.55 0.22 320);
 
   /* iOS paints the strip above and below the page with `theme-color`, so it has
      to be a plain colour a meta tag can carry -- oklch() and a translucent
@@ -148,6 +159,11 @@
      the one over it, never against the page, so it moves the same way in
      both modes. */
   --macro-under: oklch(0.2 0 0);
+
+  --lift-1: oklch(0.72 0.17 255);
+  --lift-2: oklch(0.78 0.16 50);
+  --lift-3: oklch(0.8 0.13 190);
+  --lift-4: oklch(0.74 0.2 320);
 
   --theme-color: #0a0a0a;
   --shadow-card: 0 1px 2px oklch(0 0 0 / 30%), 0 8px 24px -8px oklch(0 0 0 / 45%);
@@ -216,6 +232,10 @@
      track the one grey object on a page that has no other. */
   --calorie-track: var(--secondary);
   --macro-under: oklch(0.239 0 90);
+  --lift-1: oklch(0.56 0.17 131);
+  --lift-2: oklch(0.62 0.19 12);
+  --lift-3: oklch(0.64 0.14 58);
+  --lift-4: oklch(0.5 0.14 335);
 
   /* Native controls and scrollbars have no CSS variables to read; without this
      they paint themselves dark on a system set to dark. */

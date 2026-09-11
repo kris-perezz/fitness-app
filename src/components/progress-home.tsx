@@ -1,7 +1,6 @@
 "use client";
 
 import { useEffect, useMemo, useRef, useState, useTransition } from "react";
-import Link from "next/link";
 import { Scale, Trash2 } from "lucide-react";
 import { toast } from "sonner";
 
@@ -27,8 +26,7 @@ import {
   type ChartWindowKey,
   type WeighIn,
 } from "@/lib/weight";
-import type { LiftPoint } from "@/lib/training";
-import { LiftChart, enoughSessions } from "@/components/lift-chart";
+import { PinnedLiftsChart, type PinnedLift } from "@/components/lift-chart";
 import { deleteWeighIn, loadWeighInWindow, saveWeighIn } from "@/app/progress-actions";
 import { Button } from "@/components/ui/button";
 import { Card } from "@/components/ui/card";
@@ -101,7 +99,7 @@ export function ProgressHome({
    * you did not want.
    */
   unit: DisplayUnit;
-  /** S81. Exactly one lift, or none -- which is a normal state, not an empty one. */
+  /** S81. Oldest pin first. None is a normal state, not an empty one. */
   pinned: PinnedLift[];
 }) {
   const [entries, setEntries] = useState(initialEntries);
@@ -300,10 +298,8 @@ export function ProgressHome({
             conditional is out here rather than inside the block so that no
             pins leaves no grid item -- an empty one would still claim a row. */}
         {pinned.length > 0 && (
-          <div className="space-y-2 lg:order-6 lg:col-span-2">
-            {pinned.map((lift) => (
-              <PinnedLiftBlock key={lift.id} pinned={lift} />
-            ))}
+          <div className="lg:order-6 lg:col-span-2">
+            <PinnedLiftsBlock pinned={pinned} />
           </div>
         )}
 
@@ -687,41 +683,27 @@ function WeighInSheet({
   );
 }
 
-export type PinnedLift = { id: string; name: string; points: LiftPoint[] };
-
 /**
- * One lift on the progress tab (S81).
+ * The pinned lifts on the progress tab (S81), all on one chart.
  *
- * A MINIATURE of the S80 chart with a tap through to the full one, and exactly
- * one of them. Not a carousel, not a top three, not automatic: the pin is a
- * statement of what this block is for, and a list of every exercise charted is
- * the catalog again.
+ * Not automatic: the pin is a statement of what this block is for, and a list
+ * of every exercise charted is the catalog again.
  *
  * No pins render NOTHING -- not an empty state inviting one. An unpinned tab is
  * complete, and a prompt to pin something would be the tab asking for work
  * rather than answering a question.
  */
-function PinnedLiftBlock({ pinned }: { pinned: PinnedLift }) {
+function PinnedLiftsBlock({ pinned }: { pinned: PinnedLift[] }) {
   return (
     <Card className={cn(SURFACE, SURFACE_PAD)}>
       <div className="flex items-baseline justify-between gap-2">
-        <h2 className="text-[17px] font-semibold tracking-[-0.01em]">
-          <Link href={`/exercise/${pinned.id}`} className="underline-offset-4 hover:underline">
-            {pinned.name}
-          </Link>
-        </h2>
+        <h2 className="text-[17px] font-semibold tracking-[-0.01em]">Pinned lifts</h2>
         <span className="text-[11px] font-semibold uppercase tracking-[0.08em] text-muted-foreground">
           Estimated 1RM
         </span>
       </div>
 
-      {enoughSessions(pinned.points) ? (
-        <LiftChart points={pinned.points} compact />
-      ) : (
-        <p className="mt-2 text-xs text-muted-foreground">
-          Not enough sessions yet to draw a trend.
-        </p>
-      )}
+      <PinnedLiftsChart lifts={pinned} />
     </Card>
   );
 }
