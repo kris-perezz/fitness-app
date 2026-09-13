@@ -3,7 +3,7 @@
 import { useState, useTransition } from "react";
 import { useRouter } from "next/navigation";
 import Link from "next/link";
-import { ChevronLeft, Plus, Trash2, TriangleAlert } from "lucide-react";
+import { ChevronLeft, Copy, Plus, Trash2, TriangleAlert } from "lucide-react";
 import { show, type Food } from "@/lib/food";
 import {
   totalMacros,
@@ -14,6 +14,7 @@ import {
 } from "@/lib/recipe";
 import {
   deleteRecipe,
+  duplicateRecipe,
   removeRecipeIngredient,
   saveRecipe,
   updateRecipeIngredient,
@@ -113,6 +114,20 @@ export function RecipeEditor({
       }
       toast.success("Recipe saved");
       router.refresh();
+    });
+  }
+
+  // The copy opens straight away: a variation is started in order to change
+  // something, so leaving the user on the original would cost a tap and invite
+  // editing the wrong one.
+  function duplicate() {
+    startTransition(async () => {
+      const res = await duplicateRecipe(recipe.id);
+      if (res.error || !res.id) {
+        toast.error(res.error ?? "Could not copy that recipe");
+        return;
+      }
+      router.push(`/recipes/${res.id}`);
     });
   }
 
@@ -222,7 +237,9 @@ export function RecipeEditor({
           </div>
           <p className="mt-2 text-center text-xs text-muted-foreground">
             per serving · whole dish {round(total.kcal).toLocaleString()} cal
-            {raw.known && raw.grams > 0 ? ` · ${round(raw.grams)} g in` : ""}
+            {/* The raw weight is only ever read against the cooked one, so
+                without a cooked weight it is a number with nothing to say. */}
+            {check && raw.known ? ` · ${round(raw.grams)} g in` : ""}
           </p>
         </Card>
 
@@ -303,6 +320,15 @@ export function RecipeEditor({
               disabled={pending || name.trim() === "" || lines.length === 0}
             >
               {pending ? "Saving" : "Save recipe"}
+            </Button>
+            <Button
+              size="icon-xl"
+              variant="outline"
+              aria-label="Duplicate recipe"
+              disabled={pending}
+              onClick={duplicate}
+            >
+              <Copy className="size-4" />
             </Button>
             <Button
               size="icon-xl"

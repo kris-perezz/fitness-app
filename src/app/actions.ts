@@ -1011,6 +1011,74 @@ export async function updateRecipe(id: string, details: RecipeDetails) {
 }
 
 /**
+ * A new recipe with the same ingredients, so a variation starts from the dish
+ * it is a variation of rather than from an empty pot. Nothing is shared
+ * afterwards -- the copy is an ordinary recipe, and editing it leaves the
+ * original alone.
+ *
+ * No `foods` row is published here. A copy nobody has opened yet is not a dish
+ * anybody can log, and `saveRecipe` publishes one the moment it is.
+ */
+export async function duplicateRecipe(
+  id: string,
+): Promise<{ error: string | null; id: string | null }> {
+  const supabase = await createClient();
+  const {
+    data: { user },
+  } = await supabase.auth.getUser();
+  if (!user) return { error: "Not signed in", id: null };
+
+  const { data: source, error: sourceError } = await supabase
+    .from("recipes")
+    .select("name, servings, cooked_weight_g")
+    .eq("id", id)
+    .eq("user_id", user.id)
+    .maybeSingle();
+  if (sourceError) return { error: sourceError.message, id: null };
+  if (!source) return { error: "Recipe not found", id: null };
+
+  const { data: ingredients, error: linesError } = await supabase
+    .from("recipe_ingredients")
+    .select("food_id, qty, sort_order")
+    .eq("recipe_id", id)
+    .order("sort_order", { ascending: true });
+  if (linesError) return { error: linesError.message, id: null };
+
+  const { data: copy, error: insertError } = await supabase
+    .from("recipes")
+    .insert({
+      user_id: user.id,
+      name: copyName(source.name as string),
+      servings: source.servings as number,
+      cooked_weight_g: source.cooked_weight_g as number | null,
+    })
+    .select("id")
+    .single();
+  if (insertError) return { error: insertError.message, id: null };
+
+  const copyId = copy.id as string;
+  const rows = (ingredients ?? []).map((row) => ({
+    recipe_id: copyId,
+    food_id: row.food_id as string,
+    qty: row.qty as number,
+    sort_order: row.sort_order as number,
+  }));
+
+  if (rows.length > 0) {
+    const { error } = await supabase.from("recipe_ingredients").insert(rows);
+    if (error) {
+      // A copy with half its ingredients is worse than no copy: the user would
+      // have to work out which ones are missing against the original.
+      await supabase.from("recipes").delete().eq("id", copyId).eq("user_id", user.id);
+      return { error: error.message, id: null };
+    }
+  }
+
+  revalidatePath("/recipes");
+  return { error: null, id: copyId };
+}
+
+/**
  * Deletes the recipe and, by cascade, its ingredients. The generated `foods`
  * row is deliberately left behind: `intake_entries.food_id` points at it, and
  * past entries are not ours to disturb (S19).
@@ -1166,6 +1234,17 @@ function validateDetails(details: RecipeDetails): string | null {
     return "Cooked weight must be greater than zero, or left blank";
   }
   return null;
+}
+
+/**
+ * "Adobo" -> "Adobo (copy)", "Adobo (copy)" -> "Adobo (copy 2)". Names are not
+ * unique, so this is only about telling two rows apart in the list.
+ */
+function copyName(name: string): string {
+  const base = name.trim();
+  const existing = base.match(/^(.*) \(copy(?: (\d+))?\)$/);
+  if (!existing) return `${base} (copy)`;
+  return `${existing[1]} (copy ${Number(existing[2] ?? 1) + 1})`;
 }
 
 type ServerClient = Awaited<ReturnType<typeof createClient>>;
