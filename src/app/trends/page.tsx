@@ -1,6 +1,6 @@
 import { createClient } from "@/lib/supabase/server";
 import { TREND_DAYS, dailySeries, trendsWindow, type IntakeDay, type TopFood } from "@/lib/trends";
-import { toDayGoal, type DayGoal } from "@/lib/goals";
+import { toDayGoal, withTodayGoal, type DayGoal } from "@/lib/goals";
 import { TrendsScreen } from "@/components/trends-screen";
 import { serverToday } from "@/lib/server-time";
 
@@ -28,10 +28,13 @@ export default async function TrendsPage() {
       .gte("log_date", from)
       .lte("log_date", to)
       .order("log_date"),
-    // Only strict_mode is read live (S77). The goal numbers themselves come
-    // from day_goals below, one stored row per day rather than one live row
-    // for the whole window (S60).
-    supabase.from("nutrition_settings").select("strict_mode").maybeSingle(),
+    // The tone (S77), plus the prescription today's segment is drawn from
+    // until an entry seeds its day_goals row. Every other day in the window
+    // comes from that table, one stored row each (S60).
+    supabase
+      .from("nutrition_settings")
+      .select("strict_mode, calorie_goal, protein_goal_g, carb_goal_g, fat_goal_g")
+      .maybeSingle(),
     supabase
       .from("day_goals")
       .select("log_date, calorie_goal, protein_goal_g, carb_goal_g, fat_goal_g")
@@ -50,7 +53,14 @@ export default async function TrendsPage() {
   // days scored against a number. Calm passes no rows at all, which is the
   // same no-goal path a day with no stored row already takes -- neither
   // chart needs a second mode to draw nothing.
-  const goals: DayGoal[] = settings?.strict_mode === true ? (dayGoals ?? []).map(toDayGoal) : [];
+  const goals: DayGoal[] =
+    settings?.strict_mode === true
+      ? withTodayGoal(
+          (dayGoals ?? []).map(toDayGoal),
+          today,
+          toDayGoal({ ...settings, log_date: today }),
+        )
+      : [];
 
   return (
     <TrendsScreen

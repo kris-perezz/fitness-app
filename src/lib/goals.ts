@@ -163,3 +163,21 @@ export function toDayGoal(row: {
     fat_goal_g: Number(row.fat_goal_g),
   };
 }
+
+/**
+ * Today's goal, from the live prescription, when nothing has dated it yet.
+ *
+ * The no-invented-default rule above is about HISTORY: a day already lived
+ * keeps whatever was on file then, or nothing. Today is not history -- the
+ * prescription on `nutrition_settings` is its goal, and a row only appears
+ * once the first entry seeds it. Without this the strict screen spends every
+ * morning looking exactly like calm until something is logged.
+ */
+export function withTodayGoal(
+  rows: DayGoal[],
+  today: string,
+  live: Omit<DayGoal, "log_date"> | null,
+): DayGoal[] {
+  if (!live || rows.some((g) => g.log_date === today)) return rows;
+  return [...rows, { ...live, log_date: today }];
+}

@@ -6,7 +6,7 @@ import {
   type IntakeEntry,
 } from "@/lib/food";
 import { toMicros } from "@/lib/micros";
-import { toDayGoal } from "@/lib/goals";
+import { toDayGoal, withTodayGoal } from "@/lib/goals";
 import { LogScreen } from "@/components/log-screen";
 import { serverToday } from "@/lib/server-time";
 
@@ -68,10 +68,13 @@ export default async function LogPage({
         .select("log_date, calorie_goal, protein_goal_g, carb_goal_g, fat_goal_g")
         .gte("log_date", from)
         .lte("log_date", to),
-      // Only strict_mode is read live here now (S77) -- the goal numbers
-      // themselves come from day_goals above, one per day rather than one for
-      // the whole window.
-      supabase.from("nutrition_settings").select("strict_mode").maybeSingle(),
+      // The tone (S77) and the live prescription. Past days take their goal
+      // from day_goals above, one per day; today has no row there until its
+      // first entry seeds one, so it reads the prescription instead.
+      supabase
+        .from("nutrition_settings")
+        .select("strict_mode, calorie_goal, protein_goal_g, carb_goal_g, fat_goal_g")
+        .maybeSingle(),
       supabase.auth.getUser(),
     ]);
 
@@ -82,7 +85,11 @@ export default async function LogPage({
       loadedTo={to}
       foods={visibleFoods((foods ?? []) as CatalogRow[], auth.user?.id ?? null)}
       entries={(entries ?? []) as IntakeEntry[]}
-      dayGoals={(dayGoals ?? []).map(toDayGoal)}
+      dayGoals={withTodayGoal(
+        (dayGoals ?? []).map(toDayGoal),
+        today,
+        settings ? toDayGoal({ ...settings, log_date: today }) : null,
+      )}
       strictMode={settings?.strict_mode === true}
     />
   );

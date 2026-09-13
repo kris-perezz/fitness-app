@@ -2,6 +2,7 @@ import { createClient } from "@/lib/supabase/server";
 import { WINDOW_MONTHS, shiftMonth } from "@/lib/training";
 import { loadIntakeDaysWindow } from "@/app/actions";
 import { MonthLog } from "@/components/month-log";
+import { toDayGoal, withTodayGoal } from "@/lib/goals";
 import { serverToday } from "@/lib/server-time";
 
 export const dynamic = "force-dynamic";
@@ -25,7 +26,7 @@ export default async function MonthLogPage() {
 
   const { data: settings } = await supabase
     .from("nutrition_settings")
-    .select("strict_mode")
+    .select("strict_mode, calorie_goal, protein_goal_g, carb_goal_g, fat_goal_g")
     .maybeSingle();
   const strictMode = settings?.strict_mode === true;
 
@@ -37,7 +38,11 @@ export default async function MonthLogPage() {
       today={today}
       loadedFrom={from}
       days={days}
-      dayGoals={dayGoals}
+      dayGoals={
+        strictMode && settings
+          ? withTodayGoal(dayGoals, today, toDayGoal({ ...settings, log_date: today }))
+          : dayGoals
+      }
       strictMode={strictMode}
     />
   );
