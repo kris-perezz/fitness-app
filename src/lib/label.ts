@@ -58,8 +58,21 @@ type Extracted = {
 /** A draft food, not a saved one: every field is editable before it is written. */
 export type LabelDraft = Omit<Food, "id" | "aliases" | "barcode" | "source">;
 
+/**
+ * The serving as the PANEL states it, where that is more than one of the thing
+ * -- "Per 2 pieces (240 g)". The draft itself stores one piece, so this is what
+ * the check-it-against-the-package screen needs to scale back up by; null when
+ * the panel's serving is a single item or names no count.
+ */
+export type PrintedServing = { label: string; count: number };
+
 export type LabelResult =
-  | { status: "found"; draft: LabelDraft; warning: string | null }
+  | {
+      status: "found";
+      draft: LabelDraft;
+      printed: PrintedServing | null;
+      warning: string | null;
+    }
   // The photo reached the model and the model could not read a label off it.
   // Distinct from an error: retaking the photo is the useful next step.
   | { status: "unreadable"; message: string }
@@ -187,6 +200,22 @@ function labelMicros(x: Extracted, at: (v: number | null) => number): Micros {
   return out;
 }
 
+/**
+ * How many of the thing one printed serving is: 2 for "2 pieces", 1 for
+ * "1 shake" and for a label that names no count.
+ *
+ * A serving of two weighs two pieces' worth, so the grams beside it are not
+ * what one of them weighs -- and "1 serving" in this app has to mean one of
+ * something a person can pick up. Only a leading whole number counts: "1/2 cup"
+ * is a fraction of one measure, not a count of halves.
+ */
+function servingCount(label: string | null): number {
+  const match = /^\s*(\d+)\s*[^\d\s/.,]/.exec(label ?? "");
+  if (match === null) return 1;
+  const n = Number(match[1]);
+  return n > 1 && n <= 50 ? n : 1;
+}
+
 /** Positive, finite, and not an obvious misread. Null covers everything else. */
 function clean(value: number | null, max: number): number | null {
   if (value === null || !Number.isFinite(value) || value < 0 || value > max) return null;
@@ -220,7 +249,7 @@ function macroWarning(draft: LabelDraft): string | null {
  * precision, since multiplying a rounded per-100 figure back up to a serving is
  * exactly the bug that made a 160 calorie shake read 159.
  */
-function toDraft(x: Extracted): LabelDraft | null {
+function toDraft(x: Extracted): { draft: LabelDraft; printed: PrintedServing | null } | null {
   const kcal = clean(x.kcal, 10_000);
   if (kcal === null) return null;
 
@@ -236,7 +265,13 @@ function toDraft(x: Extracted): LabelDraft | null {
 
   const at = (v: number | null) => (clean(v, 100_000) ?? 0) * factor;
 
-  return {
+  // The macros are per 100 either way -- what the count changes is what ONE of
+  // this food is, which is the number every "1 serving" on the log tab means.
+  const pieces = servingCount(x.serving_label);
+  const label = x.serving_label?.trim() ?? "";
+  const one = amount === null ? null : Math.round((amount / pieces) * 100) / 100;
+
+  const draft: LabelDraft = {
     // Empty rather than a stand-in like "Scanned label": a placeholder in a
     // name field is indistinguishable from something that was actually read,
     // and the save button already refuses to submit a blank name.
@@ -246,7 +281,7 @@ function toDraft(x: Extracted): LabelDraft | null {
     // A countable draft has no weight at all, so 'g' is a placeholder rather
     // than a claim; on the per_100g branch it mirrors `unit` as 0008 requires.
     weight_unit: unit,
-    grams_per_unit: countable ? null : amount,
+    grams_per_unit: one,
     // S37. Read off the panel and scaled by the same `factor` as the macros,
     // so a per-serving label becomes per-100 g consistently across every field.
     // ABSENT IS ABSENT (S36): a row the OCR could not read stays out of the
@@ -262,6 +297,11 @@ function toDraft(x: Extracted): LabelDraft | null {
     // Confirmed off an actual label, which is the whole point of S4 -- and what
     // puts it above an Open Food Facts row in the source hierarchy.
     verified: true,
+  };
+
+  return {
+    draft,
+    printed: pieces > 1 && label !== "" ? { label, count: pieces } : null,
   };
 }
 
@@ -332,15 +372,20 @@ export async function extractLabel(image: string): Promise<LabelResult> {
     return { status: "error", message: "The label reader sent nothing back." };
   }
 
-  const draft = toDraft(parsed.value);
-  if (draft === null) {
+  const read = toDraft(parsed.value);
+  if (read === null) {
     return {
       status: "unreadable",
       message: "No calories could be read. Try again with the panel filling the frame.",
     };
   }
 
-  return { status: "found", draft, warning: macroWarning(draft) };
+  return {
+    status: "found",
+    draft: read.draft,
+    printed: read.printed,
+    warning: macroWarning(read.draft),
+  };
 }
 
 type Output =

@@ -24,7 +24,7 @@ import {
 import { CNF_ATTRIBUTION, CNF_LICENCE_URL, type CnfHit } from "@/lib/cnf";
 import type { OffHit } from "@/lib/off";
 import { downscaleToDataUrl } from "@/lib/image";
-import type { LabelDraft } from "@/lib/label";
+import type { LabelDraft, PrintedServing } from "@/lib/label";
 import { BarcodeScanner } from "@/components/barcode-scanner";
 import { FoodSourceBadge } from "@/components/food-source-badge";
 import { Button } from "@/components/ui/button";
@@ -521,7 +521,13 @@ function LabelStep({
   type Phase =
     | { kind: "idle" }
     | { kind: "reading" }
-    | { kind: "draft"; draft: LabelDraft; warning: string | null }
+    | {
+        kind: "draft";
+        draft: LabelDraft;
+        /** The serving the PANEL states, where that is more than one piece. */
+        printed: PrintedServing | null;
+        warning: string | null;
+      }
     | { kind: "failed"; message: string };
 
   const [phase, setPhase] = useState<Phase>({ kind: "idle" });
@@ -536,12 +542,15 @@ function LabelStep({
   const uploadRef = useRef<HTMLInputElement>(null);
 
   // Per-serving where the label was, so the numbers on screen are the numbers
-  // printed on the package.
-  const perServing = (draft: LabelDraft) =>
-    draft.basis === "per_100g" && draft.grams_per_unit ? draft.grams_per_unit / 100 : 1;
+  // printed on the package -- INCLUDING the count, since a panel headed "Per 2
+  // pieces" prints two pieces' worth while the draft stores one.
+  const perServing = (draft: LabelDraft, printed: PrintedServing | null) =>
+    draft.basis === "per_100g" && draft.grams_per_unit
+      ? (draft.grams_per_unit * (printed?.count ?? 1)) / 100
+      : 1;
 
-  function loadDraft(draft: LabelDraft, warning: string | null) {
-    const f = perServing(draft);
+  function loadDraft(draft: LabelDraft, printed: PrintedServing | null, warning: string | null) {
+    const f = perServing(draft, printed);
     const at = (n: number | null) => String(Math.round(((n ?? 0) * f + Number.EPSILON) * 10) / 10);
     setForm({
       name: draft.name,
@@ -562,7 +571,7 @@ function LabelStep({
         }),
       ),
     });
-    setPhase({ kind: "draft", draft, warning });
+    setPhase({ kind: "draft", draft, printed, warning });
   }
 
   async function pick(file: File) {
@@ -589,13 +598,13 @@ function LabelStep({
       return;
     }
 
-    if (res.status === "found") loadDraft(res.draft, res.warning);
+    if (res.status === "found") loadDraft(res.draft, res.printed, res.warning);
     else setPhase({ kind: "failed", message: res.message });
   }
 
   function save() {
     if (phase.kind !== "draft") return;
-    const f = perServing(phase.draft);
+    const f = perServing(phase.draft, phase.printed);
     const num = (key: string) => {
       const parsed = Number(form[key]);
       return Number.isFinite(parsed) ? parsed / f : 0;
@@ -639,14 +648,22 @@ function LabelStep({
   }
 
   const draft = phase.kind === "draft" ? phase.draft : null;
+  const printed = phase.kind === "draft" ? phase.printed : null;
+  // The panel's own serving, named the way the panel names it: a food whose
+  // serving is two pieces is checked against the two-piece column, even though
+  // one piece is what gets stored and later logged.
+  const servingText =
+    draft?.grams_per_unit == null
+      ? ""
+      : printed
+        ? `per ${printed.label} (${Math.round(draft.grams_per_unit * printed.count)} ${draft.unit})`
+        : `per serving (${draft.grams_per_unit} ${draft.unit})`;
   const basisText =
     draft === null
       ? ""
       : draft.basis === "per_unit"
         ? `per ${draft.unit}`
-        : draft.grams_per_unit
-          ? `per serving (${draft.grams_per_unit} ${draft.unit})`
-          : `per 100 ${draft.unit}`;
+        : servingText || `per 100 ${draft.unit}`;
 
   /**
    * S37. The rows a Canadian panel is legally required to print, plus the two
