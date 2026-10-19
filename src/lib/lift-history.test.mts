@@ -1,7 +1,7 @@
 import test from "node:test";
 import assert from "node:assert/strict";
 
-import { hasRepBand, liftHistory } from "./training.ts";
+import { enoughSessions, hasRepBand, liftHistory, repsOnly } from "./training.ts";
 import type { WorkoutSet } from "./training.ts";
 
 const set = (over: Partial<WorkoutSet> = {}): WorkoutSet =>
@@ -93,4 +93,17 @@ test("the second series only appears for an exercise that has one", () => {
 
   const high = liftHistory([{ log_date: "2026-09-01", sets: [set({ reps: 20 })] }]);
   assert.equal(hasRepBand(high.points), true);
+});
+
+test("bodyweight lifts chart by best reps, since a zero load estimates nothing", () => {
+  const days = ["2026-09-01", "2026-09-03", "2026-09-05", "2026-09-08"];
+  const { points } = liftHistory(
+    days.map((log_date, i) => ({
+      log_date,
+      sets: [set({ load_lb: 0, reps: 8 + i }), set({ load_lb: 0, reps: 6 })],
+    })),
+  );
+  assert.deepEqual(points.map((p) => p.reps), [8, 9, 10, 11]);
+  assert.ok(repsOnly(points));
+  assert.ok(enoughSessions(points));
 });

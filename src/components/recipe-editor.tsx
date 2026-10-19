@@ -429,7 +429,7 @@ function IngredientRow({ line }: { line: EditorLine }) {
           <ItemContent className="min-w-0">
             <ItemTitle className="font-normal">{line.food.name}</ItemTitle>
             <ItemDescription className="text-xs">
-              {show(macros.kcal)} cal · {show(macros.protein_g)}g protein
+              {show(macros.kcal)} cal · {show(macros.protein_g)} g protein
             </ItemDescription>
           </ItemContent>
           <ItemActions className="shrink-0 gap-1">

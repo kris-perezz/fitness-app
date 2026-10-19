@@ -5,7 +5,8 @@ import { CartesianGrid, Line, LineChart, XAxis, YAxis } from "recharts";
 
 import { CHART_CLASS, SERIES, TOOLTIP, X_AXIS, Y_AXIS, dayTick, measureDomain } from "@/lib/chart";
 import { useFinePointer } from "@/lib/pointer";
-import { MIN_LIFT_SESSIONS, hasRepBand, type LiftPoint } from "@/lib/training";
+import { MIN_LIFT_SESSIONS, hasRepBand, repsOnly, type LiftPoint } from "@/lib/training";
+import { toDisplay, type DisplayUnit } from "@/lib/weight";
 import {
   ChartContainer,
   ChartTooltip,
@@ -19,7 +20,20 @@ const liftConfig = {
   repBand: { label: "High-rep", color: "var(--muted-foreground)" },
 } satisfies ChartConfig;
 
-export function LiftChart({ points }: { points: LiftPoint[] }) {
+/** Stored pounds in the reader's unit, to the tenth a plate can be read to. */
+function inUnit(points: LiftPoint[], unit: DisplayUnit): LiftPoint[] {
+  if (unit === "lb") return points;
+  const kg = (v: number | null) => (v === null ? null : Math.round(toDisplay(v, unit) * 10) / 10);
+  return points.map((p) => ({ ...p, e1rm: kg(p.e1rm), repBand: kg(p.repBand) }));
+}
+
+export function LiftChart({ points: stored, unit }: { points: LiftPoint[]; unit: DisplayUnit }) {
+  const byReps = repsOnly(stored);
+  const points = byReps
+    ? stored.map((p) => ({ ...p, e1rm: p.reps, repBand: null }))
+    : inUnit(stored, unit);
+  const suffix = byReps ? "reps" : unit;
+  const config = byReps ? { ...liftConfig, e1rm: { ...liftConfig.e1rm, label: "Best reps" } } : liftConfig;
   const showRepBand = hasRepBand(points);
   const hoverable = useFinePointer();
   const domain = measureDomain(
@@ -30,7 +44,7 @@ export function LiftChart({ points }: { points: LiftPoint[] }) {
   );
 
   return (
-    <ChartContainer config={liftConfig} className={`mt-3 ${CHART_CLASS}`}>
+    <ChartContainer config={config} className={`mt-3 ${CHART_CLASS}`}>
       <LineChart data={points} margin={{ left: 0, right: 8, top: 4 }} accessibilityLayer>
         <CartesianGrid vertical={false} />
         <XAxis dataKey="date" {...X_AXIS} tickFormatter={dayTick} />
@@ -93,10 +107,10 @@ export function LiftChart({ points }: { points: LiftPoint[] }) {
                         style={{ background: item.color }}
                       />
                       <span className="text-muted-foreground">
-                        {liftConfig[name as keyof typeof liftConfig]?.label ?? name}
+                        {config[name as keyof typeof config]?.label ?? name}
                       </span>
                       <span className="ml-auto font-mono font-medium tabular-nums text-foreground">
-                        {Number(value)} lb
+                        {Number(value)} {suffix}
                       </span>
                     </>
                   )
@@ -128,7 +142,7 @@ function drawable(points: LiftPoint[]): boolean {
  * The colour follows the pin, not the drawable set, so a lift keeps its colour
  * when the one pinned before it gains enough sessions to draw.
  */
-export function PinnedLiftsChart({ lifts }: { lifts: PinnedLift[] }) {
+export function PinnedLiftsChart({ lifts, unit }: { lifts: PinnedLift[]; unit: DisplayUnit }) {
   const hoverable = useFinePointer();
 
   const series = lifts.map((lift, i) => ({
@@ -147,7 +161,7 @@ export function PinnedLiftsChart({ lifts }: { lifts: PinnedLift[] }) {
   // days, and connectNulls carries its line across them.
   const byDate = new Map<string, Record<string, string | number>>();
   for (const s of drawn) {
-    for (const p of s.points) {
+    for (const p of inUnit(s.points, unit)) {
       if (p.e1rm === null) continue;
       const row = byDate.get(p.date) ?? { date: p.date };
       row[s.key] = p.e1rm;
@@ -201,7 +215,7 @@ export function PinnedLiftsChart({ lifts }: { lifts: PinnedLift[] }) {
                             {config[String(name)]?.label ?? name}
                           </span>
                           <span className="ml-auto font-mono font-medium tabular-nums text-foreground">
-                            {Number(value)} lb
+                            {Number(value)} {unit}
                           </span>
                         </>
                       )

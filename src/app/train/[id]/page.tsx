@@ -26,7 +26,7 @@ export default async function WorkoutPage({ params }: PageProps<"/train/[id]">) 
   // the session's date). The rest were sequential by accident of where they sat
   // in the file, and the slots query never needed the workout row at all: it
   // keys on the id already in the URL.
-  const [row, exercises, slotRows, recent] = await Promise.all([
+  const [row, exercises, slotRows, recent, settings] = await Promise.all([
     // RLS scopes this to the caller, so somebody else's id is a 404 rather than
     // a permission error -- which is the honest answer, since as far as this
     // user is concerned the session does not exist.
@@ -46,6 +46,7 @@ export default async function WorkoutPage({ params }: PageProps<"/train/[id]">) 
       .order("sort_order", { ascending: true })
       .then(must),
     recentExerciseIds(supabase),
+    supabase.from("nutrition_settings").select("display_weight_unit").maybeSingle().then(must),
   ]);
 
   if (!row) notFound();
@@ -83,6 +84,7 @@ export default async function WorkoutPage({ params }: PageProps<"/train/[id]">) 
       history={history}
       exercises={(exercises ?? []) as Exercise[]}
       today={today}
+      unit={settings?.display_weight_unit === "kg" ? "kg" : "lb"}
       recentExerciseIds={recent}
     />
   );

@@ -46,3 +46,14 @@ test("short dates carry the year only outside the current one", async () => {
   assert.equal(dayTitle("2026-10-18", "2026-10-19"), "Yesterday");
   assert.equal(dayTitle("2026-03-01", "2026-03-02"), "Yesterday");
 });
+
+test("amounts round to two places and plural units read naturally", async () => {
+  const { amountLabel } = await import("./food.ts");
+  assert.equal(amountLabel(0.6666666666666666, "cup"), "0.67 cups");
+  assert.equal(amountLabel(2, "serving"), "2 servings");
+  assert.equal(amountLabel(1, "serving"), "1 serving");
+  assert.equal(amountLabel(2, "serving (1/3 cup)"), "2 servings (1/3 cup)");
+  assert.equal(amountLabel(150, "g"), "150 g");
+  assert.equal(amountLabel(3, "patty"), "3 patties");
+  assert.equal(amountLabel(2, "glass"), "2 glasses");
+});

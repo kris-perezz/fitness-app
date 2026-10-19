@@ -19,6 +19,7 @@ import {
   LOG_BUFFER_DAYS,
   LOG_WINDOW_DAYS,
   MEALS,
+  amountLabel,
   shiftDate,
   todayDate,
   type Food,
@@ -343,7 +344,7 @@ export function LogScreen({
               <div className="flex items-baseline justify-between px-3.5 pb-2 pt-3">
                 <h2 className="text-[17px] font-semibold tracking-[-0.01em]">{meal}</h2>
                 <span className="text-[15px] tabular-nums text-muted-foreground">
-                  {withCommas(mealKcal)}
+                  {items.length > 0 && `${withCommas(mealKcal)} cal`}
                 </span>
               </div>
 
@@ -364,7 +365,7 @@ export function LogScreen({
                             <ItemContent className="min-w-0">
                               <ItemTitle className="font-normal">{e.name}</ItemTitle>
                               <ItemDescription className="text-xs">
-                                {e.qty} {e.unit}
+                                {amountLabel(e.qty, e.unit)}
                                 {e.estimate && " · estimate"}
                               </ItemDescription>
                             </ItemContent>
@@ -493,9 +494,9 @@ function MacroMeter({
       <div className={cn("mt-1 text-xl font-semibold leading-none tabular-nums", paintClass)}>
         {round(value)}
         {against === null ? (
-          <span className="text-xs font-normal text-muted-foreground">g</span>
+          <span className="text-xs font-normal text-muted-foreground"> g</span>
         ) : (
-          <span className="text-xs font-normal text-muted-foreground">/{round(against)}g</span>
+          <span className="text-xs font-normal text-muted-foreground"> / {round(against)} g</span>
         )}
       </div>
     </div>
@@ -572,7 +573,7 @@ function EntryDetail({
               <p className="mt-0.5 text-sm text-muted-foreground">
                 {/* The amount moves into the field while it is being changed,
                     so the old figure is not sitting beside the new one. */}
-                {amount === null && `${entry.qty} ${entry.unit} · `}
+                {amount === null && `${amountLabel(entry.qty, entry.unit)} · `}
                 {entry.meal}
                 {entry.estimate && " · estimate"}
               </p>
@@ -639,11 +640,11 @@ function EntryDetail({
               <dl className="mt-6 grid grid-cols-3 gap-y-5 border-t border-border pt-5">
                 {[
                   ["Calories", withCommas(entry.kcal * shown)],
-                  ["Protein", `${round(entry.protein_g * shown)}g`],
-                  ["Carbs", `${round(entry.carb_g * shown)}g`],
-                  ["Fat", `${round(entry.fat_g * shown)}g`],
-                  ["Fibre", `${round(entry.fiber_g * shown)}g`],
-                  ["Sodium", `${withCommas(entry.sodium_mg * shown)}mg`],
+                  ["Protein", `${round(entry.protein_g * shown)} g`],
+                  ["Carbs", `${round(entry.carb_g * shown)} g`],
+                  ["Fat", `${round(entry.fat_g * shown)} g`],
+                  ["Fibre", `${round(entry.fiber_g * shown)} g`],
+                  ["Sodium", entry.sodium_mg == null ? "—" : `${withCommas(entry.sodium_mg * shown)} mg`],
                 ].map(([label, value]) => (
                   <div key={label}>
                     <dt className="text-xs text-muted-foreground">{label}</dt>

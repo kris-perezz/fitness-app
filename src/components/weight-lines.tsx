@@ -89,7 +89,7 @@ export function WeightLines({
                         {weightConfig[name as keyof typeof weightConfig]?.label ?? name}
                       </span>
                       <span className="ml-auto font-mono font-medium tabular-nums text-foreground">
-                        {trim(Number(value))} {unit}
+                        {Number(value).toFixed(1)} {unit}
                       </span>
                     </>
                   )

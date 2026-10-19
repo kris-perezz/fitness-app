@@ -308,7 +308,7 @@ export function ProgressHome({
             pins leaves no grid item -- an empty one would still claim a row. */}
         {pinned.length > 0 && (
           <div className="lg:order-6 lg:col-span-2">
-            <PinnedLiftsBlock pinned={pinned} />
+            <PinnedLiftsBlock pinned={pinned} unit={unit} />
           </div>
         )}
 
@@ -379,7 +379,7 @@ export function ProgressHome({
                         aria-label={`Edit ${shortDate(e.date)}`}
                       >
                         <span className="text-sm">
-                          {trim(toDisplay(e.weightLb, unit))} {unit}
+                          {toDisplay(e.weightLb, unit).toFixed(1)} {unit}
                         </span>{" "}
                         {/* The delta is why the list is worth reading rather than
                             the chart: the chart shows the shape, these are the
@@ -687,7 +687,7 @@ function WeighInSheet({
  * complete, and a prompt to pin something would be the tab asking for work
  * rather than answering a question.
  */
-function PinnedLiftsBlock({ pinned }: { pinned: PinnedLift[] }) {
+function PinnedLiftsBlock({ pinned, unit }: { pinned: PinnedLift[]; unit: DisplayUnit }) {
   return (
     <Card className={cn(SURFACE, SURFACE_PAD)}>
       <div className="flex items-baseline justify-between gap-2">
@@ -697,7 +697,7 @@ function PinnedLiftsBlock({ pinned }: { pinned: PinnedLift[] }) {
         </span>
       </div>
 
-      <PinnedLiftsChart lifts={pinned} />
+      <PinnedLiftsChart lifts={pinned} unit={unit} />
     </Card>
   );
 }

@@ -14,6 +14,8 @@ import {
   type Exercise,
   type LiftPoint,
   enoughSessions,
+  hasLiftValue,
+  repsOnly,
   type LiftSession,
 } from "@/lib/training";
 import { Button } from "@/components/ui/button";
@@ -25,6 +27,7 @@ import { Item, ItemContent, ItemDescription, ItemTitle } from "@/components/ui/i
 import { cn } from "@/lib/utils";
 import { PAGE, SURFACE, SURFACE_PAD } from "@/lib/ui";
 import { useSwipe } from "@/lib/swipe";
+import type { DisplayUnit } from "@/lib/weight";
 import { todayDate } from "@/lib/food";
 import { useBack } from "@/lib/back";
 
@@ -50,12 +53,14 @@ export function ExerciseScreen({
   points,
   sessions,
   pinned,
+  unit,
 }: {
   exercise: Exercise;
   points: LiftPoint[];
   sessions: LiftSession[];
   /** S81. Whether THIS lift is the one on the progress tab. */
   pinned: boolean;
+  unit: DisplayUnit;
 }) {
   const [pending, startTransition] = useTransition();
 
@@ -75,7 +80,7 @@ export function ExerciseScreen({
     });
   }
 
-  const plottable = points.filter((p) => p.e1rm !== null || p.repBand !== null);
+  const plottable = points.filter(hasLiftValue);
   const enough = enoughSessions(points);
   const showRepBand = hasRepBand(points);
 
@@ -123,7 +128,7 @@ export function ExerciseScreen({
         <>
           <Card className={cn(SURFACE, SURFACE_PAD)}>
             <div className="flex items-baseline justify-between gap-2">
-              <h2 className="text-sm font-medium">Estimated 1RM</h2>
+              <h2 className="text-sm font-medium">{repsOnly(points) ? "Best reps" : "Estimated 1RM"}</h2>
               <span className="text-xs text-muted-foreground">
                 {sessions.length} {sessions.length === 1 ? "session" : "sessions"}
               </span>
@@ -138,7 +143,7 @@ export function ExerciseScreen({
                 trend. The sets are below in the meantime.
               </p>
             ) : (
-              <LiftChart points={points} />
+              <LiftChart points={points} unit={unit} />
             )}
 
             {showRepBand && enough && (
@@ -157,7 +162,7 @@ export function ExerciseScreen({
                     <ItemContent className="min-w-0">
                       <ItemTitle className="font-normal">{dayTitle(session.date, todayDate())}</ItemTitle>
                       <ItemDescription className="text-xs tabular-nums">
-                        {session.sets.map((set) => setSummary(set)).join(" · ")}
+                        {session.sets.map((set) => setSummary(set, unit)).join(" · ")}
                       </ItemDescription>
                     </ItemContent>
                   </Item>

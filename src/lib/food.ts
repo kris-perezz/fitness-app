@@ -276,6 +276,28 @@ export function countLabel(food: Food, n: number): string {
   return food.unit;
 }
 
+const MEASURES = new Set(["g", "ml", "mg", "kg", "oz", "lb", "l"]);
+
+/**
+ * "2 servings", "0.67 cup" -> "0.67 cups", "150 g". At most two decimals, and
+ * the first word of a counting unit pluralised, so "serving (1/3 cup)" reads
+ * "2 servings (1/3 cup)".
+ */
+export function amountLabel(qty: number, unit: string): string {
+  const n = Math.round(qty * 100) / 100;
+  if (MEASURES.has(unit.toLowerCase()) || n === 1) return `${n} ${unit}`;
+  const [word, ...rest] = unit.split(" ");
+  // A single trailing s is already plural ("slices"); "ss" is not ("glass").
+  const plural = /(ss|x|ch|sh)$/i.test(word)
+    ? `${word}es`
+    : /s$/i.test(word)
+      ? word
+      : /[^aeiou]y$/i.test(word)
+      ? `${word.slice(0, -1)}ies`
+      : `${word}s`;
+  return [`${n} ${plural}`, ...rest].join(" ");
+}
+
 /** The amount the catalog macros are quoted against, for display. */
 export function basisLabel(food: Food): string {
   if (food.basis !== "per_100g") return food.unit;

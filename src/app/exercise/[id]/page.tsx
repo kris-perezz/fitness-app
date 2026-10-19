@@ -16,7 +16,7 @@ export default async function ExercisePage({ params }: PageProps<"/exercise/[id]
   const { id } = await params;
   const supabase = await createClient();
 
-  const [exercise, slots, pin] = await Promise.all([
+  const [exercise, slots, pin, settings] = await Promise.all([
     supabase
       .from("exercises")
       .select("id, name, aliases, equipment, bodyweight_fraction, load_is_per_side, primary_muscles")
@@ -34,6 +34,7 @@ export default async function ExercisePage({ params }: PageProps<"/exercise/[id]
     // S81/0033. At most one row, and its existence IS the answer -- pins are
     // a set now, so this asks about this lift rather than reading the pin.
     supabase.from("pinned_exercises").select("exercise_id").eq("exercise_id", id).maybeSingle().then(must),
+    supabase.from("nutrition_settings").select("display_weight_unit").maybeSingle().then(must),
   ]);
 
   if (!exercise) notFound();
@@ -53,6 +54,7 @@ export default async function ExercisePage({ params }: PageProps<"/exercise/[id]
       points={points}
       sessions={sessions}
       pinned={pin != null}
+      unit={settings?.display_weight_unit === "kg" ? "kg" : "lb"}
     />
   );
 }

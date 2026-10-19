@@ -11,6 +11,7 @@ import {
   foldBest,
   isWorkingSet,
   loadLabel,
+  loadText,
   shortDate,
   prFor,
   prMessage,
@@ -23,6 +24,7 @@ import {
   type WorkoutSlot,
 } from "@/lib/training";
 import { NO_HISTORY } from "@/lib/training";
+import { fromDisplay, toDisplay, type DisplayUnit } from "@/lib/weight";
 import type { Bests, LastSession, SlotHistory } from "@/lib/training";
 import {
   addWorkoutExercise,
@@ -92,6 +94,7 @@ export function TrainScreen({
   history,
   exercises,
   today,
+  unit,
   recentExerciseIds,
 }: {
   workout: Workout;
@@ -100,6 +103,7 @@ export function TrainScreen({
   history: Promise<SlotHistory>;
   exercises: Exercise[];
   today: string;
+  unit: DisplayUnit;
   recentExerciseIds: string[];
 }) {
   const router = useRouter();
@@ -189,7 +193,7 @@ export function TrainScreen({
           </span>
           <span className="shrink-0 pr-1 text-xs tabular-nums text-muted-foreground">
             {workingSets} {workingSets === 1 ? "set" : "sets"}
-            {volume > 0 && ` · ${Math.round(volume).toLocaleString()} lb`}
+            {volume > 0 && ` · ${Math.round(toDisplay(volume, unit)).toLocaleString()} ${unit}`}
           </span>
         </header>
 
@@ -228,6 +232,7 @@ export function TrainScreen({
             // a form BEHAVES today, not what a past set meant, so they are the
             // things here that follow the catalog rather than freeze at log time.
             exercise={exercises.find((e) => e.id === slot.exercise_id) ?? null}
+            unit={unit}
             onRemoving={markRemoving}
             openForm={openForm}
             onOpenForm={setOpenForm}
@@ -379,6 +384,7 @@ function SlotSection({
   onRemoving,
   openForm,
   onOpenForm,
+  unit,
 }: {
   slot: WorkoutSlot;
   last: LastSession | null;
@@ -390,6 +396,7 @@ function SlotSection({
   onRemoving: (slotId: string) => void;
   openForm: string | null;
   onOpenForm: (key: string | null) => void;
+  unit: DisplayUnit;
 }) {
   const addKey = `${slot.id}:add`;
   const adding = openForm === addKey;
@@ -418,7 +425,7 @@ function SlotSection({
     (current: WorkoutSet[], action: { kind: "add"; set: WorkoutSet }) => [...current, action.set],
   );
 
-  const suggestion = suggestFor(sets, last);
+  const suggestion = suggestFor(sets, last, unit);
   const editing = sets.find((set) => openForm === `${slot.id}:${set.id}`) ?? null;
   const setEditing = (set: WorkoutSet | null) =>
     onOpenForm(set ? `${slot.id}:${set.id}` : editing ? null : openForm);
@@ -517,7 +524,7 @@ function SlotSection({
                 <TableCell>
                   <span className="flex items-center gap-1.5">
                     <span className="tabular-nums">
-                      {set.load_lb === 0 ? "BW" : `${trim(set.load_lb)} lb`}
+                      {set.load_lb === 0 ? "BW" : loadText(set.load_lb, unit)}
                     </span>
                     {/* A warm-up counts for nothing in volume (S32) but stays in
                         history, so the row has to say which it is -- the light
@@ -553,6 +560,7 @@ function SlotSection({
                 <TableRow className="hover:bg-transparent">
                   <TableCell colSpan={5} className="whitespace-normal px-5 pb-3 pt-2">
                     <SetForm
+                      unit={unit}
                       key={editing.id}
                       title={`Set ${editing.set_index + 1}`}
                       suggestion={null}
@@ -614,6 +622,7 @@ function SlotSection({
         <CollapsibleContent>
           <div className="px-5 pb-4 pt-1">
             <SetForm
+              unit={unit}
               // Re-keyed on the set count so each new set opens with a fresh
               // suggestion rather than the previous row's edited state.
               key={sets.length}
@@ -703,7 +712,9 @@ function SetForm({
   onSubmit,
   onCancel,
   onDelete,
+  unit,
 }: {
+  unit: DisplayUnit;
   title: string;
   suggestion: { from: string; detail: string } | null;
   initial: SetDraft;
@@ -714,7 +725,10 @@ function SetForm({
   onCancel: () => void;
   onDelete?: () => void;
 }) {
-  const [load, setLoad] = useState(initial.load_lb === 0 ? "" : trim(initial.load_lb));
+  // Typed in the reader's unit and stored in pounds. Untouched, the stored
+  // pounds go back exactly, so editing reps never nudges a kg-shown load.
+  const shownLoad = initial.load_lb === 0 ? "" : trim(toDisplay(initial.load_lb, unit));
+  const [load, setLoad] = useState(shownLoad);
   const [reps, setReps] = useState(initial.reps === null ? "" : String(initial.reps));
   const [rir, setRir] = useState(initialRir === null ? "" : String(initialRir));
   const [warmup, setWarmup] = useState(initial.set_type === "warmup");
@@ -754,7 +768,7 @@ function SetForm({
       {
         reps: reps.trim() === "" ? null : Number(reps),
         // Blank is bodyweight -- a real load of zero (S29), not a missing one.
-        load_lb: load.trim() === "" ? 0 : Number(load),
+        load_lb: load === shownLoad ? initial.load_lb : load.trim() === "" ? 0 : fromDisplay(Number(load), unit),
         set_type: warmup ? "warmup" : "straight",
       },
       // Null, not zero: blank is "not recorded", zero is "taken to failure",
@@ -784,7 +798,7 @@ function SetForm({
             htmlFor={`load_${title}`}
             className="text-[11px] font-normal text-muted-foreground"
           >
-            {loadLabel(exercise)}
+            {loadLabel(exercise, unit)}
           </FieldLabel>
           <Input
             id={`load_${title}`}

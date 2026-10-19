@@ -382,8 +382,8 @@ function QtyStep({
           <p className="mt-1 text-xs text-muted-foreground">{sourceHint(food.source, food.derived_from)}</p>
         )}
         <p className="mt-1 text-xs text-muted-foreground">
-          {show(food.kcal)} cal · {show(food.protein_g)}g protein · {show(food.carb_g)}g carbs ·{" "}
-          {show(food.fat_g)}g fat per {basisLabel(food)}
+          {show(food.kcal)} cal · {show(food.protein_g)} g protein · {show(food.carb_g)} g carbs ·{" "}
+          {show(food.fat_g)} g fat per {basisLabel(food)}
           {food.grams_per_unit
             ? ` · 1 ${countLabel(food, 1)} = ${food.grams_per_unit} ${food.weight_unit}`
             : ""}

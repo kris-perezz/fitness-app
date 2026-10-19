@@ -123,7 +123,8 @@ function displayName(product: OffProduct, barcode: string): string {
 function servingGrams(product: OffProduct): number | null {
   const raw = num(product.serving_quantity);
   if (raw === null || raw <= 0 || raw > 5000) return null;
-  return Math.round(raw);
+  // Tenths, not whole grams: a 2.5 g sachet rounded to 3 g is 20% too much.
+  return Math.round(raw * 10) / 10;
 }
 
 /**

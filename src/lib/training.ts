@@ -9,6 +9,7 @@
  */
 
 import { searchNamed } from "./search.ts";
+import { toDisplay, type DisplayUnit } from "./weight.ts";
 
 /**
  * A catalog row, as far as the CLIENT is concerned -- which is deliberately
@@ -199,8 +200,13 @@ export function allowsBodyweight(exercise: Exercise | null): boolean {
  * is the failure that actually corrupts a series, and the one no amount of
  * arithmetic downstream can undo.
  */
-export function loadLabel(exercise: Exercise | null): string {
-  return exercise?.load_is_per_side ? "Load per side (lb)" : "Load (lb)";
+export function loadLabel(exercise: Exercise | null, unit: DisplayUnit = "lb"): string {
+  return exercise?.load_is_per_side ? `Load per side (${unit})` : `Load (${unit})`;
+}
+
+/** A stored pound load in the reader's unit: "135 lb", "61.2 kg". */
+export function loadText(loadLb: number, unit: DisplayUnit = "lb"): string {
+  return `${trim(toDisplay(loadLb, unit))} ${unit}`;
 }
 
 /** S27: the same ranking the food picker uses, because it is the same function. */
@@ -224,12 +230,10 @@ export function isWorkingSet(set: WorkoutSet): boolean {
  * How a confirmed set reads back. Bodyweight movements log `load_lb = 0`, which
  * is a real answer rather than a missing one, so it gets a word instead of "0 lb".
  */
-export function setSummary(set: WorkoutSet): string {
+export function setSummary(set: WorkoutSet, unit: DisplayUnit = "lb"): string {
   if (set.skipped) return "Skipped";
-  const reps = set.reps ?? 0;
-  const load = set.load_lb === 0 ? "bodyweight" : `${trim(set.load_lb)} lb`;
   const rir = set.rir === null ? "" : set.rir === 0 ? " · to failure" : ` · ${set.rir} RIR`;
-  return `${reps} × ${load}${rir}`;
+  return `${loadReps(set.load_lb, set.reps, unit)}${rir}`;
 }
 
 /**
@@ -403,13 +407,14 @@ export type Suggestion = {
 export function suggestFor(
   setsToday: WorkoutSet[],
   lastSession: { sets: WorkoutSet[]; date: string } | null,
+  unit: DisplayUnit = "lb",
 ): Suggestion | null {
   const prior = [...setsToday].reverse().find(isWorkingSet);
   if (prior) {
     return {
       draft: { reps: prior.reps, load_lb: prior.load_lb, set_type: "straight" },
       from: `Set ${prior.set_index + 1} today`,
-      detail: loadReps(prior.load_lb, prior.reps),
+      detail: loadReps(prior.load_lb, prior.reps, unit),
     };
   }
 
@@ -420,7 +425,7 @@ export function suggestFor(
   return {
     draft: { reps: best.reps, load_lb: best.load_lb, set_type: "straight" },
     from: shortDate(lastSession.date),
-    detail: loadReps(best.load_lb, best.reps),
+    detail: loadReps(best.load_lb, best.reps, unit),
   };
 }
 
@@ -434,8 +439,8 @@ export function dayTitle(date: string, today: string): string {
 }
 
 /** "100 lb × 12", or "bodyweight × 12" where the load is a real zero (S29). */
-export function loadReps(loadLb: number, reps: number | null): string {
-  const load = loadLb === 0 ? "bodyweight" : `${trim(loadLb)} lb`;
+export function loadReps(loadLb: number, reps: number | null, unit: DisplayUnit = "lb"): string {
+  const load = loadLb === 0 ? "bodyweight" : loadText(loadLb, unit);
   return `${load} × ${reps ?? 0}`;
 }
 
@@ -479,7 +484,13 @@ export function isStale(workout: Workout, today: string): boolean {
  * mistake this app refuses to make anywhere else. Null where a session had no
  * set in that band, so the chart draws a gap rather than a slope down to zero.
  */
-export type LiftPoint = { date: string; e1rm: number | null; repBand: number | null };
+export type LiftPoint = {
+  date: string;
+  e1rm: number | null;
+  repBand: number | null;
+  /** Most reps in one bodyweight set, which is what a pull-up is measured by. */
+  reps: number | null;
+};
 
 /** What was actually lifted that day. The chart shows shape; these show facts. */
 export type LiftSession = { date: string; sets: WorkoutSet[] };
@@ -517,9 +528,15 @@ export function liftHistory(
     const sets = byDate.get(date) ?? [];
     let e1rm = 0;
     let repBand = 0;
+    let bestReps = 0;
     for (const set of sets) {
       const reps = set.reps ?? 0;
       if (reps <= 0) continue;
+      // Brzycki on a zero load is zero, so bodyweight work is charted by reps.
+      if (set.load_lb === 0) {
+        bestReps = Math.max(bestReps, reps);
+        continue;
+      }
       const e = estimated1RM(set.load_lb, set.reps);
       if (reps <= REP_CAP) e1rm = Math.max(e1rm, e);
       else repBand = Math.max(repBand, e);
@@ -531,6 +548,7 @@ export function liftHistory(
       date,
       e1rm: e1rm > 0 ? Math.round(e1rm) : null,
       repBand: repBand > 0 ? Math.round(repBand) : null,
+      reps: bestReps > 0 ? bestReps : null,
     });
     sessions.push({ date, sets });
   }
@@ -545,5 +563,14 @@ export function hasRepBand(points: LiftPoint[]): boolean {
 
 /** Enough sessions to draw at all (S79 rule 4). Shared so both callers agree. */
 export function enoughSessions(points: LiftPoint[]): boolean {
-  return points.filter((p) => p.e1rm !== null || p.repBand !== null).length >= MIN_LIFT_SESSIONS;
+  return points.filter(hasLiftValue).length >= MIN_LIFT_SESSIONS;
+}
+
+export function hasLiftValue(p: LiftPoint): boolean {
+  return p.e1rm !== null || p.repBand !== null || p.reps !== null;
+}
+
+/** Bodyweight only, ever: chart the reps, since there is no load to estimate from. */
+export function repsOnly(points: LiftPoint[]): boolean {
+  return points.some((p) => p.reps !== null) && points.every((p) => p.e1rm === null && p.repBand === null);
 }
