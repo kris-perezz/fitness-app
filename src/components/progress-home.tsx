@@ -31,11 +31,11 @@ import {
 import type { PinnedLift } from "@/components/lift-chart";
 import { deleteWeighIn, loadWeighInWindow, saveWeighIn } from "@/app/progress-actions";
 import { reach } from "@/lib/reach";
+import { deleteWithUndo } from "@/lib/undo";
 import { Button } from "@/components/ui/button";
 import { Card } from "@/components/ui/card";
 import { ToggleGroup, ToggleGroupItem } from "@/components/ui/toggle-group";
 import { Calendar } from "@/components/ui/calendar";
-import { ConfirmAction } from "@/components/confirm-action";
 import { SwipeToDelete } from "@/components/swipe-to-delete";
 import { useSwipe } from "@/lib/swipe";
 import {
@@ -230,15 +230,15 @@ export function ProgressHome({
   // The gesture's own path to the same delete the weigh-in sheet offers. It
   // drops the row from the window in place, exactly as the sheet's `onDeleted`
   // does, so the chart and the calendar follow without a refetch.
-  const [, startRowDelete] = useTransition();
   function removeWeighIn(date: string) {
-    startRowDelete(async () => {
-      const res = await reach(deleteWeighIn(date));
-      if (res.error) {
-        toast.error(res.error);
-        return;
-      }
-      setEntries((prev) => prev.filter((e) => e.date !== date));
+    const entry = entries.find((e) => e.date === date);
+    if (!entry) return;
+    deleteWithUndo({
+      message: `Deleted ${shortDate(date)}`,
+      hide: () => setEntries((prev) => prev.filter((e) => e.date !== date)),
+      // The list sorts itself by date, so order does not need restoring.
+      restore: () => setEntries((prev) => [...prev, entry]),
+      commit: () => reach(deleteWeighIn(date)),
     });
   }
 
@@ -366,11 +366,7 @@ export function ProgressHome({
               <li key={e.date}>
                 {/* The weigh-in sheet keeps the Delete button it always had;
                     this is the shortcut past it for a reading typed wrong. */}
-                <SwipeToDelete
-                  title={`Delete ${shortDate(e.date)}?`}
-                  description="That reading comes off the chart and the trend. This cannot be undone."
-                  onConfirm={() => removeWeighIn(e.date)}
-                >
+                <SwipeToDelete onConfirm={() => removeWeighIn(e.date)}>
                   <Item size="sm" className="rounded-none px-3.5 py-3 active:bg-accent">
                     <ItemContent className="min-w-0">
                       <ItemTitle className="font-normal">{shortDate(e.date)}</ItemTitle>
@@ -430,7 +426,7 @@ export function ProgressHome({
         onSaved={(entry) =>
           setEntries((prev) => [...prev.filter((e) => e.date !== entry.date), entry])
         }
-        onDeleted={(date) => setEntries((prev) => prev.filter((e) => e.date !== date))}
+        onDelete={removeWeighIn}
       />
     </>
   );
@@ -556,7 +552,7 @@ function WeighInSheet({
   today,
   onOpenChange,
   onSaved,
-  onDeleted,
+  onDelete,
   unit,
 }: {
   date: string | null;
@@ -565,16 +561,13 @@ function WeighInSheet({
   today: string;
   onOpenChange: (open: boolean) => void;
   onSaved: (entry: WeighIn) => void;
-  onDeleted: (date: string) => void;
+  onDelete: (date: string) => void;
   unit: DisplayUnit;
 }) {
   const [value, setValue] = useState("");
   const [openedFor, setOpenedFor] = useState<string | null>(date);
-  // One transition per action, not one for the sheet: a shared flag makes the
-  // Save button announce "Saving" while a delete is what is actually running.
   const [saving, startSave] = useTransition();
-  const [deleting, startDelete] = useTransition();
-  const pending = saving || deleting;
+  const pending = saving;
 
   // Reset on every OPEN, and on opening a different day. Adjusted during render
   // rather than in an effect, the same call add-sheet.tsx made and for the same
@@ -619,15 +612,8 @@ function WeighInSheet({
 
   function remove() {
     if (date === null) return;
-    startDelete(async () => {
-      const res = await reach(deleteWeighIn(date));
-      if (res.error) {
-        toast.error(res.error);
-        return;
-      }
-      onDeleted(date);
-      onOpenChange(false);
-    });
+    onDelete(date);
+    onOpenChange(false);
   }
 
   return (
@@ -672,16 +658,15 @@ function WeighInSheet({
 
         <div className="flex shrink-0 items-center gap-2 border-t border-border px-5 pt-3 pb-safe">
           {existing && (
-            <ConfirmAction
-              trigger={
-                <Button variant="ghost" size="icon-xl" className="size-11 shrink-0" aria-label="Delete">
-                  <Trash2 className="size-4" />
-                </Button>
-              }
-              title="Delete this weigh-in?"
-              description="The trend and the rate are recomputed without it."
-              onConfirm={remove}
-            />
+            <Button
+              variant="ghost"
+              size="icon-xl"
+              className="size-11 shrink-0"
+              aria-label="Delete"
+              onClick={remove}
+            >
+              <Trash2 className="size-4" />
+            </Button>
           )}
           <Button className="h-11 flex-1 text-base" onClick={save} disabled={pending || !value}>
             {saving ? "Saving" : existing ? "Save" : "Log it"}

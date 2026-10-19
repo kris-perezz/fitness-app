@@ -27,6 +27,7 @@ import {
 } from "@/lib/food";
 import { deleteEntry, loadIntakeWindow, saveEntryAsFood, updateEntryQty } from "@/app/actions";
 import { reach } from "@/lib/reach";
+import { deleteWithUndo } from "@/lib/undo";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Card } from "@/components/ui/card";
@@ -48,7 +49,6 @@ import {
 import { cn } from "@/lib/utils";
 import { statusOf, toneOf, type Metric, type Paint, type Tone } from "@/lib/tone";
 import { AddSheet } from "@/components/add-sheet";
-import { ConfirmAction } from "@/components/confirm-action";
 import { FoodSourceBadge } from "@/components/food-source-badge";
 import { CalorieRing } from "@/components/calorie-ring";
 import { toast } from "sonner";
@@ -185,15 +185,14 @@ export function LogScreen({
 
   // Shared by the swipe on a row and the Delete button in the entry detail --
   // one place decides what a removed entry does to the window on screen.
-  const [, startEntryDelete] = useTransition();
   function removeEntry(entry: Entry) {
-    startEntryDelete(async () => {
-      const res = await reach(deleteEntry(entry.id));
-      if (res.error) {
-        toast.error(res.error);
-        return;
-      }
-      setEntries((prev) => prev.filter((e) => e.id !== entry.id));
+    const at = entries.findIndex((e) => e.id === entry.id);
+    deleteWithUndo({
+      message: `Deleted ${entry.name}`,
+      hide: () => setEntries((prev) => prev.filter((e) => e.id !== entry.id)),
+      restore: () =>
+        setEntries((prev) => [...prev.slice(0, at), entry, ...prev.slice(at)]),
+      commit: () => reach(deleteEntry(entry.id)),
     });
   }
 
@@ -319,11 +318,7 @@ export function LogScreen({
                       {/* The entry detail keeps the Delete button it always
                           had; this is the shortcut past it for the entry you
                           only opened to get rid of. */}
-                      <SwipeToDelete
-                        title={`Delete ${e.name}?`}
-                        description={`${round(e.kcal)} calories come off ${e.meal}. This cannot be undone.`}
-                        onConfirm={() => removeEntry(e)}
-                      >
+                      <SwipeToDelete onConfirm={() => removeEntry(e)}>
                         <Item
                           asChild
                           size="sm"
@@ -378,7 +373,7 @@ export function LogScreen({
         entry={detail}
         food={detail?.food_id ? (foods.find((f) => f.id === detail.food_id) ?? null) : null}
         onClose={() => setDetail(null)}
-        onDeleted={(id) => setEntries((prev) => prev.filter((e) => e.id !== id))}
+        onDelete={removeEntry}
         onUpdated={(updated) =>
           setEntries((prev) => prev.map((e) => (e.id === updated.id ? updated : e)))
         }
@@ -472,7 +467,7 @@ function EntryDetail({
   entry,
   food,
   onClose,
-  onDeleted,
+  onDelete,
   onUpdated,
   onSavedAsFood,
 }: {
@@ -480,15 +475,14 @@ function EntryDetail({
   /** The catalog row this entry was logged against, when it still exists. */
   food: Food | null;
   onClose: () => void;
-  onDeleted: (id: string) => void;
+  onDelete: (entry: Entry) => void;
   onUpdated: (entry: Entry) => void;
   onSavedAsFood: (entryId: string, foodId: string) => void;
 }) {
   // One transition per action, not one for the sheet: a shared flag makes the
   // Delete button announce "Deleting" while a save is what is actually running.
   const [saving, startSave] = useTransition();
-  const [deleting, startDelete] = useTransition();
-  const pending = saving || deleting;
+  const pending = saving;
   // The amount being typed, or null when the sheet is just reading. Keyed by
   // the entry so opening a second one never inherits the first one's edit.
   const [amount, setAmount] = useState<string | null>(null);
@@ -551,7 +545,7 @@ function EntryDetail({
                 <div className="mt-4 flex items-center gap-2">
                   <Input
                     autoFocus
-                    type="number"
+                    type="text"
                     inputMode="decimal"
                     enterKeyHint="done"
                     aria-label={`Amount in ${entry.unit}`}
@@ -643,30 +637,17 @@ function EntryDetail({
                     <BookmarkPlus className="size-4" /> Save as food
                   </Button>
                 )}
-                <ConfirmAction
-                  title={`Delete ${entry.name}?`}
-                  description={`${round(entry.kcal)} calories come off ${entry.meal}. This cannot be undone.`}
-                  onConfirm={() =>
-                    startDelete(async () => {
-                      const res = await reach(deleteEntry(entry.id));
-                      if (res.error) {
-                        toast.error(res.error);
-                        return;
-                      }
-                      onDeleted(entry.id);
-                      onClose();
-                    })
-                  }
-                  trigger={
-                    <Button
-                      variant="outline"
-                      className="h-11 flex-1 text-destructive"
-                      disabled={pending}
-                    >
-                      {deleting ? "Deleting" : "Delete"}
-                    </Button>
-                  }
-                />
+                <Button
+                  variant="outline"
+                  className="h-11 flex-1 text-destructive"
+                  disabled={pending}
+                  onClick={() => {
+                    onDelete(entry);
+                    onClose();
+                  }}
+                >
+                  Delete
+                </Button>
               </ButtonGroup>
             </div>
           </div>

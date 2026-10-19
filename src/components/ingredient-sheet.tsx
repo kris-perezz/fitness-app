@@ -217,7 +217,7 @@ function IngredientQtyStep({
           <Input
             ref={inputRef}
             id="ingredient_qty"
-            type="number"
+            type="text"
             inputMode="decimal"
             enterKeyHint="done"
             value={qty}

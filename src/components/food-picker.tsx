@@ -809,7 +809,7 @@ function LabelStep({
                   </FieldLabel>
                   <Input
                     id={`label_${key}`}
-                    type="number"
+                    type="text"
                     inputMode="decimal"
                     value={form[key] ?? ""}
                     onChange={(e) => setForm({ ...form, [key]: e.target.value })}
@@ -848,7 +848,7 @@ function LabelStep({
                         </FieldLabel>
                         <Input
                           id={`label_${key}`}
-                          type="number"
+                          type="text"
                           inputMode="decimal"
                           value={form[key] ?? ""}
                           onChange={(e) => setForm({ ...form, [key]: e.target.value })}

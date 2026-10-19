@@ -212,7 +212,7 @@ function EditForm({
           </div>
           <Input
             id="edit_serving"
-            type="number"
+            type="text"
             inputMode="decimal"
             value={serving}
             onChange={(e) => setServing(e.target.value)}
@@ -237,7 +237,7 @@ function EditForm({
               </FieldLabel>
               <Input
                 id={`edit_${key}`}
-                type="number"
+                type="text"
                 inputMode="decimal"
                 value={form[key] ?? ""}
                 onChange={(e) => setForm({ ...form, [key]: e.target.value })}

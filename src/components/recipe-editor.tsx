@@ -182,7 +182,7 @@ export function RecipeEditor({
               </FieldLabel>
               <Input
                 id="recipe_servings"
-                type="number"
+                type="text"
                 inputMode="decimal"
                 value={servings}
                 onChange={(e) => setServings(e.target.value)}
@@ -199,7 +199,7 @@ export function RecipeEditor({
               </FieldLabel>
               <Input
                 id="recipe_cooked"
-                type="number"
+                type="text"
                 inputMode="decimal"
                 value={cooked}
                 onChange={(e) => setCooked(e.target.value)}
@@ -434,7 +434,7 @@ function IngredientRow({ line }: { line: EditorLine }) {
           </ItemContent>
           <ItemActions className="shrink-0 gap-1">
             <Input
-              type="number"
+              type="text"
               inputMode="decimal"
               aria-label={`Amount of ${line.food.name}`}
               value={qty}

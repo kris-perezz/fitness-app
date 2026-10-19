@@ -44,8 +44,9 @@ export function SwipeToDelete({
   className,
 }: {
   children: ReactNode;
-  title: string;
-  description: string;
+  /** With no title the swipe deletes at once; the caller offers Undo. */
+  title?: string;
+  description?: string;
   confirmLabel?: string;
   onConfirm: () => void;
   disabled?: boolean;
@@ -71,7 +72,10 @@ export function SwipeToDelete({
     // Always back to rest. A row left sitting open is a second, undismissable
     // state to explain, and the dialog is already the thing being asked.
     setOffset(0);
-    if (engaged.current && Math.abs(travelled.current) >= TRIGGER_PX) setAsking(true);
+    if (engaged.current && Math.abs(travelled.current) >= TRIGGER_PX) {
+      if (title) setAsking(true);
+      else onConfirm();
+    }
     travelled.current = 0;
   }
 
@@ -130,14 +134,16 @@ export function SwipeToDelete({
         {children}
       </div>
 
-      <ConfirmAction
-        open={asking}
-        onOpenChange={setAsking}
-        title={title}
-        description={description}
-        confirmLabel={confirmLabel}
-        onConfirm={onConfirm}
-      />
+      {title && (
+        <ConfirmAction
+          open={asking}
+          onOpenChange={setAsking}
+          title={title}
+          description={description ?? ""}
+          confirmLabel={confirmLabel}
+          onConfirm={onConfirm}
+        />
+      )}
     </div>
   );
 }

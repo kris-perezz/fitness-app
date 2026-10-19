@@ -33,6 +33,7 @@ import {
   updateSet,
 } from "@/app/training-actions";
 import { reach } from "@/lib/reach";
+import { deleteWithUndo } from "@/lib/undo";
 import { ExercisePicker } from "@/components/exercise-picker";
 import { Button } from "@/components/ui/button";
 import { ButtonGroup } from "@/components/ui/button-group";
@@ -403,13 +404,14 @@ function SlotSection({
    * The optimistic row is discarded automatically when the transition ends and
    * the refreshed server data arrives, so a failed write corrects itself rather
    * than leaving a set that was never saved.
+   *
+   * `hidden` is the other direction: sets deleted behind an Undo toast, gone
+   * from the screen but not yet from the server.
    */
+  const [hidden, setHidden] = useState<string[]>([]);
   const [sets, applyOptimistic] = useOptimistic(
-    slot.sets,
-    (current: WorkoutSet[], action: { kind: "add"; set: WorkoutSet } | { kind: "remove"; id: string }) =>
-      action.kind === "add"
-        ? [...current, action.set]
-        : current.filter((s) => s.id !== action.id),
+    slot.sets.filter((set) => !hidden.includes(set.id)),
+    (current: WorkoutSet[], action: { kind: "add"; set: WorkoutSet }) => [...current, action.set],
   );
 
   const suggestion = suggestFor(sets, last);
@@ -569,17 +571,16 @@ function SlotSection({
                           setEditing(null);
                         })
                       }
-                      onDelete={() =>
-                        startTransition(async () => {
-                          applyOptimistic({ kind: "remove", id: editing.id });
-                          setEditing(null);
-                          const res = await reach(deleteSet(editing.id));
-                          if (res.error) {
-                            toast.error(res.error);
-                            return;
-                          }
-                        })
-                      }
+                      onDelete={() => {
+                        const id = editing.id;
+                        setEditing(null);
+                        deleteWithUndo({
+                          message: `Deleted set ${editing.set_index + 1}`,
+                          hide: () => setHidden((prev) => [...prev, id]),
+                          restore: () => setHidden((prev) => prev.filter((h) => h !== id)),
+                          commit: () => reach(deleteSet(id)),
+                        });
+                      }}
                     />
                   </TableCell>
                 </TableRow>
@@ -783,7 +784,7 @@ function SetForm({
           </FieldLabel>
           <Input
             id={`load_${title}`}
-            type="number"
+            type="text"
             inputMode="decimal"
             value={load}
             onChange={(e) => edit("load", setLoad)(e.target.value)}
@@ -802,7 +803,7 @@ function SetForm({
           </FieldLabel>
           <Input
             id={`reps_${title}`}
-            type="number"
+            type="text"
             inputMode="numeric"
             value={reps}
             onChange={(e) => edit("reps", setReps)(e.target.value)}
@@ -820,7 +821,7 @@ function SetForm({
           </FieldLabel>
           <Input
             id={`rir_${title}`}
-            type="number"
+            type="text"
             inputMode="numeric"
             value={rir}
             onChange={(e) => edit("rir", setRir)(e.target.value)}

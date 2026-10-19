@@ -398,7 +398,7 @@ function QtyStep({
           <Input
             ref={inputRef}
             id="qty"
-            type="number"
+            type="text"
             inputMode="decimal"
             enterKeyHint="done"
             value={qty}
@@ -896,7 +896,7 @@ function CustomStep({
                     ) : (
                       <InputGroup className="w-24">
                         <InputGroupInput
-                          type="number"
+                          type="text"
                           inputMode="numeric"
                           value={row.grams}
                           onChange={(e) => reweigh(index, e.target.value)}
@@ -926,7 +926,7 @@ function CustomStep({
               </FieldLabel>
               <Input
                 id={key}
-                type="number"
+                type="text"
                 inputMode="decimal"
                 value={f[key]}
                 onChange={(e) => {

@@ -83,7 +83,8 @@ export function TrainHome({
   openSession: { id: string; date: string } | null;
 }) {
   const router = useRouter();
-  const [adding, setAdding] = useState(false);
+  // The day the "Which day?" sheet opens on, or null when it is closed.
+  const [adding, setAdding] = useState<string | null>(null);
 
   // The month is state, not a URL parameter and not a server round trip. Every
   // session and every day of volume is already here, so paging is a filter
@@ -173,26 +174,18 @@ export function TrainHome({
     // lands in the biggest month.
     return countDomain([...byMonthMuscle.values()])[1];
   }, [volume]);
-  const [, startTransition] = useTransition();
 
   const byDate = useMemo(() => new Map(sessions.map((s) => [s.date, s])), [sessions]);
   const trainedDays = useMemo(() => sessions.map((s) => toDate(s.date)), [sessions]);
 
-  /** Open a day's session, creating it if there is none (S52). */
+  /**
+   * Open a day's session (S52). A day with none asks first, on the same sheet
+   * as Add session: a tap to look at a day must not mark it as trained.
+   */
   function open(date: string) {
     const existing = byDate.get(date);
-    if (existing) {
-      router.push(`/train/${existing.id}`);
-      return;
-    }
-    startTransition(async () => {
-      const res = await reach(openWorkoutOn(date));
-      if (res.error || !res.id) {
-        toast.error(res.error ?? "Could not open that session");
-        return;
-      }
-      router.push(`/train/${res.id}`);
-    });
+    if (existing) router.push(`/train/${existing.id}`);
+    else setAdding(date);
   }
 
   // S53. Forgetting to press Finish is the normal case -- the last thing you do
@@ -236,7 +229,7 @@ export function TrainHome({
               </Link>
             </Button>
           ) : (
-            <Button className="h-12 w-full text-base" onClick={() => setAdding(true)}>
+            <Button className="h-12 w-full text-base" onClick={() => setAdding(today)}>
               <CalendarPlus className="size-4" /> Add session
             </Button>
           )}
@@ -351,7 +344,13 @@ export function TrainHome({
         </div>
       </main>
 
-      <PickDay open={adding} onOpenChange={setAdding} today={today} />
+      <PickDay
+        key={adding ?? "closed"}
+        open={adding !== null}
+        onOpenChange={(isOpen) => !isOpen && setAdding(null)}
+        today={today}
+        day={adding ?? today}
+      />
     </>
   );
 }
@@ -368,24 +367,27 @@ function PickDay({
   open,
   onOpenChange,
   today,
+  day,
 }: {
   open: boolean;
   onOpenChange: (open: boolean) => void;
   today: string;
+  /** Selected when the sheet opens. */
+  day: string;
 }) {
   const router = useRouter();
-  const [picked, setPicked] = useState<Date | undefined>(() => toDate(today));
+  const [picked, setPicked] = useState<Date | undefined>(() => toDate(day));
   const [pending, startTransition] = useTransition();
   // Held here only so the grid can be swiped. Uncontrolled, the month is
   // day-picker's own private state and a gesture has nothing to move.
-  const [month, setMonth] = useState(() => toDate(today));
+  const [month, setMonth] = useState(() => toDate(day));
   const monthSwipe = useSwipe({
     onLeft: () => setMonth(shiftMonthDate(month, 1)),
     onRight: () => setMonth(shiftMonthDate(month, -1)),
   });
 
   function go() {
-    if (!picked) return;
+    if (!picked || pending) return;
     startTransition(async () => {
       const res = await reach(openWorkoutOn(dateKey(picked)));
       if (res.error || !res.id) {
