@@ -1,7 +1,5 @@
 "use client";
 
-import Link from "next/link";
-import { useRouter } from "next/navigation";
 import { ChevronLeft, ChartNoAxesColumn } from "lucide-react";
 import dynamic from "next/dynamic";
 
@@ -15,6 +13,7 @@ import { Item, ItemContent, ItemDescription, ItemTitle } from "@/components/ui/i
 import { cn } from "@/lib/utils";
 import { PAGE, SURFACE, SURFACE_PAD } from "@/lib/ui";
 import { useSwipe } from "@/lib/swipe";
+import { useBack } from "@/lib/back";
 
 /**
  * The Food tab's Trends view (S83-S86). What a month of eating looks like,
@@ -62,23 +61,21 @@ export function TrendsScreen({
   /** Null means the query failed -- see TopFoods. Empty means nothing logged. */
   topFoods: TopFood[] | null;
 }) {
-  const router = useRouter();
   const logged = loggedDays(days);
   const share = estimateShare(days);
 
   // The back arrow in the header, as a gesture. Installed to a home screen
   // there is no browser edge-swipe to fall back on, so a stacked screen that
   // cannot be swiped back can only be left by aiming at the corner.
-  const back = useSwipe({ onRight: () => router.push("/log") });
+  const goBack = useBack("/log");
+  const back = useSwipe({ onRight: goBack });
 
   return (
     <main className={cn(PAGE, "touch-pan-y")} {...back}>
       <header className="flex items-center gap-1 px-1 py-1">
-        <Button size="icon-xl" variant="ghost" aria-label="Back to the log" asChild>
-          <Link href="/log">
+        <Button size="icon-xl" variant="ghost" aria-label="Back to the log" onClick={goBack}>
             <ChevronLeft className="size-5" />
-          </Link>
-        </Button>
+          </Button>
         <span className="text-sm font-medium">Trends</span>
       </header>
 

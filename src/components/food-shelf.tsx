@@ -1,8 +1,6 @@
 "use client";
 
 import { useMemo, useState, useTransition } from "react";
-import { useRouter } from "next/navigation";
-import Link from "next/link";
 import { ChevronLeft, Package, Plus, Search } from "lucide-react";
 import { saveScannedFood } from "@/app/actions";
 import { reach } from "@/lib/reach";
@@ -30,6 +28,7 @@ import { InputGroup, InputGroupAddon, InputGroupInput } from "@/components/ui/in
 import { Item, ItemContent, ItemDescription, ItemTitle } from "@/components/ui/item";
 import { liftForKeyboard } from "@/lib/sheet";
 import { useSwipe } from "@/lib/swipe";
+import { useBack } from "@/lib/back";
 import { PAGE, SURFACE } from "@/lib/ui";
 import { cn } from "@/lib/utils";
 import { toast } from "sonner";
@@ -49,7 +48,6 @@ const SNAP_POINTS = [0.6, 1] as const;
  * than at a meal.
  */
 export function FoodShelf({ foods }: { foods: Food[] }) {
-  const router = useRouter();
   const [query, setQuery] = useState("");
   const [step, setStep] = useState<PickerStep | null>(null);
   const [snap, setSnap] = useState<number | string | null>(SNAP_POINTS[0]);
@@ -104,16 +102,16 @@ export function FoodShelf({ foods }: { foods: Food[] }) {
     });
   }
 
-  const back = useSwipe({ onRight: () => router.push("/log") });
+  const goBack = useBack("/log");
+
+  const back = useSwipe({ onRight: goBack });
 
   return (
     <>
       <main className={cn(PAGE, "touch-pan-y")} {...back}>
         <header className="flex items-center gap-1 px-1 py-1">
-          <Button size="icon-xl" variant="ghost" aria-label="Back to the log" asChild>
-            <Link href="/log">
-              <ChevronLeft className="size-5" />
-            </Link>
+          <Button size="icon-xl" variant="ghost" aria-label="Back to the log" onClick={goBack}>
+            <ChevronLeft className="size-5" />
           </Button>
           <span className="flex-1 text-sm font-medium">Foods</span>
           <Button size="sm" variant="ghost" className="h-11" onClick={open}>
@@ -197,6 +195,8 @@ export function FoodShelf({ foods }: { foods: Food[] }) {
         snapPoints={[...SNAP_POINTS]}
         activeSnapPoint={snap}
         setActiveSnapPoint={setSnap}
+        // A drag down must not discard a read label.
+        dismissible={step?.kind !== "label"}
       >
         <DrawerContent snapped onFocusCapture={liftForKeyboard(setSnap)}>
           <DrawerHeader className="px-5 pb-2 pt-0">

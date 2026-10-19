@@ -73,6 +73,7 @@ export function FoodPicker({
   onStep,
   onPick,
   onCustom,
+  hidden = false,
 }: {
   foods: Food[];
   step: PickerStep;
@@ -86,37 +87,40 @@ export function FoodPicker({
   onPick: (food: Food, scanned: boolean) => void;
   /** Omitted where typing a one-off makes no sense, which hides the button. */
   onCustom?: () => void;
+  /** The caller is showing a step of its own. The search stays mounted so
+   * going back finds the query and the online results where they were. */
+  hidden?: boolean;
 }) {
-  if (step.kind === "scan") {
-    return (
-      <BarcodeScanner
-        onFood={(food) => onPick(food, true)}
-        onMiss={(barcode) => onStep({ kind: "label", barcode })}
-        onBack={() => onStep({ kind: "search" })}
-      />
-    );
-  }
-
-  if (step.kind === "label") {
-    return (
-      <LabelStep
-        barcode={step.barcode}
-        // Already written to the catalog by saveLabelFood, so it is not
-        // "scanned" in the sense that matters here.
-        onFood={(food) => onPick(food, false)}
-        onBack={() => onStep({ kind: "search" })}
-      />
-    );
-  }
-
   return (
-    <SearchStep
-      foods={foods}
-      onPick={onPick}
-      onScan={() => onStep({ kind: "scan" })}
-      onLabel={() => onStep({ kind: "label", barcode: null })}
-      onCustom={onCustom}
-    />
+    <>
+      {!hidden && step.kind === "scan" && (
+        <BarcodeScanner
+          onFood={(food) => onPick(food, true)}
+          onMiss={(barcode) => onStep({ kind: "label", barcode })}
+          onBack={() => onStep({ kind: "search" })}
+        />
+      )}
+
+      {!hidden && step.kind === "label" && (
+        <LabelStep
+          barcode={step.barcode}
+          // Already written to the catalog by saveLabelFood, so it is not
+          // "scanned" in the sense that matters here.
+          onFood={(food) => onPick(food, false)}
+          onBack={() => onStep({ kind: "search" })}
+        />
+      )}
+
+      <div className={hidden || step.kind !== "search" ? "hidden" : "contents"}>
+        <SearchStep
+          foods={foods}
+          onPick={onPick}
+          onScan={() => onStep({ kind: "scan" })}
+          onLabel={() => onStep({ kind: "label", barcode: null })}
+          onCustom={onCustom}
+        />
+      </div>
+    </>
   );
 }
 
@@ -689,9 +693,10 @@ function LabelStep({
     ["sodium_mg", "Sodium (mg)"],
   ];
 
-  // The Back button as a gesture. A sheet step is a stacked screen like any
-  // other, and the drawer's own drag is vertical, so the axis is free.
-  const back = useSwipe({ onRight: onBack });
+  // The Back button as a gesture -- until there is a read label on screen,
+  // which a stray sideways drag would otherwise throw away.
+  const busy = phase.kind === "draft" || phase.kind === "reading";
+  const back = useSwipe({ onRight: busy ? undefined : onBack });
 
   return (
     <div className="flex min-h-0 flex-1 flex-col touch-pan-y" {...back}>

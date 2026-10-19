@@ -1,5 +1,6 @@
 "use client";
 
+import { isMonth, useUrlParam } from "@/lib/url-state";
 import { useEffect, useMemo, useRef, useState, useTransition } from "react";
 import { Scale, Trash2 } from "lucide-react";
 import { toast } from "sonner";
@@ -109,8 +110,11 @@ export function ProgressHome({
 }) {
   const [entries, setEntries] = useState(initialEntries);
   const [from, setFrom] = useState(loadedFrom);
-  const [month, setMonth] = useState(today.slice(0, 7));
-  const [windowKey, setWindowKey] = useState<ChartWindowKey>(DEFAULT_CHART_WINDOW);
+  const [month, setMonth] = useUrlParam("month", today.slice(0, 7), isMonth(today));
+  const [windowParam, setWindowKey] = useUrlParam("window", DEFAULT_CHART_WINDOW, (v) =>
+    CHART_WINDOWS.some((w) => w.key === v),
+  );
+  const windowKey = windowParam as ChartWindowKey;
   const [editing, setEditing] = useState<string | null>(null);
   const loading = useRef(false);
 

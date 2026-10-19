@@ -95,6 +95,9 @@ export function AddSheet({
   const [step, setStep] = useState<Step>({ kind: "search" });
   const [wasOpen, setWasOpen] = useState(meal !== null);
   const [snap, setSnap] = useState<number | string | null>(SNAP_POINTS[0]);
+  // Once a one-off is started it stays mounted until the sheet closes, so
+  // stepping back to search does not throw away a description or an estimate.
+  const [drafting, setDrafting] = useState(false);
 
   // Reset on every OPEN, not merely when a different meal opens the sheet.
   // Keying on the meal meant adding a second food to the same meal reopened on
@@ -108,6 +111,7 @@ export function AddSheet({
     setWasOpen(true);
     setStep({ kind: "search" });
     setSnap(SNAP_POINTS[0]);
+    setDrafting(false);
   } else if (meal === null && wasOpen) {
     setWasOpen(false);
   }
@@ -119,6 +123,7 @@ export function AddSheet({
    */
   function go(next: Step) {
     setStep(next);
+    if (next.kind === "custom") setDrafting(true);
     if (next.kind !== "search") setSnap(1);
   }
 
@@ -129,6 +134,8 @@ export function AddSheet({
       snapPoints={[...SNAP_POINTS]}
       activeSnapPoint={snap}
       setActiveSnapPoint={setSnap}
+      // A drag down must not discard a typed one-off or a read label.
+      dismissible={step.kind !== "custom" && step.kind !== "label"}
     >
       <DrawerContent snapped onFocusCapture={liftForKeyboard(setSnap)}>
         <DrawerHeader className="px-5 pb-2 pt-0">
@@ -138,10 +145,11 @@ export function AddSheet({
           </DrawerDescription>
         </DrawerHeader>
 
-        {meal && (step.kind === "search" || step.kind === "scan" || step.kind === "label") && (
+        {meal && (
           <FoodPicker
             foods={foods}
-            step={step}
+            step={step.kind === "qty" || step.kind === "custom" ? { kind: "search" } : step}
+            hidden={step.kind === "qty" || step.kind === "custom"}
             onStep={go}
             onPick={(food, scanned) => go({ kind: "qty", food, scanned })}
             onCustom={() => go({ kind: "custom" })}
@@ -162,16 +170,18 @@ export function AddSheet({
           />
         )}
 
-        {meal && step.kind === "custom" && (
-          <CustomStep
-            date={date}
-            meal={meal}
-            onBack={() => go({ kind: "search" })}
-            onDone={(entry) => {
-              onAdded(entry);
-              onOpenChange(false);
-            }}
-          />
+        {meal && drafting && (
+          <div className={step.kind === "custom" ? "contents" : "hidden"}>
+            <CustomStep
+              date={date}
+              meal={meal}
+              onBack={() => go({ kind: "search" })}
+              onDone={(entry) => {
+                onAdded(entry);
+                onOpenChange(false);
+              }}
+            />
+          </div>
         )}
       </DrawerContent>
     </Drawer>

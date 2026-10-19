@@ -28,6 +28,7 @@ import {
 import { toast } from "sonner";
 import { SwipeToDelete } from "@/components/swipe-to-delete";
 import { useSwipe } from "@/lib/swipe";
+import { useBack } from "@/lib/back";
 import { cn } from "@/lib/utils";
 import { PAGE, SURFACE } from "@/lib/ui";
 
@@ -40,7 +41,6 @@ export type RecipeSummary = {
 };
 
 export function RecipeList({ recipes }: { recipes: RecipeSummary[] }) {
-  const router = useRouter();
   const [naming, setNaming] = useState(false);
   const [, startDelete] = useTransition();
 
@@ -60,16 +60,15 @@ export function RecipeList({ recipes }: { recipes: RecipeSummary[] }) {
   // The back arrow in the header, as a gesture. Installed to a home screen
   // there is no browser edge-swipe to fall back on, so a stacked screen that
   // cannot be swiped back can only be left by aiming at the corner.
-  const back = useSwipe({ onRight: () => router.push("/log") });
+  const goBack = useBack("/log");
+  const back = useSwipe({ onRight: goBack });
 
   return (
     <>
       <main className={cn(PAGE, "touch-pan-y")} {...back}>
         <header className="flex items-center gap-1 px-1 py-1">
-          <Button size="icon-xl" variant="ghost" aria-label="Back to the log" asChild>
-            <Link href="/log">
-              <ChevronLeft className="size-5" />
-            </Link>
+          <Button size="icon-xl" variant="ghost" aria-label="Back to the log" onClick={goBack}>
+            <ChevronLeft className="size-5" />
           </Button>
           <span className="text-sm font-medium">Recipes</span>
         </header>

@@ -1,9 +1,7 @@
 "use client";
 
-import Link from "next/link";
 import { ChevronLeft, Pin, PinOff, TrendingUp } from "lucide-react";
 import { useTransition } from "react";
-import { useRouter } from "next/navigation";
 import { toast } from "sonner";
 import { pinExercise } from "@/app/progress-actions";
 import { reach } from "@/lib/reach";
@@ -27,6 +25,7 @@ import { Item, ItemContent, ItemDescription, ItemTitle } from "@/components/ui/i
 import { cn } from "@/lib/utils";
 import { PAGE, SURFACE, SURFACE_PAD } from "@/lib/ui";
 import { useSwipe } from "@/lib/swipe";
+import { useBack } from "@/lib/back";
 
 // Loaded after the page, so the history list never waits on recharts.
 const LiftChart = dynamic(() => import("@/components/lift-chart").then((m) => m.LiftChart), {
@@ -57,7 +56,6 @@ export function ExerciseScreen({
   /** S81. Whether THIS lift is the one on the progress tab. */
   pinned: boolean;
 }) {
-  const router = useRouter();
   const [pending, startTransition] = useTransition();
 
   /**
@@ -83,16 +81,15 @@ export function ExerciseScreen({
   // The back arrow in the header, as a gesture. Installed to a home screen
   // there is no browser edge-swipe to fall back on, so a stacked screen that
   // cannot be swiped back can only be left by aiming at the corner.
-  const back = useSwipe({ onRight: () => router.push("/train") });
+  const goBack = useBack("/train");
+  const back = useSwipe({ onRight: goBack });
 
   return (
     <main className={cn(PAGE, "touch-pan-y")} {...back}>
       <header className="flex items-center gap-1 px-1 py-1">
-        <Button size="icon-xl" variant="ghost" aria-label="Back to training" asChild>
-          <Link href="/train">
+        <Button size="icon-xl" variant="ghost" aria-label="Back to training" onClick={goBack}>
             <ChevronLeft className="size-5" />
-          </Link>
-        </Button>
+          </Button>
         <span className="truncate text-sm font-medium">{exercise.name}</span>
         {/* Pushed to the right so it does not sit against the back arrow: it is
             a setting, not part of navigation. */}

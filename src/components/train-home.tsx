@@ -1,5 +1,6 @@
 "use client";
 
+import { isMonth, useUrlParam } from "@/lib/url-state";
 import { useEffect, useMemo, useRef, useState, useTransition } from "react";
 import { useRouter } from "next/navigation";
 import Link from "next/link";
@@ -87,7 +88,7 @@ export function TrainHome({
   // The month is state, not a URL parameter and not a server round trip. Every
   // session and every day of volume is already here, so paging is a filter
   // rather than a fetch -- which is the only way it is ever instant.
-  const [month, setMonth] = useState(today.slice(0, 7));
+  const [month, setMonth] = useUrlParam("month", today.slice(0, 7), isMonth(today));
 
   // The window, and everything in it. Grown backwards in place rather than
   // refetched, so a month already held is never asked for twice.

@@ -36,7 +36,12 @@ export default async function LogPage({
 }) {
   const { date: requested } = await searchParams;
   const today = await serverToday();
-  const date = /^\d{4}-\d{2}-\d{2}$/.test(requested ?? "") ? requested! : today;
+  const valid =
+    requested !== undefined &&
+    /^\d{4}-\d{2}-\d{2}$/.test(requested) &&
+    !Number.isNaN(Date.parse(requested)) &&
+    requested <= today;
+  const date = valid ? requested : today;
 
   // Both ways from the anchor, unlike train's one -- days can be paged forward
   // as well as back, and arriving on an old day through `?date=` would
@@ -81,7 +86,6 @@ export default async function LogPage({
 
   return (
     <LogScreen
-      date={date}
       loadedFrom={from}
       loadedTo={to}
       foods={visibleFoods(foods ?? [], user?.id ?? null)}

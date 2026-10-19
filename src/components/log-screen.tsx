@@ -1,5 +1,6 @@
 "use client";
 
+import { isDay, useUrlParam } from "@/lib/url-state";
 import { useEffect, useMemo, useRef, useState, useTransition } from "react";
 import { useRouter } from "next/navigation";
 import Link from "next/link";
@@ -62,7 +63,6 @@ const round = (v: number) => Math.round(v);
 const withCommas = (v: number) => round(v).toLocaleString();
 
 export function LogScreen({
-  date: initialDate,
   loadedFrom,
   loadedTo,
   foods,
@@ -70,8 +70,6 @@ export function LogScreen({
   dayGoals: initialDayGoals,
   strictMode,
 }: {
-  /** The day to open on -- today, or whatever `?date=` asked for. */
-  date: string;
   /** Oldest and newest day the server sent, inclusive. */
   loadedFrom: string;
   loadedTo: string;
@@ -90,10 +88,11 @@ export function LogScreen({
   const [addingTo, setAddingTo] = useState<Meal | null>(null);
   const [detail, setDetail] = useState<Entry | null>(null);
 
-  // The day is state, not a URL parameter and not a server round trip. Every
-  // entry in the window is already here, so an arrow is a filter rather than a
-  // fetch -- which is the only way it is ever instant.
-  const [date, setDate] = useState(initialDate);
+  // The day is state, not a server round trip: every entry in the window is
+  // already here, so an arrow is a filter rather than a fetch. It is mirrored
+  // into the address so coming back from another screen lands on it again.
+  const today = todayDate();
+  const [date, setDate] = useUrlParam("date", today, isDay(today));
 
   // The window, and everything in it. Grown outwards in place rather than
   // refetched, so a day already held is never asked for twice.
@@ -104,8 +103,6 @@ export function LogScreen({
   const [from, setFrom] = useState(loadedFrom);
   const [to, setTo] = useState(loadedTo);
   const loading = useRef(false);
-
-  const today = todayDate();
 
   /**
    * Extend BEFORE the edge is reached, not when it is hit -- the same contract

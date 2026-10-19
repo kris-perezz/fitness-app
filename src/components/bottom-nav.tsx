@@ -1,11 +1,12 @@
 "use client";
 
-import { useSyncExternalStore } from "react";
+import { useEffect, useRef, useSyncExternalStore } from "react";
 import Link from "next/link";
 import { usePathname } from "next/navigation";
 import { Dumbbell, TrendingUp, User, UtensilsCrossed } from "lucide-react";
 import { OPEN_WORKOUT_COOKIE } from "@/lib/open-workout-cookie.shared";
 import { cn } from "@/lib/utils";
+import { markNavigated } from "@/lib/back";
 
 /**
  * `document.cookie` has no change event, so there is nothing to subscribe to
@@ -55,6 +56,10 @@ const CHROMELESS = ["/login", "/auth"];
 
 export function BottomNav({ openWorkoutId: fromServer }: { openWorkoutId?: string | null }) {
   const pathname = usePathname();
+  const firstPath = useRef(pathname);
+  useEffect(() => {
+    if (pathname !== firstPath.current) markNavigated();
+  }, [pathname]);
 
   /**
    * `fromServer` is only ever right on the very first paint. This nav is

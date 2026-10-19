@@ -2,7 +2,6 @@
 
 import { useState, useTransition } from "react";
 import { useRouter } from "next/navigation";
-import Link from "next/link";
 import { ChevronLeft, Copy, Plus, Trash2, TriangleAlert } from "lucide-react";
 import { show, type Food } from "@/lib/food";
 import {
@@ -25,6 +24,7 @@ import { IngredientSheet } from "@/components/ingredient-sheet";
 import { ConfirmAction } from "@/components/confirm-action";
 import { SwipeToDelete } from "@/components/swipe-to-delete";
 import { useSwipe } from "@/lib/swipe";
+import { useBack } from "@/lib/back";
 import { Button } from "@/components/ui/button";
 import { ButtonGroup } from "@/components/ui/button-group";
 import { Card } from "@/components/ui/card";
@@ -138,23 +138,22 @@ export function RecipeEditor({
         toast.error(res.error);
         return;
       }
-      router.push("/recipes");
+      router.replace("/recipes");
     });
   }
 
   // The back arrow in the header, as a gesture. Installed to a home screen
   // there is no browser edge-swipe to fall back on, so a stacked screen that
   // cannot be swiped back can only be left by aiming at the corner.
-  const back = useSwipe({ onRight: () => router.push("/recipes") });
+  const goBack = useBack("/recipes");
+  const back = useSwipe({ onRight: goBack });
 
   return (
     <>
       <main className={cn(PAGE, "touch-pan-y")} {...back}>
         <header className="flex items-center gap-1 px-1 py-1">
-          <Button size="icon-xl" variant="ghost" aria-label="All recipes" asChild>
-            <Link href="/recipes">
-              <ChevronLeft className="size-5" />
-            </Link>
+          <Button size="icon-xl" variant="ghost" aria-label="All recipes" onClick={goBack}>
+            <ChevronLeft className="size-5" />
           </Button>
           <span className="truncate text-sm font-medium">{name || "Untitled recipe"}</span>
         </header>

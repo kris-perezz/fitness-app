@@ -72,6 +72,8 @@ export function IngredientSheet({
       snapPoints={[...SNAP_POINTS]}
       activeSnapPoint={snap}
       setActiveSnapPoint={setSnap}
+      // A drag down must not discard a typed one-off or a read label.
+      dismissible={step.kind !== "label"}
     >
       <DrawerContent snapped onFocusCapture={liftForKeyboard(setSnap)}>
         <DrawerHeader className="px-5 pb-2 pt-0">
@@ -81,10 +83,11 @@ export function IngredientSheet({
           </DrawerDescription>
         </DrawerHeader>
 
-        {step.kind !== "qty" && (
+        {open && (
           <FoodPicker
             foods={foods}
-            step={step}
+            step={step.kind === "qty" ? { kind: "search" } : step}
+            hidden={step.kind === "qty"}
             onStep={go}
             onPick={(food, scanned) => go({ kind: "qty", food, scanned })}
             // No "Create": a one-off with no catalog row cannot be referenced by

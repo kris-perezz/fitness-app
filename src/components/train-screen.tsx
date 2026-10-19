@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useOptimistic, useState, useTransition } from "react";
+import { Fragment, useEffect, useOptimistic, useState, useTransition } from "react";
 import { useRouter } from "next/navigation";
 import Link from "next/link";
 import { Check, ChevronLeft, Dumbbell, Flame, Pencil, Plus, Trash2, X } from "lucide-react";
@@ -103,6 +103,10 @@ export function TrainScreen({
   const router = useRouter();
   const { lastSessions, bests } = useStreamedHistory(history);
   const [picking, setPicking] = useState(false);
+  // One set form open across the whole session: `${slotId}:add` or
+  // `${slotId}:${setId}`. Two half-filled forms on one screen invite saving
+  // the wrong one.
+  const [openForm, setOpenForm] = useState<string | null>(null);
   const [pending, startTransition] = useTransition();
 
   // S26. A session left open from a previous day cannot absorb today's sets, so
@@ -161,19 +165,22 @@ export function TrainScreen({
 
   // The back chevron as a gesture, and it carries ?browse=1 for the same reason
   // the chevron does: /train sends you straight back into an open session.
-  const back = useSwipe({ onRight: () => router.push("/train?browse=1") });
+  const back = useSwipe({ onRight: () => router.replace("/train?browse=1") });
 
   return (
     <>
       <main className={cn(PAGE, "touch-pan-y")} {...back}>
         <header className="flex items-center gap-1 px-1 py-1">
-          <Button size="icon-xl" variant="ghost" aria-label="All sessions" asChild>
-            {/* ?browse=1, because /train sends you back into an open session on
-                sight (S26). Without it this chevron would bounce straight here
-                again and the calendar would be unreachable mid-workout. */}
-            <Link href="/train?browse=1">
-              <ChevronLeft className="size-5" />
-            </Link>
+          {/* ?browse=1, because /train sends you back into an open session on
+              sight (S26). A replace, so the phone's back button does not walk
+              between the two in a loop. */}
+          <Button
+            size="icon-xl"
+            variant="ghost"
+            aria-label="All sessions"
+            onClick={() => router.replace("/train?browse=1")}
+          >
+            <ChevronLeft className="size-5" />
           </Button>
           <span className="min-w-0 flex-1 truncate text-sm font-medium">
             {past ? shortDate(workout.log_date) : "Today's session"}
@@ -220,6 +227,8 @@ export function TrainScreen({
             // things here that follow the catalog rather than freeze at log time.
             exercise={exercises.find((e) => e.id === slot.exercise_id) ?? null}
             onRemoving={markRemoving}
+            openForm={openForm}
+            onOpenForm={setOpenForm}
           />
         ))}
 
@@ -243,7 +252,7 @@ export function TrainScreen({
             onClick={() =>
               run(() => reach(finishWorkout(workout.id)), () => {
                 toast.success("Session finished");
-                router.push("/train");
+                router.replace("/train");
               })
             }
           >
@@ -265,7 +274,7 @@ export function TrainScreen({
                   } go with it. This cannot be undone.`
             }
             confirmLabel={allSets === 0 ? "Discard" : "Delete"}
-            onConfirm={() => run(() => reach(discardWorkout(workout.id)), () => router.push("/train"))}
+            onConfirm={() => run(() => reach(discardWorkout(workout.id)), () => router.replace("/train"))}
             trigger={
               <Button
                 size="icon-xl"
@@ -363,6 +372,8 @@ function SlotSection({
   bests,
   exercise,
   onRemoving,
+  openForm,
+  onOpenForm,
 }: {
   slot: WorkoutSlot;
   last: LastSession | null;
@@ -372,9 +383,12 @@ function SlotSection({
   exercise: Exercise | null;
   /** Hide this slot now; the parent clears it when the action settles. */
   onRemoving: (slotId: string) => void;
+  openForm: string | null;
+  onOpenForm: (key: string | null) => void;
 }) {
-  const [adding, setAdding] = useState(false);
-  const [editing, setEditing] = useState<WorkoutSet | null>(null);
+  const addKey = `${slot.id}:add`;
+  const adding = openForm === addKey;
+  const setAdding = (open: boolean) => onOpenForm(open ? addKey : adding ? null : openForm);
   // What was typed into a set whose save failed, so reopening the form does not
   // ask for it again.
   const [unsaved, setUnsaved] = useState<{ draft: SetDraft; rir: number | null } | null>(null);
@@ -399,6 +413,9 @@ function SlotSection({
   );
 
   const suggestion = suggestFor(sets, last);
+  const editing = sets.find((set) => openForm === `${slot.id}:${set.id}`) ?? null;
+  const setEditing = (set: WorkoutSet | null) =>
+    onOpenForm(set ? `${slot.id}:${set.id}` : editing ? null : openForm);
 
   // One removal, reached from the X or from a swipe across the name strip.
   const removeLabel = `Remove ${slot.name}?`;
@@ -486,7 +503,8 @@ function SlotSection({
           </TableHeader>
           <TableBody>
             {sets.map((set) => (
-              <TableRow key={set.id}>
+              <Fragment key={set.id}>
+              <TableRow data-state={editing?.id === set.id ? "selected" : undefined}>
                 <TableCell className="pl-5 tabular-nums text-muted-foreground">
                   {set.set_index + 1}
                 </TableCell>
@@ -519,69 +537,66 @@ function SlotSection({
                     className="text-muted-foreground"
                     aria-label={`Edit set ${set.set_index + 1}`}
                     disabled={set.id.startsWith("pending-")}
-                    onClick={() => {
-                      setAdding(false);
-                      setEditing(set);
-                    }}
+                    onClick={() => setEditing(set)}
                   >
                     <Pencil className="size-4" />
                   </Button>
                 </TableCell>
               </TableRow>
+              {editing?.id === set.id && (
+                <TableRow className="hover:bg-transparent">
+                  <TableCell colSpan={5} className="whitespace-normal px-5 pb-3 pt-2">
+                    <SetForm
+                      key={editing.id}
+                      title={`Set ${editing.set_index + 1}`}
+                      suggestion={null}
+                      initial={{ reps: editing.reps, load_lb: editing.load_lb, set_type: editing.set_type }}
+                      initialRir={editing.rir}
+                      exercise={exercise}
+                      confirmLabel="Save"
+                      onCancel={() => setEditing(null)}
+                      onSubmit={(draft, rir) =>
+                        startTransition(async () => {
+                          const res = await reach(updateSet(editing.id, {
+                            ...draft,
+                            rir,
+                            skipped: editing.skipped,
+                          }));
+                          if (res.error) {
+                            toast.error(res.error);
+                            return;
+                          }
+                          setEditing(null);
+                        })
+                      }
+                      onDelete={() =>
+                        startTransition(async () => {
+                          applyOptimistic({ kind: "remove", id: editing.id });
+                          setEditing(null);
+                          const res = await reach(deleteSet(editing.id));
+                          if (res.error) {
+                            toast.error(res.error);
+                            return;
+                          }
+                        })
+                      }
+                    />
+                  </TableCell>
+                </TableRow>
+              )}
+              </Fragment>
             ))}
           </TableBody>
         </Table>
       )}
 
-      {editing && (
-        <div className="px-5 pb-3 pt-2">
-          <SetForm
-            key={editing.id}
-            title={`Set ${editing.set_index + 1}`}
-            suggestion={null}
-            initial={{ reps: editing.reps, load_lb: editing.load_lb, set_type: editing.set_type }}
-            initialRir={editing.rir}
-            exercise={exercise}
-            confirmLabel="Save"
-            onCancel={() => setEditing(null)}
-            onSubmit={(draft, rir) =>
-              startTransition(async () => {
-                const res = await reach(updateSet(editing.id, {
-                  ...draft,
-                  rir,
-                  skipped: editing.skipped,
-                }));
-                if (res.error) {
-                  toast.error(res.error);
-                  return;
-                }
-                setEditing(null);
-              })
-            }
-            onDelete={() =>
-              startTransition(async () => {
-                applyOptimistic({ kind: "remove", id: editing.id });
-                setEditing(null);
-                const res = await reach(deleteSet(editing.id));
-                if (res.error) {
-                  toast.error(res.error);
-                  return;
-                }
-              })
-            }
-          />
-        </div>
-      )}
 
       {/* Button first, form second (S46). Collapsible carries the aria-expanded
           wiring and the height animation; the trigger hides while open because
           the form has its own confirm and cancel. */}
       <Collapsible
         open={adding}
-        onOpenChange={(open) => {
-          setAdding(open);
-          if (open) setEditing(null);
-        }}
+        onOpenChange={setAdding}
       >
         <div className={adding ? "hidden" : "px-5 pb-4 pt-2"}>
           <CollapsibleTrigger asChild>

@@ -1,8 +1,8 @@
 "use client";
 
+import { isMonth, useUrlParam } from "@/lib/url-state";
 import { useEffect, useMemo, useRef, useState } from "react";
 import { useRouter } from "next/navigation";
-import Link from "next/link";
 import { ChevronLeft } from "lucide-react";
 import { WINDOW_BUFFER_MONTHS, WINDOW_MONTHS, shiftMonth } from "@/lib/training";
 import { loadIntakeDaysWindow, type DayLog } from "@/app/actions";
@@ -15,6 +15,7 @@ import { DayRingsButton, RING_LEGEND, type DayRingInfo } from "@/components/day-
 import { cn } from "@/lib/utils";
 import { PAGE, SURFACE } from "@/lib/ui";
 import { useSwipe } from "@/lib/swipe";
+import { useBack } from "@/lib/back";
 
 /**
  * S103. Exactly S57's shape, moved to Food: a filled day is a day with
@@ -50,7 +51,7 @@ export function MonthLog({
   // The month is state, not a URL parameter and not a server round trip --
   // the same contract train-home.tsx and progress-home.tsx already use, for
   // the same reason: a round trip per calendar arrow is never seamless.
-  const [month, setMonth] = useState(today.slice(0, 7));
+  const [month, setMonth] = useUrlParam("month", today.slice(0, 7), isMonth(today));
 
   // The window, and everything in it. Grown backwards in place rather than
   // refetched, so a month already held is never asked for twice.
@@ -120,7 +121,8 @@ export function MonthLog({
   // home screen, where there is no browser edge-swipe to fall back on, so a
   // stacked screen that cannot be swiped back cannot be left except by aiming
   // at a 44px target in the corner.
-  const back = useSwipe({ onRight: () => router.push("/log") });
+  const goBack = useBack("/log");
+  const back = useSwipe({ onRight: goBack });
 
   // What the calendar's own two nav arrows do, from anywhere on the grid.
   // Nothing is clamped forward: the arrows are not either, and a month past
@@ -133,11 +135,9 @@ export function MonthLog({
   return (
     <main className={cn(PAGE, "touch-pan-y")} {...back}>
       <header className="flex items-center gap-1 px-1 py-1">
-        <Button size="icon-xl" variant="ghost" aria-label="Back to the log" asChild>
-          <Link href="/log">
+        <Button size="icon-xl" variant="ghost" aria-label="Back to the log" onClick={goBack}>
             <ChevronLeft className="size-5" />
-          </Link>
-        </Button>
+          </Button>
         <span className="text-sm font-medium">Month</span>
       </header>
 
