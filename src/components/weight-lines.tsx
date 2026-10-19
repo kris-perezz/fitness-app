@@ -1,7 +1,7 @@
 "use client";
 
 import { CartesianGrid, Line, LineChart, ReferenceLine, XAxis, YAxis } from "recharts";
-import { trim } from "@/lib/training";
+import { shortDate, trim } from "@/lib/training";
 import type { DisplayUnit } from "@/lib/weight";
 import { CHART_CLASS, MEASURE_TICKS, SERIES, TOOLTIP, X_AXIS, Y_AXIS, dayTick } from "@/lib/chart";
 import { useFinePointer } from "@/lib/pointer";
@@ -77,7 +77,7 @@ export function WeightLines({
             {...TOOLTIP}
             content={
               <ChartTooltipContent
-                labelFormatter={(value) => dayTick(String(value))}
+                labelFormatter={(value) => shortDate(String(value))}
                 formatter={(value, name, item) =>
                   value == null ? null : (
                     <>

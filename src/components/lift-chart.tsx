@@ -5,7 +5,7 @@ import { CartesianGrid, Line, LineChart, XAxis, YAxis } from "recharts";
 
 import { CHART_CLASS, MEASURE_TICKS, SERIES, TOOLTIP, X_AXIS, Y_AXIS, dayTick, measureDomain } from "@/lib/chart";
 import { useFinePointer } from "@/lib/pointer";
-import { MIN_LIFT_SESSIONS, hasRepBand, repsOnly, type LiftPoint } from "@/lib/training";
+import { MIN_LIFT_SESSIONS, hasRepBand, repsOnly, shortDate, type LiftPoint } from "@/lib/training";
 import { toDisplay, type DisplayUnit } from "@/lib/weight";
 import {
   ChartContainer,
@@ -98,7 +98,7 @@ export function LiftChart({ points: stored, unit }: { points: LiftPoint[]; unit:
             {...TOOLTIP}
             content={
               <ChartTooltipContent
-                labelFormatter={(value) => dayTick(String(value))}
+                labelFormatter={(value) => shortDate(String(value))}
                 formatter={(value, name, item) =>
                   value == null ? null : (
                     <>
@@ -203,7 +203,7 @@ export function PinnedLiftsChart({ lifts, unit }: { lifts: PinnedLift[]; unit: D
                 {...TOOLTIP}
                 content={
                   <ChartTooltipContent
-                    labelFormatter={(value) => dayTick(String(value))}
+                    labelFormatter={(value) => shortDate(String(value))}
                     formatter={(value, name, item) =>
                       value == null ? null : (
                         <>
