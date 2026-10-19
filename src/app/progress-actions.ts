@@ -8,7 +8,7 @@
  */
 
 import { revalidatePath } from "next/cache";
-import { authUser, createClient } from "@/lib/supabase/server";
+import { authUser, createClient, plain } from "@/lib/supabase/server";
 import { toWeighIn, type WeighIn } from "@/lib/weight";
 import { serverToday } from "@/lib/server-time";
 
@@ -55,7 +55,7 @@ export async function saveWeighIn(
     },
     { onConflict: "user_id,log_date" },
   );
-  if (error) return { error: error.message };
+  if (error) return { error: plain(error) };
 
   revalidatePath("/progress", "layout");
   return { error: null };
@@ -78,7 +78,7 @@ export async function deleteWeighIn(date: string): Promise<{ error: string | nul
   if (!/^\d{4}-\d{2}-\d{2}$/.test(date)) return { error: "Not a valid date" };
 
   const { error } = await supabase.from("weigh_ins").delete().eq("log_date", date);
-  if (error) return { error: error.message };
+  if (error) return { error: plain(error) };
 
   revalidatePath("/progress", "layout");
   return { error: null };
@@ -109,7 +109,7 @@ export async function loadWeighInWindow(
     .gte("log_date", `${fromMonth}-01`)
     .lte("log_date", lastDayOfMonth(toMonth))
     .order("log_date", { ascending: false });
-  if (error) return { entries: [], error: error.message };
+  if (error) return { entries: [], error: plain(error) };
 
   return { entries: (data ?? []).map(toWeighIn), error: null };
 }
@@ -146,7 +146,7 @@ export async function pinExercise(
         .delete()
         .eq("user_id", user.id)
         .eq("exercise_id", exerciseId);
-  if (error) return { error: error.message };
+  if (error) return { error: plain(error) };
 
   revalidatePath("/progress");
   revalidatePath(`/exercise/${exerciseId}`);

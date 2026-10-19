@@ -36,3 +36,13 @@ test("before 04:00 is still the previous day", () => {
   assert.equal(todayDate(new Date("2026-09-10T08:30:00Z"), "America/Edmonton"), "2026-09-09");
   assert.equal(todayDate(new Date("2026-09-10T10:00:00Z"), "America/Edmonton"), "2026-09-10");
 });
+
+test("short dates carry the year only outside the current one", async () => {
+  const { shortDate, dayTitle } = await import("./training.ts");
+  const thisYear = new Date().getFullYear();
+  assert.doesNotMatch(shortDate(`${thisYear}-03-04`), /\d{4}/);
+  assert.match(shortDate("2001-03-04"), /2001/);
+  assert.equal(dayTitle("2026-10-19", "2026-10-19"), "Today");
+  assert.equal(dayTitle("2026-10-18", "2026-10-19"), "Yesterday");
+  assert.equal(dayTitle("2026-03-01", "2026-03-02"), "Yesterday");
+});

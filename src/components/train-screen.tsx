@@ -5,6 +5,7 @@ import { useRouter } from "next/navigation";
 import Link from "next/link";
 import { Check, ChevronLeft, Dumbbell, Flame, Pencil, Plus, Trash2, X } from "lucide-react";
 import {
+  dayTitle,
   NO_BESTS,
   allowsBodyweight,
   foldBest,
@@ -184,7 +185,7 @@ export function TrainScreen({
             <ChevronLeft className="size-5" />
           </Button>
           <span className="min-w-0 flex-1 truncate text-sm font-medium">
-            {past ? shortDate(workout.log_date) : "Today's session"}
+            {past ? dayTitle(workout.log_date, today) : "Today's session"}
           </span>
           <span className="shrink-0 pr-1 text-xs tabular-nums text-muted-foreground">
             {workingSets} {workingSets === 1 ? "set" : "sets"}

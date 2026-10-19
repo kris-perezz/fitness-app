@@ -424,18 +424,33 @@ export function suggestFor(
   };
 }
 
+/** A day as a heading: "Today", "Yesterday", or its short date. */
+export function dayTitle(date: string, today: string): string {
+  if (date === today) return "Today";
+  const yesterday = new Date(`${today}T12:00:00`);
+  yesterday.setDate(yesterday.getDate() - 1);
+  const y = `${yesterday.getFullYear()}-${String(yesterday.getMonth() + 1).padStart(2, "0")}-${String(yesterday.getDate()).padStart(2, "0")}`;
+  return date === y ? "Yesterday" : shortDate(date);
+}
+
 /** "100 lb × 12", or "bodyweight × 12" where the load is a real zero (S29). */
 export function loadReps(loadLb: number, reps: number | null): string {
   const load = loadLb === 0 ? "bodyweight" : `${trim(loadLb)} lb`;
   return `${load} × ${reps ?? 0}`;
 }
 
-/** "Mon 25 Aug" -- midday so a date-only string cannot drift a day on parse. */
+/**
+ * "Sun, Oct 18", or "Sun, Oct 18, 2025" outside the current year. Midday, so a
+ * date-only string cannot drift a day on parse. A fixed locale, so the server
+ * and the phone render the same text.
+ */
 export function shortDate(date: string): string {
-  return new Date(`${date}T12:00:00`).toLocaleDateString(undefined, {
+  const d = new Date(`${date}T12:00:00`);
+  return d.toLocaleDateString("en-US", {
     weekday: "short",
     day: "numeric",
     month: "short",
+    year: d.getFullYear() === new Date().getFullYear() ? undefined : "numeric",
   });
 }
 

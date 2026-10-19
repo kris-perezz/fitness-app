@@ -132,11 +132,13 @@ export const TOOLTIP = {
   isAnimationActive: false,
 } as const;
 
-/** A date-only string as an axis tick: "3 Sep". */
+/** A date-only string as an axis tick: "Sep 3", or "Sep 3, 2025" outside this year. */
 export function dayTick(date: string): string {
   // Midday, so a timezone offset cannot shunt a date-only string a day either way.
-  return new Date(`${date}T12:00:00`).toLocaleDateString(undefined, {
+  const d = new Date(`${date}T12:00:00`);
+  return d.toLocaleDateString("en-US", {
     day: "numeric",
     month: "short",
+    year: d.getFullYear() === new Date().getFullYear() ? undefined : "numeric",
   });
 }

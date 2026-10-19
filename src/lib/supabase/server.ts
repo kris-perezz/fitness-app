@@ -48,3 +48,26 @@ export async function authUser(
   const { data } = await supabase.auth.getClaims();
   return data?.claims.sub ? { id: data.claims.sub } : null;
 }
+
+/**
+ * A database error as a sentence a person can act on. The raw text ("duplicate
+ * key value violates unique constraint ...") goes to the server log instead.
+ */
+export function plain(error: { message: string; code?: string }): string {
+  console.error("db error", error.code, error.message);
+  switch (error.code) {
+    case "23505":
+      return "That already exists.";
+    case "23503":
+      return "That's still used somewhere else.";
+    case "23514":
+    case "22P02":
+      return "That value isn't allowed.";
+    case "42501":
+      return "You can't change that.";
+    case "PGRST116":
+      return "That no longer exists.";
+    default:
+      return "Something went wrong. Try again.";
+  }
+}

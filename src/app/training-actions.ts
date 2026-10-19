@@ -9,7 +9,7 @@
  */
 
 import { revalidatePath } from "next/cache";
-import { authUser, createClient } from "@/lib/supabase/server";
+import { authUser, createClient, plain } from "@/lib/supabase/server";
 import { clearOpenWorkoutCookie, setOpenWorkoutCookie } from "@/lib/open-workout-cookie";
 import type { Exercise, SetType } from "@/lib/training";
 import { serverToday } from "@/lib/server-time";
@@ -51,7 +51,7 @@ export async function openWorkoutOn(
     .select("id")
     .eq("log_date", date)
     .maybeSingle();
-  if (findError) return { id: null, error: findError.message };
+  if (findError) return { id: null, error: plain(findError) };
   if (existing) {
     if (date === today) {
       await setOpenWorkoutCookie(existing.id as string);
@@ -73,7 +73,7 @@ export async function openWorkoutOn(
     })
     .select("id")
     .single();
-  if (error) return { id: null, error: error.message };
+  if (error) return { id: null, error: plain(error) };
 
   if (date === today) await setOpenWorkoutCookie(data.id as string);
   revalidatePath("/train", "layout");
@@ -126,7 +126,7 @@ export async function discardWorkout(id: string) {
   if (!user) return { error: "Not signed in" };
 
   const { error } = await supabase.from("workouts").delete().eq("id", id).eq("user_id", user.id);
-  if (error) return { error: error.message };
+  if (error) return { error: plain(error) };
 
   await clearOpenWorkoutCookie(id);
   revalidatePath("/train", "layout");
@@ -158,7 +158,7 @@ export async function addWorkoutExercise(
     p_workout_id: workoutId,
     p_exercise_id: exerciseId,
   });
-  if (error) return { error: error.message };
+  if (error) return { error: plain(error) };
 
   revalidatePath("/train", "layout");
   return { error: null };
@@ -167,7 +167,7 @@ export async function addWorkoutExercise(
 export async function removeWorkoutExercise(id: string) {
   const supabase = await createClient();
   const { error } = await supabase.from("workout_exercises").delete().eq("id", id);
-  if (error) return { error: error.message };
+  if (error) return { error: plain(error) };
 
   revalidatePath("/train", "layout");
   return { error: null };
@@ -206,7 +206,7 @@ export async function logSet(workoutExerciseId: string, input: SetInput) {
     .order("set_index", { ascending: false })
     .limit(1)
     .maybeSingle();
-  if (readError) return { error: readError.message };
+  if (readError) return { error: plain(readError) };
 
   const { error } = await supabase.from("workout_sets").insert({
     workout_exercise_id: workoutExerciseId,
@@ -217,7 +217,7 @@ export async function logSet(workoutExerciseId: string, input: SetInput) {
     set_type: input.set_type,
     set_index: lastSet ? lastSet.set_index + 1 : 0,
   });
-  if (error) return { error: error.message };
+  if (error) return { error: plain(error) };
 
   revalidatePath("/train", "layout");
   return { error: null };
@@ -238,7 +238,7 @@ export async function updateSet(id: string, input: Omit<SetInput, "set_index">) 
       set_type: input.set_type,
     })
     .eq("id", id);
-  if (error) return { error: error.message };
+  if (error) return { error: plain(error) };
 
   revalidatePath("/train", "layout");
   return { error: null };
@@ -252,7 +252,7 @@ export async function deleteSet(id: string) {
     .eq("id", id)
     .select("workout_exercise_id")
     .maybeSingle();
-  if (error) return { error: error.message };
+  if (error) return { error: plain(error) };
 
   // Close the gap, so "Set 3" still means the third set.
   if (deleted) {
@@ -313,7 +313,7 @@ export async function createExercise(input: {
     })
     .select("*")
     .single();
-  if (error) return { exercise: null, error: error.message };
+  if (error) return { exercise: null, error: plain(error) };
 
   revalidatePath("/train");
   return { exercise: data as Exercise, error: null };
@@ -363,7 +363,7 @@ async function closeWorkout(
     .from("workout_exercises")
     .select("id")
     .eq("workout_id", workoutId);
-  if (slotError) return slotError.message;
+  if (slotError) return plain(slotError);
 
   // An abandoned session with nothing in it is not history, it is litter -- and
   // leaving it closed-but-empty would clutter the calendar with a day that
@@ -374,7 +374,7 @@ async function closeWorkout(
       .delete()
       .eq("id", workoutId)
       .eq("user_id", userId);
-    return error ? error.message : null;
+    return error ? plain(error) : null;
   }
 
   const { data: last } = await supabase
@@ -404,7 +404,7 @@ async function closeWorkout(
     .update({ ended_at: endedAt })
     .eq("id", workoutId)
     .eq("user_id", userId);
-  return error ? error.message : null;
+  return error ? plain(error) : null;
 }
 
 /** Closes whatever is open on a day that is not today. Null when nothing was. */
@@ -418,7 +418,7 @@ async function closeStaleWorkout(
     .select("id, log_date")
     .is("ended_at", null)
     .maybeSingle();
-  if (error) return error.message;
+  if (error) return plain(error);
   if (!data || data.log_date === today) return null;
 
   const failed = await closeWorkout(supabase, data.id as string, userId);
@@ -467,7 +467,7 @@ export async function loadTrainingWindow(
       .gte("log_date", from)
       .lte("log_date", to),
   ]);
-  if (se || ve) return { ...empty, error: (se ?? ve)!.message };
+  if (se || ve) return { ...empty, error: plain((se ?? ve)!) };
 
   return {
     sessions: (sessionRows ?? []).map((row) => ({

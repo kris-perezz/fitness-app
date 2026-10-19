@@ -6,11 +6,11 @@ import { toast } from "sonner";
 import { pinExercise } from "@/app/progress-actions";
 import { reach } from "@/lib/reach";
 import {
+  dayTitle,
   MIN_LIFT_SESSIONS,
   REP_CAP,
   hasRepBand,
   setSummary,
-  shortDate,
   type Exercise,
   type LiftPoint,
   enoughSessions,
@@ -25,6 +25,7 @@ import { Item, ItemContent, ItemDescription, ItemTitle } from "@/components/ui/i
 import { cn } from "@/lib/utils";
 import { PAGE, SURFACE, SURFACE_PAD } from "@/lib/ui";
 import { useSwipe } from "@/lib/swipe";
+import { todayDate } from "@/lib/food";
 import { useBack } from "@/lib/back";
 
 // Loaded after the page, so the history list never waits on recharts.
@@ -154,7 +155,7 @@ export function ExerciseScreen({
                 <li key={session.date}>
                   <Item size="sm" className="rounded-none px-3.5 py-3">
                     <ItemContent className="min-w-0">
-                      <ItemTitle className="font-normal">{shortDate(session.date)}</ItemTitle>
+                      <ItemTitle className="font-normal">{dayTitle(session.date, todayDate())}</ItemTitle>
                       <ItemDescription className="text-xs tabular-nums">
                         {session.sets.map((set) => setSummary(set)).join(" · ")}
                       </ItemDescription>

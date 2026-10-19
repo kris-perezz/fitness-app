@@ -6,6 +6,7 @@ import { useRouter } from "next/navigation";
 import Link from "next/link";
 import { CalendarPlus, Dumbbell, Play } from "lucide-react";
 import {
+  dayTitle,
   MUSCLE_GROUPS,
   WINDOW_BUFFER_MONTHS,
   WINDOW_MONTHS,
@@ -323,7 +324,7 @@ export function TrainHome({
                   {/* Full prefetch -- see the resume link above. */}
                   <Link href={`/train/${s.id}`} prefetch>
                     <ItemContent className="min-w-0">
-                      <ItemTitle className="font-normal">{shortDate(s.date)}</ItemTitle>
+                      <ItemTitle className="font-normal">{dayTitle(s.date, today)}</ItemTitle>
                       <ItemDescription className="truncate text-xs">
                         {s.exercises.length === 0
                           ? "No exercises yet"

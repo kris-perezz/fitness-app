@@ -8,7 +8,7 @@ import { toast } from "sonner";
 import dynamic from "next/dynamic";
 import { CHART_CLASS } from "@/lib/chart";
 
-import { WINDOW_BUFFER_MONTHS, WINDOW_MONTHS, shiftMonth, shortDate, trim } from "@/lib/training";
+import { dayTitle, WINDOW_BUFFER_MONTHS, WINDOW_MONTHS, shiftMonth, shortDate, trim } from "@/lib/training";
 import {
   CHART_WINDOWS,
   DEFAULT_CHART_WINDOW,
@@ -369,7 +369,7 @@ export function ProgressHome({
                 <SwipeToDelete onConfirm={() => removeWeighIn(e.date)}>
                   <Item size="sm" className="rounded-none px-3.5 py-3 active:bg-accent">
                     <ItemContent className="min-w-0">
-                      <ItemTitle className="font-normal">{shortDate(e.date)}</ItemTitle>
+                      <ItemTitle className="font-normal">{dayTitle(e.date, today)}</ItemTitle>
                     </ItemContent>
                     <ItemActions className="shrink-0 gap-3 text-right tabular-nums">
                       <button

@@ -33,6 +33,7 @@ import {
   updateEntryQty,
 } from "@/app/actions";
 import { reach } from "@/lib/reach";
+import { dayTitle } from "@/lib/training";
 import { deleteWithUndo } from "@/lib/undo";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -182,16 +183,7 @@ export function LogScreen({
   // a floor only means dinner has not happened. Yesterday is finished and can
   // be summarised; today cannot.
   const finished = date < today;
-  const label =
-    date === today
-      ? "Today"
-      : date === shiftDate(today, -1)
-        ? "Yesterday"
-        : new Date(`${date}T12:00:00`).toLocaleDateString(undefined, {
-            weekday: "short",
-            month: "short",
-            day: "numeric",
-          });
+  const label = dayTitle(date, today);
 
   // What the add sheet offers before anything is typed: the foods logged most
   // recently, this meal's first. Breakfast is mostly the same few things.

@@ -2,7 +2,7 @@
 
 import { revalidatePath } from "next/cache";
 import { redirect } from "next/navigation";
-import { authUser, createClient } from "@/lib/supabase/server";
+import { authUser, createClient, plain } from "@/lib/supabase/server";
 import { fetchOffProduct, isBarcode, searchOff, type OffSearchResult } from "@/lib/off";
 import { fetchCnfFood, searchCnf, type CnfSearchResult } from "@/lib/cnf";
 import type { LabelDraft } from "@/lib/label";
@@ -82,7 +82,7 @@ export async function addEntry(
     .insert(row)
     .select(ENTRY_COLUMNS)
     .single();
-  if (error) return { entry: null, error: error.message };
+  if (error) return { entry: null, error: plain(error) };
 
   await seedDayGoal(supabase, user.id, entry.log_date);
 
@@ -159,7 +159,7 @@ async function seedDayGoal(
       { user_id: userId, log_date: logDate, ...settings },
       { onConflict: "user_id,log_date", ignoreDuplicates: true },
     );
-  if (error) console.error("day_goals seed failed", error.message);
+  if (error) console.error("day_goals seed failed", plain(error));
 }
 
 /** What the log screen reads. `micros` and `sugar_g` are stored and not shown. */
@@ -197,7 +197,7 @@ export async function loadIntakeWindow(
       .gte("log_date", from)
       .lte("log_date", to),
   ]);
-  if (error) return { entries: [], dayGoals: [], error: error.message };
+  if (error) return { entries: [], dayGoals: [], error: plain(error) };
 
   return {
     entries: (data ?? []) as unknown as IntakeEntry[],
@@ -276,7 +276,7 @@ export async function loadIntakeDaysWindow(
           .lte("log_date", to)
       : Promise.resolve({ data: null, error: null }),
   ]);
-  if (error) return { days: [], dayGoals: [], error: error.message };
+  if (error) return { days: [], dayGoals: [], error: plain(error) };
 
   return {
     days: (data ?? []).map(toDayLog),
@@ -306,7 +306,7 @@ export async function updateEntryQty(
     .select("qty, kcal, protein_g, fat_g, carb_g, fiber_g, sodium_mg, sugar_g, micros")
     .eq("id", id)
     .single();
-  if (readError || !current) return { entry: null, error: readError?.message ?? "Entry not found" };
+  if (readError || !current) return { entry: null, error: readError ? plain(readError) : "Entry not found" };
 
   // An entry stored with no amount has no ratio to scale by, and dividing by it
   // would write NaN across the row.
@@ -329,7 +329,7 @@ export async function updateEntryQty(
     .eq("id", id)
     .select(ENTRY_COLUMNS)
     .single();
-  if (error) return { entry: null, error: error.message };
+  if (error) return { entry: null, error: plain(error) };
 
   revalidatePath("/log");
   return { entry: data as unknown as IntakeEntry, error: null };
@@ -348,7 +348,7 @@ export async function moveEntry(
     .eq("id", id)
     .select(ENTRY_COLUMNS)
     .single();
-  if (error) return { entry: null, error: error.message };
+  if (error) return { entry: null, error: plain(error) };
 
   revalidatePath("/log");
   return { entry: data as unknown as IntakeEntry, error: null };
@@ -357,7 +357,7 @@ export async function moveEntry(
 export async function deleteEntry(id: string) {
   const supabase = await createClient();
   const { error } = await supabase.from("intake_entries").delete().eq("id", id);
-  if (error) return { error: error.message };
+  if (error) return { error: plain(error) };
 
   revalidatePath("/log");
   return { error: null };
@@ -419,7 +419,7 @@ export async function saveGoals(goals: Goals) {
     onboarded: true,
     updated_at: new Date().toISOString(),
   });
-  if (error) return { error: error.message };
+  if (error) return { error: plain(error) };
 
   // S60. Today's dated row is corrected along with the live prescription --
   // a typo fixed minutes after saving should not stick to today's food under
@@ -437,7 +437,7 @@ export async function saveGoals(goals: Goals) {
     },
     { onConflict: "user_id,log_date" },
   );
-  if (dayError) return { error: dayError.message };
+  if (dayError) return { error: plain(dayError) };
 
   revalidatePath("/log");
   revalidatePath("/goals");
@@ -465,7 +465,7 @@ export async function lookupBarcode(code: string): Promise<BarcodeResult> {
   // creator rather than globally, so the same product can legitimately carry
   // one row per person. Which of them to believe is what the hierarchy decides.
   const { data, error } = await supabase.from("foods").select("*").eq("barcode", barcode);
-  if (error) return { source: "error", food: null, error: error.message };
+  if (error) return { source: "error", food: null, error: plain(error) };
 
   const rows = (data ?? []) as (Food & { created_by: string | null })[];
   const best = bestBarcodeMatch(rows, user?.id ?? null);
@@ -517,7 +517,7 @@ export async function saveScannedFood(food: Food) {
     ? match.eq("barcode", barcode).eq("created_by", user.id)
     : match.eq("id", food.id)
   ).maybeSingle();
-  if (existingError) return { error: existingError.message };
+  if (existingError) return { error: plain(existingError) };
   if (existing) return { error: null };
 
   // This row is shared with everyone (0029), so its numbers come from Open
@@ -532,7 +532,7 @@ export async function saveScannedFood(food: Food) {
     created_by: user.id,
   });
   // 23505: a concurrent scan inserted it first. Same outcome as finding it above.
-  if (error && error.code !== "23505") return { error: error.message };
+  if (error && error.code !== "23505") return { error: plain(error) };
 
   revalidatePath("/log");
   revalidatePath("/foods");
@@ -619,7 +619,7 @@ export async function addCnfFood(
     created_by: user.id,
   });
   // 23505: somebody else chose the same food first. Same outcome as finding it.
-  if (error && error.code !== "23505") return { food: null, error: error.message };
+  if (error && error.code !== "23505") return { food: null, error: plain(error) };
 
   revalidatePath("/log");
   revalidatePath("/foods");
@@ -667,7 +667,7 @@ export async function saveLabelFood(
   };
 
   const { error } = await supabase.from("foods").insert({ ...food, created_by: user.id });
-  if (error) return { food: null, error: error.message };
+  if (error) return { food: null, error: plain(error) };
 
   revalidatePath("/log");
   revalidatePath("/foods");
@@ -705,7 +705,7 @@ export async function saveEntryAsFood(
     .eq("id", entryId)
     .eq("user_id", user.id)
     .maybeSingle();
-  if (error) return { food: null, error: error.message };
+  if (error) return { food: null, error: plain(error) };
   if (!data) return { food: null, error: "Entry not found" };
 
   const entry = data as {
@@ -770,14 +770,14 @@ export async function saveEntryAsFood(
   const { error: insertError } = await supabase
     .from("foods")
     .insert({ ...food, created_by: user.id });
-  if (insertError) return { food: null, error: insertError.message };
+  if (insertError) return { food: null, error: plain(insertError) };
 
   const { error: linkError } = await supabase
     .from("intake_entries")
     .update({ food_id: food.id })
     .eq("id", entryId)
     .eq("user_id", user.id);
-  if (linkError) console.error("saveEntryAsFood link failed", linkError.message);
+  if (linkError) console.error("saveEntryAsFood link failed", plain(linkError));
 
   revalidatePath("/log");
   return { food, error: null };
@@ -825,7 +825,7 @@ export async function updateFood(
   if (invalid) return { food: null, error: invalid };
 
   const { data, error } = await supabase.from("foods").select("*").eq("id", id).maybeSingle();
-  if (error) return { food: null, error: error.message };
+  if (error) return { food: null, error: plain(error) };
   if (!data) return { food: null, error: "Food not found" };
 
   const current = data as Food & { created_by: string | null };
@@ -898,7 +898,7 @@ export async function updateFood(
       .eq("id", id)
       .select("*")
       .single();
-    if (updateError) return { food: null, error: updateError.message };
+    if (updateError) return { food: null, error: plain(updateError) };
 
     await republishRecipesUsing(supabase, user.id, id, id);
     revalidatePath("/log");
@@ -924,7 +924,7 @@ export async function updateFood(
     .insert(fork)
     .select("*")
     .single();
-  if (insertError) return { food: null, error: insertError.message };
+  if (insertError) return { food: null, error: plain(insertError) };
 
   await republishRecipesUsing(supabase, user.id, current.id, fork.id);
   revalidatePath("/log");
@@ -950,7 +950,7 @@ export async function deleteFood(id: string): Promise<{ error: string | null }> 
     .select("id, source, created_by")
     .eq("id", id)
     .maybeSingle();
-  if (error) return { error: error.message };
+  if (error) return { error: plain(error) };
   if (!data) return { error: "Food not found" };
 
   const food = data as { id: string; source: FoodSource; created_by: string | null };
@@ -972,7 +972,7 @@ export async function deleteFood(id: string): Promise<{ error: string | null }> 
       .from("recipes")
       .select("id")
       .eq("user_id", user.id);
-    if (recipeError) return { error: recipeError.message };
+    if (recipeError) return { error: plain(recipeError) };
     if ((recipes ?? []).some((r) => recipeFoodId(r.id as string) === food.id)) {
       return { error: "Delete the recipe instead -- this row is its output." };
     }
@@ -985,7 +985,7 @@ export async function deleteFood(id: string): Promise<{ error: string | null }> 
     if (deleteError.code === "23503") {
       return { error: "This food is an ingredient in a recipe. Remove it there first." };
     }
-    return { error: deleteError.message };
+    return { error: plain(deleteError) };
   }
 
   revalidatePath("/foods");
@@ -1072,7 +1072,7 @@ export async function createRecipe(
     })
     .select("id")
     .single();
-  if (error) return { error: error.message, id: null };
+  if (error) return { error: plain(error), id: null };
 
   revalidatePath("/recipes");
   return { error: null, id: data.id as string };
@@ -1099,7 +1099,7 @@ export async function updateRecipe(id: string, details: RecipeDetails) {
     })
     .eq("id", id)
     .eq("user_id", user.id);
-  if (error) return { error: error.message };
+  if (error) return { error: plain(error) };
 
   revalidatePath("/recipes");
   return { error: null };
@@ -1127,7 +1127,7 @@ export async function duplicateRecipe(
     .eq("id", id)
     .eq("user_id", user.id)
     .maybeSingle();
-  if (sourceError) return { error: sourceError.message, id: null };
+  if (sourceError) return { error: plain(sourceError), id: null };
   if (!source) return { error: "Recipe not found", id: null };
 
   const { data: ingredients, error: linesError } = await supabase
@@ -1135,7 +1135,7 @@ export async function duplicateRecipe(
     .select("food_id, qty, sort_order")
     .eq("recipe_id", id)
     .order("sort_order", { ascending: true });
-  if (linesError) return { error: linesError.message, id: null };
+  if (linesError) return { error: plain(linesError), id: null };
 
   const { data: copy, error: insertError } = await supabase
     .from("recipes")
@@ -1147,7 +1147,7 @@ export async function duplicateRecipe(
     })
     .select("id")
     .single();
-  if (insertError) return { error: insertError.message, id: null };
+  if (insertError) return { error: plain(insertError), id: null };
 
   const copyId = copy.id as string;
   const rows = (ingredients ?? []).map((row) => ({
@@ -1163,7 +1163,7 @@ export async function duplicateRecipe(
       // A copy with half its ingredients is worse than no copy: the user would
       // have to work out which ones are missing against the original.
       await supabase.from("recipes").delete().eq("id", copyId).eq("user_id", user.id);
-      return { error: error.message, id: null };
+      return { error: plain(error), id: null };
     }
   }
 
@@ -1182,7 +1182,7 @@ export async function deleteRecipe(id: string) {
   if (!user) return { error: "Not signed in" };
 
   const { error } = await supabase.from("recipes").delete().eq("id", id).eq("user_id", user.id);
-  if (error) return { error: error.message };
+  if (error) return { error: plain(error) };
 
   revalidatePath("/recipes");
   return { error: null };
@@ -1207,7 +1207,7 @@ export async function addRecipeIngredient(recipeId: string, foodId: string, qty:
     .order("sort_order", { ascending: false })
     .limit(1)
     .maybeSingle();
-  if (lastError) return { error: lastError.message };
+  if (lastError) return { error: plain(lastError) };
 
   const { error } = await supabase.from("recipe_ingredients").insert({
     recipe_id: recipeId,
@@ -1215,7 +1215,7 @@ export async function addRecipeIngredient(recipeId: string, foodId: string, qty:
     qty,
     sort_order: last ? (last.sort_order as number) + 1 : 0,
   });
-  if (error) return { error: error.message };
+  if (error) return { error: plain(error) };
 
   return publishRecipe(supabase, recipeId, user.id);
 }
@@ -1232,7 +1232,7 @@ export async function updateRecipeIngredient(id: string, qty: number) {
     .eq("id", id)
     .select("recipe_id")
     .maybeSingle();
-  if (error) return { error: error.message };
+  if (error) return { error: plain(error) };
   if (!data) return { error: "Ingredient not found" };
 
   return publishRecipe(supabase, data.recipe_id as string, user.id);
@@ -1249,7 +1249,7 @@ export async function removeRecipeIngredient(id: string) {
     .eq("id", id)
     .select("recipe_id")
     .maybeSingle();
-  if (error) return { error: error.message };
+  if (error) return { error: plain(error) };
   if (!data) return { error: "Ingredient not found" };
 
   return publishRecipe(supabase, data.recipe_id as string, user.id);
@@ -1317,7 +1317,7 @@ async function ownsRecipe(
     .eq("id", recipeId)
     .eq("user_id", userId)
     .maybeSingle();
-  if (error) return error.message;
+  if (error) return plain(error);
   if (!data) return "Recipe not found";
   return null;
 }
@@ -1346,9 +1346,9 @@ async function publishRecipe(
       .eq("recipe_id", recipeId)
       .order("sort_order", { ascending: true }),
   ]);
-  if (recipeResult.error) return { error: recipeResult.error.message };
+  if (recipeResult.error) return { error: plain(recipeResult.error) };
   if (!recipeResult.data) return { error: "Recipe not found" };
-  if (linesResult.error) return { error: linesResult.error.message };
+  if (linesResult.error) return { error: plain(linesResult.error) };
 
   const details = recipeResult.data as RecipeDetails;
   const lines: RecipeLine[] = (linesResult.data ?? [])
@@ -1371,7 +1371,7 @@ async function publishRecipe(
   const { error } = await supabase
     .from("foods")
     .upsert({ ...food, created_by: userId }, { onConflict: "id" });
-  if (error) return { error: error.message };
+  if (error) return { error: plain(error) };
 
   revalidatePath("/log");
   return { error: null, published: true };

@@ -144,10 +144,11 @@ function ratiosOf(info: DayRingInfo | undefined): Record<RingKey, number> | null
  * and the only place the exact size of an overshoot is stated: the mark itself
  * stops separating them once the second lap is round. */
 function ringsLabel(date: Date, ratios: Record<RingKey, number> | null): string {
-  const base = date.toLocaleDateString(undefined, {
+  const base = date.toLocaleDateString("en-US", {
     weekday: "long",
     month: "long",
     day: "numeric",
+    year: date.getFullYear() === new Date().getFullYear() ? undefined : "numeric",
   });
   if (!ratios) return base;
   const pct = (f: number) => `${Math.round(f * 100)}%`;
