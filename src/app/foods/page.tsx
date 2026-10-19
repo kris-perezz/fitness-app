@@ -1,4 +1,4 @@
-import { createClient } from "@/lib/supabase/server";
+import { createClient, must } from "@/lib/supabase/server";
 import type { Food } from "@/lib/food";
 import { toMicros } from "@/lib/micros";
 import { FoodShelf } from "@/components/food-shelf";
@@ -21,11 +21,13 @@ export default async function FoodsPage() {
   } = await supabase.auth.getUser();
   if (!user) return <FoodShelf foods={[]} />;
 
-  const { data } = await supabase
-    .from("foods")
-    .select("*")
-    .eq("created_by", user.id)
-    .order("created_at", { ascending: false });
+  const data = must(
+    await supabase
+      .from("foods")
+      .select("*")
+      .eq("created_by", user.id)
+      .order("created_at", { ascending: false }),
+  );
 
   return <FoodShelf foods={mine((data ?? []) as CatalogRow[])} />;
 }

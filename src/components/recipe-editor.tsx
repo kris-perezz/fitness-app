@@ -20,6 +20,7 @@ import {
   updateRecipeIngredient,
   type RecipeRow,
 } from "@/app/actions";
+import { reach } from "@/lib/reach";
 import { IngredientSheet } from "@/components/ingredient-sheet";
 import { ConfirmAction } from "@/components/confirm-action";
 import { SwipeToDelete } from "@/components/swipe-to-delete";
@@ -103,11 +104,11 @@ export function RecipeEditor({
 
   function save() {
     startTransition(async () => {
-      const res = await saveRecipe(recipe.id, {
+      const res = await reach(saveRecipe(recipe.id, {
         name,
         servings: servingCount,
         cooked_weight_g: cookedWeight,
-      });
+      }));
       if (res.error) {
         toast.error(res.error);
         return;
@@ -122,7 +123,7 @@ export function RecipeEditor({
   // editing the wrong one.
   function duplicate() {
     startTransition(async () => {
-      const res = await duplicateRecipe(recipe.id);
+      const res = await reach(duplicateRecipe(recipe.id));
       if (res.error || !res.id) {
         toast.error(res.error ?? "Could not copy that recipe");
         return;
@@ -133,7 +134,7 @@ export function RecipeEditor({
 
   function remove() {
     startTransition(async () => {
-      const res = await deleteRecipe(recipe.id);
+      const res = await reach(deleteRecipe(recipe.id));
       if (res.error) {
         toast.error(res.error);
         return;
@@ -397,7 +398,7 @@ function IngredientRow({ line, onChanged }: { line: EditorLine; onChanged: () =>
     if (n === line.qty) return;
 
     startTransition(async () => {
-      const res = await updateRecipeIngredient(line.id, n);
+      const res = await reach(updateRecipeIngredient(line.id, n));
       if (res.error) {
         toast.error(res.error);
         setQty(String(line.qty));
@@ -409,7 +410,7 @@ function IngredientRow({ line, onChanged }: { line: EditorLine; onChanged: () =>
 
   function remove() {
     startTransition(async () => {
-      const res = await removeRecipeIngredient(line.id);
+      const res = await reach(removeRecipeIngredient(line.id));
       if (res.error) {
         toast.error(res.error);
         return;

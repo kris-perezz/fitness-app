@@ -21,6 +21,7 @@ import {
   type Meal,
 } from "@/lib/food";
 import { addEntry, saveScannedFood, estimateEntry } from "@/app/actions";
+import { reach } from "@/lib/reach";
 import { FoodPicker, type PickerStep } from "@/components/food-picker";
 import { FoodSourceBadge } from "@/components/food-source-badge";
 import {
@@ -281,21 +282,21 @@ function QtyStep({
   }, []);
 
   function save() {
-    if (!preview) return;
+    if (!preview || pending) return;
     startTransition(async () => {
       // Write the catalog row first: the entry's food_id references it, so a
       // never-before-seen scan would otherwise fail the foreign key. Saving is
       // idempotent -- a barcode already in the catalog is somebody's confirmed
       // food and is left exactly as it is (S3).
       if (scanned) {
-        const saved = await saveScannedFood(food);
+        const saved = await reach(saveScannedFood(food));
         if (saved.error) {
           toast.error(saved.error);
           return;
         }
       }
 
-      const res = await addEntry({
+      const res = await reach(addEntry({
         log_date: date,
         meal,
         food_id: food.id,
@@ -312,7 +313,7 @@ function QtyStep({
         micros: scaledMicros(food, scaleQty),
         sugar_g: scaledSugar(food, scaleQty),
         ...preview,
-      });
+      }));
       if (res.error || !res.entry) {
         toast.error(res.error ?? "Could not add that.");
         return;
@@ -392,6 +393,7 @@ function QtyStep({
             enterKeyHint="done"
             value={qty}
             onChange={(e) => setQty(e.target.value)}
+            onFocus={(e) => e.currentTarget.select()}
             onKeyDown={(e) => e.key === "Enter" && save()}
             className="h-12 text-base tabular-nums"
           />
@@ -604,7 +606,7 @@ function CustomStep({
       // replaces the whole app with the server error page, losing the meal.
       let res: Awaited<ReturnType<typeof estimateEntry>>;
       try {
-        res = await estimateEntry(described, photo);
+        res = await reach(estimateEntry(described, photo));
       } catch {
         if (attempt.current !== id) return;
         setEstimating(false);
@@ -657,7 +659,7 @@ function CustomStep({
 
   function save() {
     startSaving(async () => {
-      const res = await addEntry({
+      const res = await reach(addEntry({
         log_date: date,
         meal,
         food_id: null,
@@ -677,7 +679,7 @@ function CustomStep({
         // applied to the path where the data never existed).
         micros: {},
         sugar_g: null,
-      });
+      }));
       if (res.error || !res.entry) {
         toast.error(res.error ?? "Could not add that.");
         return;

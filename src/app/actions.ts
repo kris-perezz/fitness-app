@@ -13,6 +13,7 @@ import {
   type Food,
   type FoodSource,
   type IntakeEntry,
+  MEALS,
   type Macros,
   type Meal,
 } from "@/lib/food";
@@ -55,9 +56,33 @@ export async function addEntry(
   } = await supabase.auth.getUser();
   if (!user) return { entry: null, error: "Not signed in" };
 
+  const invalid = await validateEntry(entry);
+  if (invalid) return { entry: null, error: invalid };
+
+  // Named fields only: the browser's object is not trusted to carry nothing else.
+  const row = {
+    user_id: user.id,
+    log_date: entry.log_date,
+    meal: entry.meal,
+    food_id: entry.food_id,
+    name: entry.name.trim(),
+    description: entry.description?.trim() || null,
+    qty: entry.qty,
+    unit: entry.unit,
+    estimate: entry.estimate === true,
+    kcal: entry.kcal,
+    protein_g: entry.protein_g,
+    fat_g: entry.fat_g,
+    carb_g: entry.carb_g,
+    fiber_g: entry.fiber_g,
+    sodium_mg: entry.sodium_mg,
+    sugar_g: entry.sugar_g,
+    micros: toMicros(entry.micros),
+  };
+
   const { data, error } = await supabase
     .from("intake_entries")
-    .insert({ ...entry, user_id: user.id })
+    .insert(row)
     .select(ENTRY_COLUMNS)
     .single();
   if (error) return { entry: null, error: error.message };
@@ -66,6 +91,36 @@ export async function addEntry(
 
   revalidatePath("/log");
   return { entry: data as unknown as IntakeEntry, error: null };
+}
+
+/** In range, finite, and not null unless `nullable`. */
+function inRange(n: unknown, min: number, max: number, nullable = false): boolean {
+  if (n === null) return nullable;
+  return typeof n === "number" && Number.isFinite(n) && n >= min && n <= max;
+}
+
+const DATE = /^\d{4}-\d{2}-\d{2}$/;
+
+async function validateEntry(entry: NewEntry): Promise<string | null> {
+  if (typeof entry.name !== "string" || !entry.name.trim() || entry.name.length > 200) {
+    return "Enter a name";
+  }
+  if (!MEALS.includes(entry.meal)) return "Pick a meal";
+  if (typeof entry.log_date !== "string" || !DATE.test(entry.log_date)) return "Pick a day";
+  if (entry.log_date > (await serverToday())) return "That day hasn't happened yet";
+  if (!inRange(entry.qty, 0.001, 100_000)) return "Enter an amount";
+  if (typeof entry.unit !== "string" || !entry.unit || entry.unit.length > 40) return "Pick a unit";
+  if (entry.food_id !== null && typeof entry.food_id !== "string") return "Unknown food";
+  if (entry.description != null && (typeof entry.description !== "string" || entry.description.length > 2000)) {
+    return "Description is too long";
+  }
+  if (!inRange(entry.kcal, 0, 20_000)) return "Calories must be 0 to 20,000";
+  for (const n of [entry.protein_g, entry.fat_g, entry.carb_g, entry.fiber_g]) {
+    if (!inRange(n, 0, 5_000)) return "Macros must be 0 to 5,000 g";
+  }
+  if (!inRange(entry.sodium_mg, 0, 100_000, true)) return "Sodium is out of range";
+  if (!inRange(entry.sugar_g, 0, 5_000, true)) return "Sugar is out of range";
+  return null;
 }
 
 /**
@@ -318,9 +373,30 @@ export async function saveGoals(goals: Goals) {
   } = await supabase.auth.getUser();
   if (!user) return { error: "Not signed in" };
 
-  const { error } = await supabase
-    .from("nutrition_settings")
-    .upsert({ ...goals, user_id: user.id, updated_at: new Date().toISOString() });
+  if (!inRange(goals.calorie_goal, 0, 20_000)) return { error: "Calories must be 0 to 20,000" };
+  for (const n of [goals.protein_goal_g, goals.carb_goal_g, goals.fat_goal_g]) {
+    if (!inRange(n, 0, 2_000)) return { error: "Macros must be 0 to 2,000 g" };
+  }
+  if (!inRange(goals.goal_weight_lb, 40, 1_500, true)) return { error: "Goal weight is out of range" };
+  if (!inRange(goals.goal_rate_lb_per_week, -5, 5, true)) {
+    return { error: "Rate must be within 5 lb a week" };
+  }
+  if (goals.display_weight_unit !== "lb" && goals.display_weight_unit !== "kg") {
+    return { error: "Pick lb or kg" };
+  }
+
+  const { error } = await supabase.from("nutrition_settings").upsert({
+    user_id: user.id,
+    calorie_goal: goals.calorie_goal,
+    protein_goal_g: goals.protein_goal_g,
+    carb_goal_g: goals.carb_goal_g,
+    fat_goal_g: goals.fat_goal_g,
+    goal_weight_lb: goals.goal_weight_lb,
+    goal_rate_lb_per_week: goals.goal_rate_lb_per_week,
+    display_weight_unit: goals.display_weight_unit,
+    strict_mode: goals.strict_mode === true,
+    updated_at: new Date().toISOString(),
+  });
   if (error) return { error: error.message };
 
   // S60. Today's dated row is corrected along with the live prescription --
@@ -426,9 +502,15 @@ export async function saveScannedFood(food: Food) {
   if (existingError) return { error: existingError.message };
   if (existing) return { error: null };
 
+  // This row is shared with everyone (0029), so its numbers come from Open
+  // Food Facts directly, never from the browser that asked for it.
+  if (!barcode || !isBarcode(barcode)) return { error: "Not a valid barcode" };
+  const remote = await fetchOffProduct(barcode);
+  if (remote.status === "error") return { error: remote.message };
+  if (remote.status === "miss") return { error: "That product isn't on Open Food Facts" };
+
   const { error } = await supabase.from("foods").insert({
-    ...food,
-    barcode,
+    ...remote.food,
     created_by: user.id,
   });
   // 23505: a concurrent scan inserted it first. Same outcome as finding it above.
@@ -611,15 +693,12 @@ export async function saveLabelFood(
  * photograph and no ingredients to list -- a restaurant sandwich, a cafe drink
  * -- has to be retyped and re-derived every single time it is eaten.
  *
- * FORWARD-LOOKING ONLY, the same rule S7 states for corrections. The entry that
- * seeded this keeps its own numbers and its own `estimate` flag: it WAS typed
- * with no catalog row behind it, and relinking it afterwards would rewrite that
- * history to make a past day look better sourced than it was.
+ * The entry that seeded this keeps its own numbers and its own `estimate` flag.
+ * It is linked to the new food, which is what stops a second tap saving a
+ * second copy.
  *
- * `per_unit` on the entry's own unit, because a typed entry is written as
- * `qty 1 / unit "serving"` (add-sheet.tsx) and its macros are therefore the
- * whole portion. Nothing here converts, guesses a gram weight, or invents a
- * number the entry did not already carry.
+ * The food holds ONE unit of what the entry holds `qty` of, or 100 g / 100 ml
+ * when the entry was weighed. Nothing here guesses a gram weight.
  */
 export async function saveEntryAsFood(
   entryId: string,
@@ -644,6 +723,7 @@ export async function saveEntryAsFood(
 
   const entry = data as {
     name: string;
+    qty: number;
     unit: string;
     food_id: string | null;
     kcal: number;
@@ -664,27 +744,35 @@ export async function saveEntryAsFood(
 
   const name = entry.name.trim();
   if (!name) return { food: null, error: "That entry has no name to save." };
+  if (!(entry.qty > 0)) return { food: null, error: "That entry has no amount to save." };
+
+  const weighed = entry.unit === "g" || entry.unit === "ml";
+  const per = (weighed ? 100 : 1) / entry.qty;
+  const scale = (n: number) => Math.round(n * per * 10) / 10;
+  const scaleOrNull = (n: number | null) => (n == null ? null : scale(n));
 
   const food: Food = {
     id: `manual_${crypto.randomUUID()}`,
     name,
     aliases: [],
-    basis: "per_unit",
+    basis: weighed ? "per_100g" : "per_unit",
     unit: entry.unit,
     grams_per_unit: null,
     // On per_unit the measure is only meaningful alongside a gram weight, and
     // there is none. "g" is the column's default rather than a claim.
-    weight_unit: "g",
-    kcal: entry.kcal,
-    protein_g: entry.protein_g,
-    fat_g: entry.fat_g,
-    carb_g: entry.carb_g,
-    fiber_g: entry.fiber_g,
-    sodium_mg: entry.sodium_mg,
-    sugar_g: entry.sugar_g,
+    weight_unit: entry.unit === "ml" ? "ml" : "g",
+    kcal: Math.round(entry.kcal * per),
+    protein_g: scale(entry.protein_g),
+    fat_g: scale(entry.fat_g),
+    carb_g: scale(entry.carb_g),
+    fiber_g: scale(entry.fiber_g),
+    sodium_mg: scaleOrNull(entry.sodium_mg),
+    sugar_g: scaleOrNull(entry.sugar_g),
     // Absent stays absent (S36): a typed entry carries `{}` and copying that
     // is right, where filling in zeroes would invent a claim.
-    micros: entry.micros ?? {},
+    micros: Object.fromEntries(
+      Object.entries(entry.micros ?? {}).map(([k, v]) => [k, scale(v as number)]),
+    ) as Micros,
     // Nobody transcribed a package here -- the numbers came out of the same
     // head that typed the name.
     verified: false,
@@ -696,6 +784,13 @@ export async function saveEntryAsFood(
     .from("foods")
     .insert({ ...food, created_by: user.id });
   if (insertError) return { food: null, error: insertError.message };
+
+  const { error: linkError } = await supabase
+    .from("intake_entries")
+    .update({ food_id: food.id })
+    .eq("id", entryId)
+    .eq("user_id", user.id);
+  if (linkError) console.error("saveEntryAsFood link failed", linkError.message);
 
   revalidatePath("/log");
   return { food, error: null };
@@ -756,14 +851,29 @@ export async function updateFood(
     return { food: null, error: "Edit the recipe instead -- saving it rewrites these numbers." };
   }
 
-  const source: FoodSource = current.source === "label" ? "label" : "manual";
+  const shared = current.source === "cnf" || current.source === "off";
+  const numbersChanged = (["kcal", "protein_g", "carb_g", "fat_g", "fiber_g", "sodium_mg"] as const).some(
+    // Number(): a numeric column can arrive from PostgREST as a string.
+    (key) => edit[key] !== (current[key] == null ? null : Number(current[key])),
+  );
+  // A rename or a serving size is not a correction of the numbers, so it leaves
+  // where they came from alone. A shared row still forks into `manual`, or the
+  // copy would be readable by everyone (0029).
+  const keepsProvenance = !numbersChanged && !shared;
+
+  const source: FoodSource = keepsProvenance
+    ? current.source
+    : current.source === "label"
+      ? "label"
+      : "manual";
 
   // S97. What the row descended from, kept because `source` no longer says it.
   // A second correction must not rewrite this to `manual` and lose the original
   // ancestry, so an already-forked row carries its own answer forward. A label
   // row keeps its source and therefore needs no ancestry at all.
-  const derivedFrom: FoodSource | null =
-    source === "label"
+  const derivedFrom: FoodSource | null = keepsProvenance
+    ? (current.derived_from ?? null)
+    : source === "label"
       ? null
       : current.source === "manual"
         ? (current.derived_from ?? null)
@@ -791,10 +901,12 @@ export async function updateFood(
     derived_from: derivedFrom,
     // Somebody has now checked these against a package, which is what the
     // column has meant since 0001.
-    verified: true,
+    verified: numbersChanged ? true : current.verified,
   };
 
-  if (current.created_by === user.id) {
+  // A Health Canada or Open Food Facts row is shared (0029) even when you were
+  // the first to add it, so it forks like the seed set does.
+  if (current.created_by === user.id && !shared) {
     const { data: updated, error: updateError } = await supabase
       .from("foods")
       .update(fields)
@@ -803,6 +915,7 @@ export async function updateFood(
       .single();
     if (updateError) return { food: null, error: updateError.message };
 
+    await republishRecipesUsing(supabase, user.id, id, id);
     revalidatePath("/log");
     return { food: updated as Food, error: null };
   }
@@ -827,6 +940,7 @@ export async function updateFood(
     .single();
   if (insertError) return { food: null, error: insertError.message };
 
+  await republishRecipesUsing(supabase, user.id, current.id, fork.id);
   revalidatePath("/log");
   return { food: inserted as Food, error: null };
 }
@@ -1105,6 +1219,8 @@ export async function addRecipeIngredient(recipeId: string, foodId: string, qty:
   if (!user) return { error: "Not signed in" };
   if (!Number.isFinite(qty) || qty <= 0) return { error: "Quantity must be greater than zero" };
 
+  if (foodId === recipeFoodId(recipeId)) return { error: "A recipe can't include itself" };
+
   const owned = await ownsRecipe(supabase, recipeId, user.id);
   if (owned) return { error: owned };
 
@@ -1126,9 +1242,7 @@ export async function addRecipeIngredient(recipeId: string, foodId: string, qty:
   });
   if (error) return { error: error.message };
 
-  await touchRecipe(supabase, recipeId, user.id);
-  revalidatePath("/recipes");
-  return { error: null };
+  return publishRecipe(supabase, recipeId, user.id);
 }
 
 export async function updateRecipeIngredient(id: string, qty: number) {
@@ -1148,9 +1262,7 @@ export async function updateRecipeIngredient(id: string, qty: number) {
   if (error) return { error: error.message };
   if (!data) return { error: "Ingredient not found" };
 
-  await touchRecipe(supabase, data.recipe_id as string, user.id);
-  revalidatePath("/recipes");
-  return { error: null };
+  return publishRecipe(supabase, data.recipe_id as string, user.id);
 }
 
 export async function removeRecipeIngredient(id: string) {
@@ -1169,9 +1281,7 @@ export async function removeRecipeIngredient(id: string) {
   if (error) return { error: error.message };
   if (!data) return { error: "Ingredient not found" };
 
-  await touchRecipe(supabase, data.recipe_id as string, user.id);
-  revalidatePath("/recipes");
-  return { error: null };
+  return publishRecipe(supabase, data.recipe_id as string, user.id);
 }
 
 /**
@@ -1190,32 +1300,9 @@ export async function saveRecipe(id: string, details: RecipeDetails) {
   const detailsError = await updateRecipe(id, details);
   if (detailsError.error) return detailsError;
 
-  const owned = await ownsRecipe(supabase, id, user.id);
-  if (owned) return { error: owned };
-
-  const { data: rows, error: linesError } = await supabase
-    .from("recipe_ingredients")
-    .select("qty, food:foods(*)")
-    .eq("recipe_id", id)
-    .order("sort_order", { ascending: true });
-  if (linesError) return { error: linesError.message };
-
-  const lines: RecipeLine[] = (rows ?? [])
-    .map((row) => ({ qty: row.qty as number, food: row.food as unknown as Food }))
-    .filter((line) => line.food != null);
-  if (lines.length === 0) return { error: "Add at least one ingredient first" };
-
-  const food = generatedFood(id, { ...details, name: details.name.trim() }, lines);
-
-  // Upsert, not insert: re-saving an edited recipe must land on the same row so
-  // future logs pick up the new macros while logged entries keep their own.
-  const { error } = await supabase
-    .from("foods")
-    .upsert({ ...food, created_by: user.id }, { onConflict: "id" });
-  if (error) return { error: error.message };
-
-  revalidatePath("/recipes");
-  revalidatePath("/log");
+  const published = await publishRecipe(supabase, id, user.id);
+  if (published.error) return published;
+  if (!published.published) return { error: "Add at least one ingredient first" };
   return { error: null };
 }
 
@@ -1267,13 +1354,87 @@ async function ownsRecipe(
 }
 
 /**
- * Bump `updated_at` after an ingredient change. Best-effort: a failed timestamp
- * is not worth failing an otherwise-successful edit over.
+ * Rebuild the recipe's `foods` row from a fresh server-side read of its details
+ * and ingredients (S16), so what gets logged is always the recipe as it stands.
+ * The macros are computed here from trusted rows, never accepted from the
+ * browser. A recipe with no ingredients yet keeps whatever it last published.
  */
-async function touchRecipe(supabase: ServerClient, recipeId: string, userId: string) {
+async function publishRecipe(
+  supabase: ServerClient,
+  recipeId: string,
+  userId: string,
+): Promise<{ error: string | null; published?: boolean }> {
+  const [recipeResult, linesResult] = await Promise.all([
+    supabase
+      .from("recipes")
+      .select("name, servings, cooked_weight_g")
+      .eq("id", recipeId)
+      .eq("user_id", userId)
+      .maybeSingle(),
+    supabase
+      .from("recipe_ingredients")
+      .select("qty, food:foods(*)")
+      .eq("recipe_id", recipeId)
+      .order("sort_order", { ascending: true }),
+  ]);
+  if (recipeResult.error) return { error: recipeResult.error.message };
+  if (!recipeResult.data) return { error: "Recipe not found" };
+  if (linesResult.error) return { error: linesResult.error.message };
+
+  const details = recipeResult.data as RecipeDetails;
+  const lines: RecipeLine[] = (linesResult.data ?? [])
+    .map((row) => ({ qty: row.qty as number, food: row.food as unknown as Food }))
+    .filter((line) => line.food != null);
+
   await supabase
     .from("recipes")
     .update({ updated_at: new Date().toISOString() })
     .eq("id", recipeId)
     .eq("user_id", userId);
+
+  revalidatePath("/recipes");
+  if (lines.length === 0) return { error: null, published: false };
+
+  const food = generatedFood(recipeId, { ...details, name: details.name.trim() }, lines);
+  // Upsert onto the same row, so future logs pick up the new macros while
+  // logged entries keep their own.
+  const { error } = await supabase
+    .from("foods")
+    .upsert({ ...food, created_by: userId }, { onConflict: "id" });
+  if (error) return { error: error.message };
+
+  revalidatePath("/log");
+  return { error: null, published: true };
+}
+
+/**
+ * A corrected food reaches the recipes built on it. A correction that forked
+ * the row moves this user's ingredients onto the fork first.
+ */
+async function republishRecipesUsing(
+  supabase: ServerClient,
+  userId: string,
+  oldFoodId: string,
+  newFoodId: string,
+) {
+  const { data: recipes } = await supabase.from("recipes").select("id").eq("user_id", userId);
+  const ids = (recipes ?? []).map((r) => r.id as string);
+  if (ids.length === 0) return;
+
+  const { data: uses } = await supabase
+    .from("recipe_ingredients")
+    .select("recipe_id")
+    .eq("food_id", oldFoodId)
+    .in("recipe_id", ids);
+  const affected = [...new Set((uses ?? []).map((u) => u.recipe_id as string))];
+  if (affected.length === 0) return;
+
+  if (newFoodId !== oldFoodId) {
+    await supabase
+      .from("recipe_ingredients")
+      .update({ food_id: newFoodId })
+      .eq("food_id", oldFoodId)
+      .in("recipe_id", affected);
+  }
+  await Promise.all(affected.map((id) => publishRecipe(supabase, id, userId)));
 }

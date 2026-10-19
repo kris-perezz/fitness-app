@@ -21,6 +21,7 @@ import {
   searchOffFoods,
   lookupBarcode,
 } from "@/app/actions";
+import { reach } from "@/lib/reach";
 import { CNF_ATTRIBUTION, CNF_LICENCE_URL, type CnfHit } from "@/lib/cnf";
 import type { OffHit } from "@/lib/off";
 import { downscaleToDataUrl } from "@/lib/image";
@@ -288,7 +289,7 @@ function CnfSection({ query, onPick }: { query: string; onPick: (food: Food) => 
 
   const search = () => {
     startTransition(async () => {
-      const res = await searchCnfFoods(query);
+      const res = await reach(searchCnfFoods(query));
       if (res.status === "error") {
         setError(res.message);
         setHits([]);
@@ -302,7 +303,7 @@ function CnfSection({ query, onPick }: { query: string; onPick: (food: Food) => 
   const choose = (hit: CnfHit) => {
     setPicking(hit.code);
     startTransition(async () => {
-      const res = await addCnfFood(hit.code, hit.description);
+      const res = await reach(addCnfFood(hit.code, hit.description));
       setPicking(null);
       if (res.error || !res.food) {
         toast.error(res.error ?? "Could not add that food.");
@@ -411,7 +412,7 @@ function OffSection({
 
   const search = () => {
     startTransition(async () => {
-      const res = await searchOffFoods(query);
+      const res = await reach(searchOffFoods(query));
       if (res.status === "error") {
         setError(res.message);
         setHits([]);
@@ -425,7 +426,7 @@ function OffSection({
   const choose = (hit: OffHit) => {
     setPicking(hit.barcode);
     startTransition(async () => {
-      const res = await lookupBarcode(hit.barcode);
+      const res = await reach(lookupBarcode(hit.barcode));
       setPicking(null);
       if (res.source === "error") {
         toast.error(res.error ?? "Could not add that food.");
@@ -592,7 +593,7 @@ function LabelStep({
     // app with the server error page, losing the meal being logged.
     let res: Awaited<ReturnType<typeof readLabel>>;
     try {
-      res = await readLabel(image);
+      res = await reach(readLabel(image));
     } catch {
       setPhase({ kind: "failed", message: "That photo could not be sent. Try again." });
       return;
@@ -618,7 +619,7 @@ function LabelStep({
     };
 
     startTransition(async () => {
-      const res = await saveLabelFood(
+      const res = await reach(saveLabelFood(
         {
           ...phase.draft,
           name: form.name.trim(),
@@ -636,7 +637,7 @@ function LabelStep({
           ) as LabelDraft["micros"],
         },
         barcode,
-      );
+      ));
       if (res.error || !res.food) {
         toast.error(res.error ?? "Could not save that food");
         return;

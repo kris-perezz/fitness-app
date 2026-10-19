@@ -1,5 +1,5 @@
 import { notFound } from "next/navigation";
-import { createClient } from "@/lib/supabase/server";
+import { createClient, must } from "@/lib/supabase/server";
 import { NO_BESTS, NO_HISTORY } from "@/lib/training";
 import type {
   Bests,
@@ -26,23 +26,25 @@ export default async function WorkoutPage({ params }: PageProps<"/train/[id]">) 
   // the session's date). The rest were sequential by accident of where they sat
   // in the file, and the slots query never needed the workout row at all: it
   // keys on the id already in the URL.
-  const [{ data: row }, { data: exercises }, { data: slotRows }, recent] = await Promise.all([
+  const [row, exercises, slotRows, recent] = await Promise.all([
     // RLS scopes this to the caller, so somebody else's id is a 404 rather than
     // a permission error -- which is the honest answer, since as far as this
     // user is concerned the session does not exist.
-    supabase.from("workouts").select("*").eq("id", id).maybeSingle(),
+    supabase.from("workouts").select("*").eq("id", id).maybeSingle().then(must),
     // Named columns, not "*": five of the table's columns are read by nothing
     // on this screen, and one of them (created_by) is a user id the browser has
     // no reason to hold. See the Exercise type for the list.
     supabase
       .from("exercises")
       .select("id, name, aliases, equipment, bodyweight_fraction, load_is_per_side, primary_muscles")
-      .order("name"),
+      .order("name")
+      .then(must),
     supabase
       .from("workout_exercises")
       .select("*, sets:workout_sets(*)")
       .eq("workout_id", id)
-      .order("sort_order", { ascending: true }),
+      .order("sort_order", { ascending: true })
+      .then(must),
     recentExerciseIds(supabase),
   ]);
 

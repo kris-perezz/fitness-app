@@ -6,6 +6,7 @@ import Link from "next/link";
 import { ChevronLeft } from "lucide-react";
 import { WINDOW_BUFFER_MONTHS, WINDOW_MONTHS, shiftMonth } from "@/lib/training";
 import { loadIntakeDaysWindow, type DayLog } from "@/app/actions";
+import { reach } from "@/lib/reach";
 import type { DayGoal } from "@/lib/goals";
 import { Button } from "@/components/ui/button";
 import { Card } from "@/components/ui/card";
@@ -68,7 +69,7 @@ export function MonthLog({
 
     loading.current = true;
     const nextFrom = shiftMonth(from, -WINDOW_MONTHS);
-    void loadIntakeDaysWindow(nextFrom, shiftMonth(from, -1), strictMode)
+    void reach(loadIntakeDaysWindow(nextFrom, shiftMonth(from, -1), strictMode))
       .then((res) => {
         if (res.error) return; // Silent: nothing is broken, there is just less history on screen.
         setDays((prev) => [...prev, ...res.days]);

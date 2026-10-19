@@ -23,6 +23,7 @@ import {
   type ChartConfig,
 } from "@/components/ui/chart";
 import { closeStaleWorkouts, loadTrainingWindow, openWorkoutOn } from "@/app/training-actions";
+import { reach } from "@/lib/reach";
 import { Button } from "@/components/ui/button";
 import { Card } from "@/components/ui/card";
 import { Calendar } from "@/components/ui/calendar";
@@ -109,7 +110,7 @@ export function TrainHome({
 
     loading.current = true;
     const nextFrom = shiftMonth(from, -WINDOW_MONTHS);
-    void loadTrainingWindow(nextFrom, shiftMonth(from, -1))
+    void reach(loadTrainingWindow(nextFrom, shiftMonth(from, -1)))
       .then((res) => {
         if (res.error) return; // Silent: nothing is broken, there is just less history on screen.
         setSessions((prev) => [...prev, ...res.sessions]);
@@ -184,7 +185,7 @@ export function TrainHome({
       return;
     }
     startTransition(async () => {
-      const res = await openWorkoutOn(date);
+      const res = await reach(openWorkoutOn(date));
       if (res.error || !res.id) {
         toast.error(res.error ?? "Could not open that session");
         return;
@@ -202,7 +203,7 @@ export function TrainHome({
   useEffect(() => {
     if (!staleOpen || swept.current) return;
     swept.current = true;
-    void closeStaleWorkouts().then(() => router.refresh());
+    void reach(closeStaleWorkouts()).then(() => router.refresh());
   }, [staleOpen, router]);
 
   // What the calendar's own two nav arrows do, from anywhere on the grid. The
@@ -385,7 +386,7 @@ function PickDay({
   function go() {
     if (!picked) return;
     startTransition(async () => {
-      const res = await openWorkoutOn(dateKey(picked));
+      const res = await reach(openWorkoutOn(dateKey(picked)));
       if (res.error || !res.id) {
         toast.error(res.error ?? "Could not open that session");
         return;

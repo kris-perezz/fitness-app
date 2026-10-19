@@ -1,4 +1,4 @@
-import { createClient } from "@/lib/supabase/server";
+import { createClient, must } from "@/lib/supabase/server";
 import { perServingMacros, type RecipeLine } from "@/lib/recipe";
 import type { Food } from "@/lib/food";
 import type { RecipeRow } from "@/app/actions";
@@ -15,9 +15,9 @@ export const dynamic = "force-dynamic";
 export default async function RecipesPage() {
   const supabase = await createClient();
 
-  const [{ data: recipes }, { data: ingredients }] = await Promise.all([
-    supabase.from("recipes").select("*").order("created_at", { ascending: false }),
-    supabase.from("recipe_ingredients").select("recipe_id, qty, food:foods(*)"),
+  const [recipes, ingredients] = await Promise.all([
+    supabase.from("recipes").select("*").order("created_at", { ascending: false }).then(must),
+    supabase.from("recipe_ingredients").select("recipe_id, qty, food:foods(*)").then(must),
   ]);
 
   const linesByRecipe = new Map<string, RecipeLine[]>();

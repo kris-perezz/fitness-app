@@ -5,6 +5,7 @@ import { useRouter } from "next/navigation";
 import Link from "next/link";
 import { ChevronLeft, Package, Plus, Search } from "lucide-react";
 import { saveScannedFood } from "@/app/actions";
+import { reach } from "@/lib/reach";
 import { basisLabel, searchFoods, show, type Food } from "@/lib/food";
 import { FoodPicker, type PickerStep } from "@/components/food-picker";
 import { EditFoodSheet } from "@/components/edit-food-sheet";
@@ -92,7 +93,7 @@ export function FoodShelf({ foods }: { foods: Food[] }) {
     }
     startSave(async () => {
       if (scanned) {
-        const res = await saveScannedFood(food);
+        const res = await reach(saveScannedFood(food));
         if (res.error) {
           toast.error(res.error);
           return;

@@ -2,6 +2,7 @@
 
 import { useState, useTransition } from "react";
 import { saveGoals, signOut } from "@/app/actions";
+import { reach } from "@/lib/reach";
 import { Button } from "@/components/ui/button";
 import { Card } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
@@ -156,13 +157,17 @@ export function GoalsForm({ goals }: { goals: Goals }) {
    * them through `balance` would be a category error.
    */
   const weightGoals = () => {
-    const weight = parseGoal(form.goal_weight_lb);
-    const rate = parseGoal(form.goal_rate_lb_per_week);
+    // An untouched field keeps the stored pounds exactly. Converting its rounded
+    // display back would turn -1.0 lb/week into -1.1 after a kg round trip.
+    const toLb = (field: "goal_weight_lb" | "goal_rate_lb_per_week") => {
+      const storedLb = goals?.[field] ?? null;
+      if (form[field] === showGoal(storedLb, unit)) return storedLb == null ? null : Number(storedLb);
+      const n = parseGoal(form[field]);
+      return n === null ? null : fromDisplay(n, unit);
+    };
     return {
-      // Back to pounds on the way out, unrounded -- the same rule the weigh-in
-      // sheet follows, so a kg goal does not drift by a tenth per save.
-      goal_weight_lb: weight === null ? null : fromDisplay(weight, unit),
-      goal_rate_lb_per_week: rate === null ? null : fromDisplay(rate, unit),
+      goal_weight_lb: toLb("goal_weight_lb"),
+      goal_rate_lb_per_week: toLb("goal_rate_lb_per_week"),
       display_weight_unit: unit,
       strict_mode: strict,
     };
@@ -218,7 +223,7 @@ export function GoalsForm({ goals }: { goals: Goals }) {
     const values = isBalanced(current.calorie_goal, current) ? current : reconcile("calorie_goal");
 
     startTransition(async () => {
-      const res = await saveGoals({ ...values, ...weightGoals() });
+      const res = await reach(saveGoals({ ...values, ...weightGoals() }));
       if (res.error) {
         toast.error(res.error);
         return;

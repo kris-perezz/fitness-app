@@ -6,6 +6,7 @@ import { useTransition } from "react";
 import { useRouter } from "next/navigation";
 import { toast } from "sonner";
 import { pinExercise } from "@/app/progress-actions";
+import { reach } from "@/lib/reach";
 import {
   MIN_LIFT_SESSIONS,
   REP_CAP,
@@ -58,7 +59,7 @@ export function ExerciseScreen({
    */
   function togglePin() {
     startTransition(async () => {
-      const res = await pinExercise(exercise.id, !pinned);
+      const res = await reach(pinExercise(exercise.id, !pinned));
       if (res.error) {
         toast.error(res.error);
         return;

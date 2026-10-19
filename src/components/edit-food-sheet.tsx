@@ -3,6 +3,7 @@
 import { useState, useTransition } from "react";
 import { Trash2 } from "lucide-react";
 import { deleteFood, updateFood, type FoodEdit } from "@/app/actions";
+import { reach } from "@/lib/reach";
 import { basisLabel, countLabel, measureLabel, show, sourceHint, type Food } from "@/lib/food";
 import { FoodSourceBadge } from "@/components/food-source-badge";
 import { ConfirmAction } from "@/components/confirm-action";
@@ -87,13 +88,14 @@ function EditForm({
     food.grams_per_unit === null ? "" : String(food.grams_per_unit),
   );
   const [weightUnit, setWeightUnit] = useState<"g" | "ml">(food.weight_unit);
-  const [form, setForm] = useState<Record<string, string>>(() =>
+  const [initial] = useState<Record<string, string>>(() =>
     Object.fromEntries(
       FIELDS.map(([key]) => [key, key === "sodium_mg" && food.sodium_mg === null
         ? ""
         : String(show(food[key as keyof Food] as number | null))]),
     ),
   );
+  const [form, setForm] = useState(initial);
   const [pending, startTransition] = useTransition();
 
   // A per_100g food's serving size is optional and genuinely unknown when
@@ -107,22 +109,30 @@ function EditForm({
       ? "One serving"
       : `How much one ${countLabel(food, 1)} is`;
 
-  const num = (v: string) => (v.trim() === "" ? 0 : Number(v));
-  const orNull = (v: string) => (v.trim() === "" ? null : Number(v));
+  // An untouched field sends the stored value, not the rounded one it shows,
+  // so renaming a food never rounds its macros.
+  const stored = (key: string) => {
+    const value = food[key as keyof Food];
+    return value == null ? null : Number(value);
+  };
+  const num = (key: string) =>
+    form[key] === initial[key] ? (stored(key) ?? 0) : form[key].trim() === "" ? 0 : Number(form[key]);
+  const orNull = (key: string) =>
+    form[key] === initial[key] ? stored(key) : form[key].trim() === "" ? null : Number(form[key]);
 
   function save() {
     startTransition(async () => {
-      const res = await updateFood(food.id, {
+      const res = await reach(updateFood(food.id, {
         name,
-        grams_per_unit: orNull(serving),
+        grams_per_unit: serving.trim() === "" ? null : Number(serving),
         weight_unit: weightUnit,
-        kcal: num(form.kcal),
-        protein_g: num(form.protein_g),
-        carb_g: num(form.carb_g),
-        fat_g: num(form.fat_g),
-        fiber_g: num(form.fiber_g),
-        sodium_mg: orNull(form.sodium_mg),
-      });
+        kcal: num("kcal"),
+        protein_g: num("protein_g"),
+        carb_g: num("carb_g"),
+        fat_g: num("fat_g"),
+        fiber_g: num("fiber_g"),
+        sodium_mg: orNull("sodium_mg"),
+      }));
       if (res.error || !res.food) {
         toast.error(res.error ?? "Could not save that food");
         return;
@@ -135,7 +145,7 @@ function EditForm({
 
   function remove() {
     startTransition(async () => {
-      const res = await deleteFood(food.id);
+      const res = await reach(deleteFood(food.id));
       if (res.error) {
         toast.error(res.error);
         return;

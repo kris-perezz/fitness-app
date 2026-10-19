@@ -1,5 +1,5 @@
 import { redirect } from "next/navigation";
-import { createClient } from "@/lib/supabase/server";
+import { createClient, must } from "@/lib/supabase/server";
 import { WINDOW_MONTHS, shiftMonth } from "@/lib/training";
 import { TrainHome, type DayVolume, type SessionSummary } from "@/components/train-home";
 import { serverToday } from "@/lib/server-time";
@@ -41,14 +41,15 @@ export default async function TrainPage({
   // included -- so six months means five back plus this one.
   const from = `${shiftMonth(today.slice(0, 7), -(WINDOW_MONTHS - 1))}-01`;
 
-  const [{ data: openRows }, { data: sessionRows }, { data: volumeRows }] = await Promise.all([
-    supabase.from("workouts").select("id, log_date").is("ended_at", null).limit(1),
+  const [openRows, sessionRows, volumeRows] = await Promise.all([
+    supabase.from("workouts").select("id, log_date").is("ended_at", null).limit(1).then(must),
     supabase
       .from("workout_summaries")
       .select("id, log_date, exercises, set_count, volume_lb")
       .gte("log_date", from)
-      .order("log_date", { ascending: false }),
-    supabase.from("muscle_volume").select("log_date, muscle, sets").gte("log_date", from),
+      .order("log_date", { ascending: false })
+      .then(must),
+    supabase.from("muscle_volume").select("log_date, muscle, sets").gte("log_date", from).then(must),
   ]);
 
   const open = openRows?.[0] ?? null;

@@ -1,7 +1,8 @@
 import { notFound } from "next/navigation";
-import { createClient } from "@/lib/supabase/server";
+import { createClient, must } from "@/lib/supabase/server";
 import type { Food } from "@/lib/food";
 import type { RecipeRow } from "@/app/actions";
+import { recipeFoodId } from "@/lib/recipe";
 import { RecipeEditor, type EditorLine } from "@/components/recipe-editor";
 
 export const dynamic = "force-dynamic";
@@ -10,17 +11,18 @@ export default async function RecipePage({ params }: PageProps<"/recipes/[id]">)
   const { id } = await params;
   const supabase = await createClient();
 
-  const [{ data: recipe }, { data: ingredients }, { data: foods }] = await Promise.all([
+  const [recipe, ingredients, foods] = await Promise.all([
     // RLS scopes this to the caller, so somebody else's recipe id is a 404
     // rather than a permission error -- which is the honest answer, since as
     // far as this user is concerned the recipe does not exist.
-    supabase.from("recipes").select("*").eq("id", id).maybeSingle(),
+    supabase.from("recipes").select("*").eq("id", id).maybeSingle().then(must),
     supabase
       .from("recipe_ingredients")
       .select("id, qty, food:foods(*)")
       .eq("recipe_id", id)
-      .order("sort_order", { ascending: true }),
-    supabase.from("foods").select("*").order("name"),
+      .order("sort_order", { ascending: true })
+      .then(must),
+    supabase.from("foods").select("*").order("name").then(must),
   ]);
 
   if (!recipe) notFound();
@@ -36,6 +38,10 @@ export default async function RecipePage({ params }: PageProps<"/recipes/[id]">)
     .filter((line) => line.food != null);
 
   return (
-    <RecipeEditor recipe={recipe as RecipeRow} lines={lines} foods={(foods ?? []) as Food[]} />
+    <RecipeEditor
+      recipe={recipe as RecipeRow}
+      lines={lines}
+      foods={((foods ?? []) as Food[]).filter((food) => food.id !== recipeFoodId(id))}
+    />
   );
 }

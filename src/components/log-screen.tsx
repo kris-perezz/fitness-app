@@ -25,6 +25,7 @@ import {
   type Meal,
 } from "@/lib/food";
 import { deleteEntry, loadIntakeWindow, saveEntryAsFood, updateEntryQty } from "@/app/actions";
+import { reach } from "@/lib/reach";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Card } from "@/components/ui/card";
@@ -130,7 +131,7 @@ export function LogScreen({
     const fetchTo = back ? shiftDate(from, -1) : nextTo;
 
     loading.current = true;
-    void loadIntakeWindow(fetchFrom, fetchTo)
+    void reach(loadIntakeWindow(fetchFrom, fetchTo))
       .then((res) => {
         if (res.error) return; // Silent: nothing is broken, there is just less history on screen.
         setEntries((prev) => [...prev, ...res.entries]);
@@ -190,7 +191,7 @@ export function LogScreen({
   const [, startEntryDelete] = useTransition();
   function removeEntry(entry: Entry) {
     startEntryDelete(async () => {
-      const res = await deleteEntry(entry.id);
+      const res = await reach(deleteEntry(entry.id));
       if (res.error) {
         toast.error(res.error);
         return;
@@ -386,7 +387,10 @@ export function LogScreen({
         }
         // S99. The new row has to reach the catalog this screen was rendered
         // with, or the food you just saved is missing from the next search.
-        onSavedAsFood={() => router.refresh()}
+        onSavedAsFood={(entryId, foodId) => {
+          setEntries((prev) => prev.map((e) => (e.id === entryId ? { ...e, food_id: foodId } : e)));
+          router.refresh();
+        }}
       />
     </>
   );
@@ -481,7 +485,7 @@ function EntryDetail({
   onClose: () => void;
   onDeleted: (id: string) => void;
   onUpdated: (entry: Entry) => void;
-  onSavedAsFood: () => void;
+  onSavedAsFood: (entryId: string, foodId: string) => void;
 }) {
   // One transition per action, not one for the sheet: a shared flag makes the
   // Delete button announce "Deleting" while a save is what is actually running.
@@ -508,9 +512,9 @@ function EntryDetail({
   const shown = factor ?? 1;
 
   function save() {
-    if (!entry || factor === null) return;
+    if (!entry || factor === null || saving) return;
     startSave(async () => {
-      const res = await updateEntryQty(entry.id, typed);
+      const res = await reach(updateEntryQty(entry.id, typed));
       if (res.error || !res.entry) {
         toast.error(res.error ?? "Could not change that.");
         return;
@@ -556,6 +560,7 @@ function EntryDetail({
                     aria-label={`Amount in ${entry.unit}`}
                     value={amount}
                     onChange={(e) => setAmount(e.target.value)}
+                    onFocus={(e) => e.currentTarget.select()}
                     onKeyDown={(e) => e.key === "Enter" && save()}
                     className="h-11 w-28 text-base tabular-nums"
                   />
@@ -627,15 +632,13 @@ function EntryDetail({
                     disabled={pending}
                     onClick={() =>
                       startSave(async () => {
-                        const res = await saveEntryAsFood(entry.id);
+                        const res = await reach(saveEntryAsFood(entry.id));
                         if (res.error || !res.food) {
                           toast.error(res.error ?? "Could not save that as a food.");
                           return;
                         }
-                        // Says forward-looking out loud. This entry keeps the
-                        // numbers and the estimate flag it was logged with.
-                        toast.success(`Saved ${res.food.name}. Next time it is in search.`);
-                        onSavedAsFood();
+                        toast.success(`Saved ${res.food.name} to your foods`);
+                        onSavedAsFood(entry.id, res.food.id);
                         onClose();
                       })
                     }
@@ -648,7 +651,7 @@ function EntryDetail({
                   description={`${round(entry.kcal)} calories come off ${entry.meal}. This cannot be undone.`}
                   onConfirm={() =>
                     startDelete(async () => {
-                      const res = await deleteEntry(entry.id);
+                      const res = await reach(deleteEntry(entry.id));
                       if (res.error) {
                         toast.error(res.error);
                         return;

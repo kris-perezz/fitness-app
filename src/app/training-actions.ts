@@ -207,9 +207,25 @@ export async function logSet(workoutExerciseId: string, input: SetInput) {
   const invalid = validateSet(input);
   if (invalid) return { error: invalid };
 
+  // Numbered here, not from the client's count, which is stale whenever
+  // another add or delete is still in flight.
+  const { data: lastSet, error: readError } = await supabase
+    .from("workout_sets")
+    .select("set_index")
+    .eq("workout_exercise_id", workoutExerciseId)
+    .order("set_index", { ascending: false })
+    .limit(1)
+    .maybeSingle();
+  if (readError) return { error: readError.message };
+
   const { error } = await supabase.from("workout_sets").insert({
     workout_exercise_id: workoutExerciseId,
-    ...input,
+    reps: input.reps,
+    load_lb: input.load_lb,
+    rir: input.rir,
+    skipped: input.skipped === true,
+    set_type: input.set_type,
+    set_index: lastSet ? lastSet.set_index + 1 : 0,
   });
   if (error) return { error: error.message };
 
@@ -222,7 +238,16 @@ export async function updateSet(id: string, input: Omit<SetInput, "set_index">) 
   const invalid = validateSet(input);
   if (invalid) return { error: invalid };
 
-  const { error } = await supabase.from("workout_sets").update(input).eq("id", id);
+  const { error } = await supabase
+    .from("workout_sets")
+    .update({
+      reps: input.reps,
+      load_lb: input.load_lb,
+      rir: input.rir,
+      skipped: input.skipped === true,
+      set_type: input.set_type,
+    })
+    .eq("id", id);
   if (error) return { error: error.message };
 
   revalidatePath("/train", "layout");
@@ -231,8 +256,28 @@ export async function updateSet(id: string, input: Omit<SetInput, "set_index">) 
 
 export async function deleteSet(id: string) {
   const supabase = await createClient();
-  const { error } = await supabase.from("workout_sets").delete().eq("id", id);
+  const { data: deleted, error } = await supabase
+    .from("workout_sets")
+    .delete()
+    .eq("id", id)
+    .select("workout_exercise_id")
+    .maybeSingle();
   if (error) return { error: error.message };
+
+  // Close the gap, so "Set 3" still means the third set.
+  if (deleted) {
+    const { data: rest } = await supabase
+      .from("workout_sets")
+      .select("id, set_index")
+      .eq("workout_exercise_id", deleted.workout_exercise_id)
+      .order("set_index")
+      .order("created_at");
+    await Promise.all(
+      (rest ?? [])
+        .map((set, i) => (set.set_index === i ? null : supabase.from("workout_sets").update({ set_index: i }).eq("id", set.id)))
+        .filter((update) => update !== null),
+    );
+  }
 
   revalidatePath("/train", "layout");
   return { error: null };
@@ -299,11 +344,11 @@ function slug(name: string): string {
 }
 
 function validateSet(input: Omit<SetInput, "set_index">): string | null {
-  if (input.reps !== null && (!Number.isFinite(input.reps) || input.reps < 0)) {
-    return "Reps must be zero or more";
+  if (input.reps !== null && (!Number.isInteger(input.reps) || input.reps < 0 || input.reps > 200)) {
+    return "Reps must be 0 to 200";
   }
-  if (!Number.isFinite(input.load_lb) || input.load_lb < 0) {
-    return "Load must be zero or more";
+  if (!Number.isFinite(input.load_lb) || input.load_lb < 0 || input.load_lb > 3000) {
+    return "Load must be 0 to 3,000 lb";
   }
   // 0 is a real value -- taken to failure -- so only the absurd end is rejected.
   if (input.rir !== null && (!Number.isFinite(input.rir) || input.rir < 0 || input.rir > 10)) {

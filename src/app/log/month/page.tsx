@@ -1,4 +1,4 @@
-import { createClient } from "@/lib/supabase/server";
+import { createClient, must } from "@/lib/supabase/server";
 import { WINDOW_MONTHS, shiftMonth } from "@/lib/training";
 import { loadIntakeDaysWindow } from "@/app/actions";
 import { MonthLog } from "@/components/month-log";
@@ -24,14 +24,17 @@ export default async function MonthLogPage() {
   const today = await serverToday();
   const supabase = await createClient();
 
-  const { data: settings } = await supabase
-    .from("nutrition_settings")
-    .select("strict_mode, calorie_goal, protein_goal_g, carb_goal_g, fat_goal_g")
-    .maybeSingle();
+  const settings = must(
+    await supabase
+      .from("nutrition_settings")
+      .select("strict_mode, calorie_goal, protein_goal_g, carb_goal_g, fat_goal_g")
+      .maybeSingle(),
+  );
   const strictMode = settings?.strict_mode === true;
 
   const from = `${shiftMonth(today.slice(0, 7), -(WINDOW_MONTHS - 1))}-01`;
-  const { days, dayGoals } = await loadIntakeDaysWindow(from, today, strictMode);
+  const { days, dayGoals, error } = await loadIntakeDaysWindow(from, today, strictMode);
+  if (error) throw new Error(error);
 
   return (
     <MonthLog

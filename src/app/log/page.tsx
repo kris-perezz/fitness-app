@@ -1,4 +1,4 @@
-import { createClient } from "@/lib/supabase/server";
+import { createClient, must } from "@/lib/supabase/server";
 import {
   LOG_WINDOW_DAYS,
   shiftDate,
@@ -50,15 +50,16 @@ export default async function LogPage({
 
   const supabase = await createClient();
 
-  const [{ data: foods }, { data: entries }, { data: dayGoals }, { data: settings }, { data: auth }] =
+  const [foods, entries, dayGoals, settings, { data: auth }] =
     await Promise.all([
-      supabase.from("foods").select("*").order("name"),
+      supabase.from("foods").select("*").order("name").then(must),
       supabase
         .from("intake_entries")
         .select("*")
         .gte("log_date", from)
         .lte("log_date", to)
-        .order("created_at", { ascending: true }),
+        .order("created_at", { ascending: true })
+        .then(must),
       // S60. The dated goal for every day in the window, looked up in Postgres
       // rather than pulled whole and filtered client-side. A day with no row
       // here has no goal -- the log tab grades it against nothing rather than
@@ -67,14 +68,16 @@ export default async function LogPage({
         .from("day_goals")
         .select("log_date, calorie_goal, protein_goal_g, carb_goal_g, fat_goal_g")
         .gte("log_date", from)
-        .lte("log_date", to),
+        .lte("log_date", to)
+        .then(must),
       // The tone (S77) and the live prescription. Past days take their goal
       // from day_goals above, one per day; today has no row there until its
       // first entry seeds one, so it reads the prescription instead.
       supabase
         .from("nutrition_settings")
         .select("strict_mode, calorie_goal, protein_goal_g, carb_goal_g, fat_goal_g")
-        .maybeSingle(),
+        .maybeSingle()
+        .then(must),
       supabase.auth.getUser(),
     ]);
 

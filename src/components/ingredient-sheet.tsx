@@ -4,6 +4,7 @@ import { useEffect, useRef, useState, useTransition } from "react";
 import { ChevronLeft } from "lucide-react";
 import { scale, show, qtyLabel, basisLabel, type Food } from "@/lib/food";
 import { addRecipeIngredient, saveScannedFood } from "@/app/actions";
+import { reach } from "@/lib/reach";
 import { FoodPicker, type PickerStep } from "@/components/food-picker";
 import { FoodSourceBadge } from "@/components/food-source-badge";
 import {
@@ -150,19 +151,19 @@ function IngredientQtyStep({
   }, []);
 
   function save() {
-    if (!preview) return;
+    if (!preview || pending) return;
     startTransition(async () => {
       // The catalog row lands first: recipe_ingredients.food_id is a foreign
       // key, so a never-before-seen scan would otherwise fail it (S3).
       if (scanned) {
-        const saved = await saveScannedFood(food);
+        const saved = await reach(saveScannedFood(food));
         if (saved.error) {
           toast.error(saved.error);
           return;
         }
       }
 
-      const res = await addRecipeIngredient(recipeId, food.id, n);
+      const res = await reach(addRecipeIngredient(recipeId, food.id, n));
       if (res.error) {
         toast.error(res.error);
         return;
@@ -218,6 +219,7 @@ function IngredientQtyStep({
             enterKeyHint="done"
             value={qty}
             onChange={(e) => setQty(e.target.value)}
+            onFocus={(e) => e.currentTarget.select()}
             onKeyDown={(e) => e.key === "Enter" && save()}
             className="h-12 text-base tabular-nums"
           />

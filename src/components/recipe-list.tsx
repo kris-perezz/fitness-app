@@ -5,6 +5,7 @@ import { useRouter } from "next/navigation";
 import Link from "next/link";
 import { ChevronLeft, CookingPot, Plus } from "lucide-react";
 import { createRecipe, deleteRecipe } from "@/app/actions";
+import { reach } from "@/lib/reach";
 import { Button } from "@/components/ui/button";
 import { Card } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
@@ -48,7 +49,7 @@ export function RecipeList({ recipes }: { recipes: RecipeSummary[] }) {
   // by accident and never filled in.
   function remove(recipe: RecipeSummary) {
     startDelete(async () => {
-      const res = await deleteRecipe(recipe.id);
+      const res = await reach(deleteRecipe(recipe.id));
       if (res.error) {
         toast.error(res.error);
         return;
@@ -149,10 +150,11 @@ function NewRecipeSheet({
   const [pending, startTransition] = useTransition();
 
   function create() {
+    if (pending || name.trim() === "") return;
     startTransition(async () => {
       // Servings defaults to 1 -- a real number, correctable on the next
       // screen, and never zero, which the schema rejects outright.
-      const res = await createRecipe({ name, servings: 1, cooked_weight_g: null });
+      const res = await reach(createRecipe({ name, servings: 1, cooked_weight_g: null }));
       if (res.error || !res.id) {
         toast.error(res.error ?? "Could not create that recipe");
         return;
@@ -180,7 +182,7 @@ function NewRecipeSheet({
               id="new_recipe_name"
               value={name}
               onChange={(e) => setName(e.target.value)}
-              onKeyDown={(e) => e.key === "Enter" && name.trim() !== "" && create()}
+              onKeyDown={(e) => e.key === "Enter" && create()}
               placeholder="Chicken adobo"
               enterKeyHint="go"
               className="h-11 text-base"

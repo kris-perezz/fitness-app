@@ -3,6 +3,7 @@
 import { useEffect, useRef, useState } from "react";
 import type { IScannerControls } from "@zxing/browser";
 import { lookupBarcode } from "@/app/actions";
+import { reach } from "@/lib/reach";
 import type { Food } from "@/lib/food";
 import { Button } from "@/components/ui/button";
 import { Spinner } from "@/components/ui/spinner";
@@ -67,7 +68,7 @@ export function BarcodeScanner({
       if (!live) return;
       setStatus({ kind: "looking-up" });
 
-      const res = await lookupBarcode(code);
+      const res = await reach(lookupBarcode(code));
       if (!live) return;
 
       if (res.source === "catalog" || res.source === "remote") {

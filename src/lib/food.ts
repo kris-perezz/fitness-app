@@ -288,8 +288,9 @@ export function searchFoods(foods: Food[], query: string): Food[] {
 }
 
 /**
- * Today, in the reader's own timezone. The day rolls at midnight, which is the
- * only boundary a reader does not have to be told about.
+ * Today, in the reader's own timezone, as a waking day: anything before
+ * `DAY_STARTS_AT_HOUR` belongs to the night before, so a 1 a.m. snack or a
+ * session that runs past midnight stays on the day it started.
  *
  * `timeZone` IS REQUIRED ON THE SERVER and must not be guessed there. Without
  * it this reads the host clock, which is the right answer in a browser and UTC
@@ -302,9 +303,12 @@ export function searchFoods(foods: Food[], query: string): Food[] {
  * renders the date any other way would otherwise reorder the pieces silently,
  * and this has to produce YYYY-MM-DD for a Postgres `date` column.
  */
+export const DAY_STARTS_AT_HOUR = 4;
+
 export function todayDate(now = new Date(), timeZone?: string): string {
+  now = new Date(now.getTime() - DAY_STARTS_AT_HOUR * 3_600_000);
   if (timeZone === undefined) {
-    const d = new Date(now);
+    const d = now;
     return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}-${String(d.getDate()).padStart(2, "0")}`;
   }
 

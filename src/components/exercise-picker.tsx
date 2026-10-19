@@ -5,6 +5,7 @@ import { ChevronLeft, Plus, Search } from "lucide-react";
 import { searchExercises, EQUIPMENT, MUSCLE_GROUPS, type Exercise } from "@/lib/training";
 import { matchedAlias } from "@/lib/search";
 import { createExercise } from "@/app/training-actions";
+import { reach } from "@/lib/reach";
 import {
   Drawer,
   DrawerContent,
@@ -259,11 +260,11 @@ function CreateStep({
 
   function save() {
     startTransition(async () => {
-      const res = await createExercise({
+      const res = await reach(createExercise({
         name,
         muscle_group: group,
         equipment: equipment || null,
-      });
+      }));
       if (res.error || !res.exercise) {
         toast.error(res.error ?? "Could not create that exercise");
         return;

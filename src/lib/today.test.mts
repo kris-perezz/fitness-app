@@ -3,8 +3,8 @@ import assert from "node:assert/strict";
 
 import { isTimeZone, todayDate } from "./food.ts";
 
-/** 2026-09-10T01:30:00Z: already tomorrow in UTC, still the 9th in Edmonton. */
-const EVENING = new Date("2026-09-10T01:30:00Z");
+/** 2026-09-10T05:30:00Z: already tomorrow in UTC, still the 9th in Edmonton. */
+const EVENING = new Date("2026-09-10T05:30:00Z");
 
 test("a zoned today is the reader's day, not the host's", () => {
   assert.equal(todayDate(EVENING, "America/Edmonton"), "2026-09-09");
@@ -29,4 +29,10 @@ test("an unknown zone is rejected rather than thrown at Intl", () => {
   assert.equal(isTimeZone("Mars/Olympus_Mons"), false);
   assert.equal(isTimeZone(undefined), false);
   assert.equal(isTimeZone(""), false);
+});
+
+test("before 04:00 is still the previous day", () => {
+  // 08:30Z is 02:30 in Edmonton on the 10th: still the 9th's waking day.
+  assert.equal(todayDate(new Date("2026-09-10T08:30:00Z"), "America/Edmonton"), "2026-09-09");
+  assert.equal(todayDate(new Date("2026-09-10T10:00:00Z"), "America/Edmonton"), "2026-09-10");
 });

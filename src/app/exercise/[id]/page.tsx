@@ -1,5 +1,5 @@
 import { notFound } from "next/navigation";
-import { createClient } from "@/lib/supabase/server";
+import { createClient, must } from "@/lib/supabase/server";
 import { liftHistory, type Exercise, type WorkoutSet } from "@/lib/training";
 import { ExerciseScreen } from "@/components/exercise-screen";
 
@@ -16,22 +16,24 @@ export default async function ExercisePage({ params }: PageProps<"/exercise/[id]
   const { id } = await params;
   const supabase = await createClient();
 
-  const [{ data: exercise }, { data: slots }, { data: pin }] = await Promise.all([
+  const [exercise, slots, pin] = await Promise.all([
     supabase
       .from("exercises")
       .select("id, name, aliases, equipment, bodyweight_fraction, load_is_per_side, primary_muscles")
       .eq("id", id)
-      .maybeSingle(),
+      .maybeSingle()
+      .then(must),
     // `!inner` so a slot without a readable session is dropped rather than
     // arriving with a null date. RLS scopes workouts to the caller, so this is
     // also what keeps the history to your own sessions.
     supabase
       .from("workout_exercises")
       .select("workout:workouts!inner(log_date), sets:workout_sets(*)")
-      .eq("exercise_id", id),
+      .eq("exercise_id", id)
+      .then(must),
     // S81/0033. At most one row, and its existence IS the answer -- pins are
     // a set now, so this asks about this lift rather than reading the pin.
-    supabase.from("pinned_exercises").select("exercise_id").eq("exercise_id", id).maybeSingle(),
+    supabase.from("pinned_exercises").select("exercise_id").eq("exercise_id", id).maybeSingle().then(must),
   ]);
 
   if (!exercise) notFound();

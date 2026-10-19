@@ -3,6 +3,7 @@
 import { useEffect } from "react";
 import { useRouter } from "next/navigation";
 
+import { todayDate } from "@/lib/food";
 import { TIME_ZONE_COOKIE } from "@/lib/time-zone-cookie.shared";
 
 /**
@@ -28,7 +29,7 @@ export function TimeZoneCookie() {
       .split("; ")
       .find((c) => c.startsWith(`${TIME_ZONE_COOKIE}=`))
       ?.slice(TIME_ZONE_COOKIE.length + 1);
-    if (current === zone) return;
+    if (current && decodeURIComponent(current) === zone) return;
 
     // A year, so an installed app does not re-learn this every session, and
     // Lax rather than Strict: the cookie has to be present on the first
@@ -36,6 +37,18 @@ export function TimeZoneCookie() {
     document.cookie = `${TIME_ZONE_COOKIE}=${encodeURIComponent(zone)}; path=/; max-age=31536000; SameSite=Lax`;
     router.refresh();
   }, [router]);
+
+  // An installed app is resumed, not reopened, so without this it keeps
+  // yesterday as "today" and files the morning's food under it. A reload
+  // rather than a refresh: every screen holds its day in state.
+  useEffect(() => {
+    const day = todayDate();
+    function check() {
+      if (document.visibilityState === "visible" && todayDate() !== day) location.reload();
+    }
+    document.addEventListener("visibilitychange", check);
+    return () => document.removeEventListener("visibilitychange", check);
+  }, []);
 
   return null;
 }

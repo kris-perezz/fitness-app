@@ -1,4 +1,4 @@
-import { createClient } from "@/lib/supabase/server";
+import { createClient, must } from "@/lib/supabase/server";
 import { WINDOW_MONTHS, shiftMonth } from "@/lib/training";
 import { toWeighIn } from "@/lib/weight";
 import { liftHistory, type WorkoutSet } from "@/lib/training";
@@ -35,18 +35,20 @@ export default async function ProgressPage() {
 
   // Together rather than in sequence: the goal row is tiny and independent of
   // the weigh-ins, so chaining them would spend a round trip to learn nothing.
-  const [{ data }, { data: settings }, { data: first }] = await Promise.all([
+  const [data, settings, first, pinned] = await Promise.all([
     supabase
       .from("weigh_ins")
       .select("log_date, weight_lb, note")
       .gte("log_date", from)
-      .order("log_date", { ascending: false }),
+      .order("log_date", { ascending: false })
+      .then(must),
     supabase
       .from("nutrition_settings")
       .select(
         "goal_weight_lb, goal_rate_lb_per_week, display_weight_unit, strict_mode",
       )
-      .maybeSingle(),
+      .maybeSingle()
+      .then(must),
     // The first day in the log, which is what bounds S62's All. One row, and
     // the (user_id, log_date) index answers it without a scan. Fetched here
     // rather than inferred from `data`, which only ever holds the window.
@@ -55,21 +57,12 @@ export default async function ProgressPage() {
       .select("log_date")
       .order("log_date", { ascending: true })
       .limit(1)
-      .maybeSingle(),
+      .maybeSingle()
+      .then(must),
+    loadPinnedLifts(supabase),
   ]);
 
   const weighIns = (data ?? []).map(toWeighIn);
-
-  /**
-   * S81/0033. The pinned lifts, oldest pin first so adding one never shuffles
-   * the block somebody has been watching.
-   *
-   * Fetched in one round trip rather than one per pin: the slots for every
-   * pinned exercise come back together and are split by id here, so a third
-   * pin costs rows and not latency. No pins is a normal state and skips both
-   * queries.
-   */
-  const pinned = await loadPinnedLifts(supabase);
 
   return (
     <ProgressHome
@@ -116,20 +109,23 @@ export default async function ProgressPage() {
  * with it by cascade (0033), so this only ever covers the gap between the two.
  */
 async function loadPinnedLifts(supabase: Awaited<ReturnType<typeof createClient>>) {
-  const { data: pins } = await supabase
-    .from("pinned_exercises")
-    .select("exercise_id")
-    .order("created_at", { ascending: true });
+  const pins = must(
+    await supabase
+      .from("pinned_exercises")
+      .select("exercise_id")
+      .order("created_at", { ascending: true }),
+  );
 
   const ids = (pins ?? []).map((p) => p.exercise_id as string);
   if (ids.length === 0) return [];
 
-  const [{ data: exercises }, { data: slots }] = await Promise.all([
-    supabase.from("exercises").select("id, name").in("id", ids),
+  const [exercises, slots] = await Promise.all([
+    supabase.from("exercises").select("id, name").in("id", ids).then(must),
     supabase
       .from("workout_exercises")
       .select("exercise_id, workout:workouts!inner(log_date), sets:workout_sets(*)")
-      .in("exercise_id", ids),
+      .in("exercise_id", ids)
+      .then(must),
   ]);
 
   const rows = (slots ?? []) as unknown as {

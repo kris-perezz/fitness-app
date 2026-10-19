@@ -1,5 +1,6 @@
 import { createServerClient } from "@supabase/ssr";
 import { cookies } from "next/headers";
+import { notFound } from "next/navigation";
 import { SUPABASE_ANON_KEY, SUPABASE_URL } from "@/lib/env";
 
 export async function createClient() {
@@ -23,4 +24,15 @@ export async function createClient() {
       },
     },
   );
+}
+
+/**
+ * A read's data, or a throw to the route's error screen. A failed read must
+ * never render as an empty day, which invites logging everything again.
+ */
+export function must<T>(result: { data: T; error: { message: string; code?: string } | null }): T {
+  // 22P02: a malformed id in the address, which is a missing page, not an outage.
+  if (result.error?.code === "22P02") notFound();
+  if (result.error) throw new Error(result.error.message);
+  return result.data;
 }

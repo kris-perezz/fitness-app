@@ -1,4 +1,4 @@
-import { createClient } from "@/lib/supabase/server";
+import { createClient, must } from "@/lib/supabase/server";
 import { TREND_DAYS, dailySeries, trendsWindow, type IntakeDay, type TopFood } from "@/lib/trends";
 import { toDayGoal, withTodayGoal, type DayGoal } from "@/lib/goals";
 import { TrendsScreen } from "@/components/trends-screen";
@@ -21,25 +21,28 @@ export default async function TrendsPage() {
   const today = await serverToday();
   const { from, to } = trendsWindow(today, TREND_DAYS);
 
-  const [{ data: days }, { data: settings }, { data: dayGoals }, top] = await Promise.all([
+  const [days, settings, dayGoals, top] = await Promise.all([
     supabase
       .from("intake_days")
       .select("log_date, kcal, protein_g, estimate_count, item_count")
       .gte("log_date", from)
       .lte("log_date", to)
-      .order("log_date"),
+      .order("log_date")
+      .then(must),
     // The tone (S77), plus the prescription today's segment is drawn from
     // until an entry seeds its day_goals row. Every other day in the window
     // comes from that table, one stored row each (S60).
     supabase
       .from("nutrition_settings")
       .select("strict_mode, calorie_goal, protein_goal_g, carb_goal_g, fat_goal_g")
-      .maybeSingle(),
+      .maybeSingle()
+      .then(must),
     supabase
       .from("day_goals")
       .select("log_date, calorie_goal, protein_goal_g, carb_goal_g, fat_goal_g")
       .gte("log_date", from)
-      .lte("log_date", to),
+      .lte("log_date", to)
+      .then(must),
     // S85. Grouped in Postgres by `top_foods` (0023). The error is CARRIED
     // rather than thrown: until that migration is run the function does not
     // exist, and one missing section is a better failure than a blank screen

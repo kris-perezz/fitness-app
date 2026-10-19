@@ -32,6 +32,7 @@ import {
   removeWorkoutExercise,
   updateSet,
 } from "@/app/training-actions";
+import { reach } from "@/lib/reach";
 import { ExercisePicker } from "@/components/exercise-picker";
 import { Button } from "@/components/ui/button";
 import { ButtonGroup } from "@/components/ui/button-group";
@@ -240,7 +241,7 @@ export function TrainScreen({
             className="h-11 flex-1"
             disabled={pending}
             onClick={() =>
-              run(() => finishWorkout(workout.id), () => {
+              run(() => reach(finishWorkout(workout.id)), () => {
                 toast.success("Session finished");
                 router.push("/train");
               })
@@ -264,7 +265,7 @@ export function TrainScreen({
                   } go with it. This cannot be undone.`
             }
             confirmLabel={allSets === 0 ? "Discard" : "Delete"}
-            onConfirm={() => run(() => discardWorkout(workout.id), () => router.push("/train"))}
+            onConfirm={() => run(() => reach(discardWorkout(workout.id)), () => router.push("/train"))}
             trigger={
               <Button
                 size="icon-xl"
@@ -292,7 +293,7 @@ export function TrainScreen({
           setPicking(false);
           startTransition(async () => {
             addOptimisticName(exercise.name);
-            const res = await addWorkoutExercise(workout.id, exercise.id);
+            const res = await reach(addWorkoutExercise(workout.id, exercise.id));
             // On failure the placeholder disappears with the transition, which
             // is the honest outcome: the lift was not added.
             if (res.error) toast.error(res.error);
@@ -374,6 +375,9 @@ function SlotSection({
 }) {
   const [adding, setAdding] = useState(false);
   const [editing, setEditing] = useState<WorkoutSet | null>(null);
+  // What was typed into a set whose save failed, so reopening the form does not
+  // ask for it again.
+  const [unsaved, setUnsaved] = useState<{ draft: SetDraft; rir: number | null } | null>(null);
   const [pending, startTransition] = useTransition();
 
   /**
@@ -405,7 +409,7 @@ function SlotSection({
   function remove() {
     startTransition(async () => {
       onRemoving(slot.id);
-      const res = await removeWorkoutExercise(slot.id);
+      const res = await reach(removeWorkoutExercise(slot.id));
       // On failure the row comes back with the transition, which is the
       // honest outcome: it was not removed.
       if (res.error) toast.error(res.error);
@@ -514,7 +518,11 @@ function SlotSection({
                     variant="ghost"
                     className="text-muted-foreground"
                     aria-label={`Edit set ${set.set_index + 1}`}
-                    onClick={() => setEditing(set)}
+                    disabled={set.id.startsWith("pending-")}
+                    onClick={() => {
+                      setAdding(false);
+                      setEditing(set);
+                    }}
                   >
                     <Pencil className="size-4" />
                   </Button>
@@ -538,11 +546,11 @@ function SlotSection({
             onCancel={() => setEditing(null)}
             onSubmit={(draft, rir) =>
               startTransition(async () => {
-                const res = await updateSet(editing.id, {
+                const res = await reach(updateSet(editing.id, {
                   ...draft,
                   rir,
                   skipped: editing.skipped,
-                });
+                }));
                 if (res.error) {
                   toast.error(res.error);
                   return;
@@ -554,7 +562,7 @@ function SlotSection({
               startTransition(async () => {
                 applyOptimistic({ kind: "remove", id: editing.id });
                 setEditing(null);
-                const res = await deleteSet(editing.id);
+                const res = await reach(deleteSet(editing.id));
                 if (res.error) {
                   toast.error(res.error);
                   return;
@@ -568,7 +576,13 @@ function SlotSection({
       {/* Button first, form second (S46). Collapsible carries the aria-expanded
           wiring and the height animation; the trigger hides while open because
           the form has its own confirm and cancel. */}
-      <Collapsible open={adding} onOpenChange={setAdding}>
+      <Collapsible
+        open={adding}
+        onOpenChange={(open) => {
+          setAdding(open);
+          if (open) setEditing(null);
+        }}
+      >
         <div className={adding ? "hidden" : "px-5 pb-4 pt-2"}>
           <CollapsibleTrigger asChild>
             <Button variant="outline" className="h-11 w-full">
@@ -585,11 +599,14 @@ function SlotSection({
               key={sets.length}
               title={`Set ${sets.length + 1}`}
               suggestion={suggestion}
-              initial={suggestion?.draft ?? { reps: null, load_lb: 0, set_type: "straight" }}
-              initialRir={null}
+              initial={unsaved?.draft ?? suggestion?.draft ?? { reps: null, load_lb: 0, set_type: "straight" }}
+              initialRir={unsaved?.rir ?? null}
               exercise={exercise}
               confirmLabel="Add set"
-              onCancel={() => setAdding(false)}
+              onCancel={() => {
+                setAdding(false);
+                setUnsaved(null);
+              }}
               onSubmit={(draft, rir) => {
                 // Collapse back to the button before the write, not after it.
                 // The form is keyed on `sets.length`, so leaving it open meant
@@ -597,6 +614,7 @@ function SlotSection({
                 // screen jumped straight to "Set 3" instead of coming to rest,
                 // which is the half-filled form the design note above rules out.
                 setAdding(false);
+                setUnsaved(null);
                 startTransition(async () => {
                   const setIndex = sets.length;
                   applyOptimistic({
@@ -612,14 +630,16 @@ function SlotSection({
                       skipped: false,
                     },
                   });
-                  const res = await logSet(slot.id, {
+                  const res = await reach(logSet(slot.id, {
                     set_index: setIndex,
                     ...draft,
                     rir,
                     skipped: false,
-                  });
+                  }));
                   if (res.error) {
                     toast.error(res.error);
+                    setUnsaved({ draft, rir });
+                    setAdding(true);
                     return;
                   }
 

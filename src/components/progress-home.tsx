@@ -28,6 +28,7 @@ import {
 } from "@/lib/weight";
 import { PinnedLiftsChart, type PinnedLift } from "@/components/lift-chart";
 import { deleteWeighIn, loadWeighInWindow, saveWeighIn } from "@/app/progress-actions";
+import { reach } from "@/lib/reach";
 import { Button } from "@/components/ui/button";
 import { Card } from "@/components/ui/card";
 import { ToggleGroup, ToggleGroupItem } from "@/components/ui/toggle-group";
@@ -172,7 +173,7 @@ export function ProgressHome({
       .reduce((a, b) => (a < b ? a : b));
 
     loading.current = true;
-    void loadWeighInWindow(nextFrom, shiftMonth(from, -1)).then((res) => {
+    void reach(loadWeighInWindow(nextFrom, shiftMonth(from, -1))).then((res) => {
       loading.current = false;
       if (res.error) return; // Silent: there is just less history on screen.
       setEntries((prev) => [...prev, ...res.entries]);
@@ -224,7 +225,7 @@ export function ProgressHome({
   const [, startRowDelete] = useTransition();
   function removeWeighIn(date: string) {
     startRowDelete(async () => {
-      const res = await deleteWeighIn(date);
+      const res = await reach(deleteWeighIn(date));
       if (res.error) {
         toast.error(res.error);
         return;
@@ -598,7 +599,7 @@ function WeighInSheet({
     // here would make 82 kg read back as 81.99 the next time the sheet opened.
     const lb = fromDisplay(typed, unit);
     startSave(async () => {
-      const res = await saveWeighIn(date, lb, existing?.note ?? null);
+      const res = await reach(saveWeighIn(date, lb, existing?.note ?? null));
       if (res.error) {
         toast.error(res.error);
         return;
@@ -611,7 +612,7 @@ function WeighInSheet({
   function remove() {
     if (date === null) return;
     startDelete(async () => {
-      const res = await deleteWeighIn(date);
+      const res = await reach(deleteWeighIn(date));
       if (res.error) {
         toast.error(res.error);
         return;
