@@ -183,6 +183,23 @@ export function LogScreen({
             day: "numeric",
           });
 
+  // What the add sheet offers before anything is typed: the foods logged most
+  // recently, this meal's first. Breakfast is mostly the same few things.
+  const recentFoods = useMemo(() => {
+    if (!addingTo) return [];
+    const byId = new Map(foods.map((f) => [f.id, f]));
+    // Reversed first, so the stable sort keeps a day's later entries on top.
+    const newest = [...entries].reverse().sort((a, b) => b.log_date.localeCompare(a.log_date));
+    const ordered = [...newest.filter((e) => e.meal === addingTo), ...newest.filter((e) => e.meal !== addingTo)];
+    const picked: Food[] = [];
+    for (const e of ordered) {
+      const food = e.food_id ? byId.get(e.food_id) : undefined;
+      if (food && !picked.includes(food)) picked.push(food);
+      if (picked.length === 8) break;
+    }
+    return picked;
+  }, [addingTo, entries, foods]);
+
   // Shared by the swipe on a row and the Delete button in the entry detail --
   // one place decides what a removed entry does to the window on screen.
   function removeEntry(entry: Entry) {
@@ -363,6 +380,7 @@ export function LogScreen({
         meal={addingTo}
         onOpenChange={(open) => !open && setAddingTo(null)}
         foods={foods}
+        recent={recentFoods}
         date={date}
         // The window is what the screen reads now, so a saved entry has to land
         // in it. A revalidate still runs on the server for whoever loads the

@@ -309,7 +309,7 @@ function toDraft(x: Extracted): { draft: LabelDraft; printed: PrintedServing | n
  * `image` is a data URL. It is downscaled on the client first: a raw phone
  * photo is several megabytes and would not survive the server action body limit.
  */
-export async function extractLabel(image: string): Promise<LabelResult> {
+export async function extractLabel(image: string, abort?: AbortSignal): Promise<LabelResult> {
   const key = envKey();
   if (key === null) {
     return { status: "error", message: "Label reading is not configured on this server." };
@@ -322,7 +322,9 @@ export async function extractLabel(image: string): Promise<LabelResult> {
   try {
     response = await fetch(API, {
       method: "POST",
-      signal: AbortSignal.timeout(TIMEOUT_MS),
+      signal: abort
+        ? AbortSignal.any([AbortSignal.timeout(TIMEOUT_MS), abort])
+        : AbortSignal.timeout(TIMEOUT_MS),
       headers: { "Content-Type": "application/json", Authorization: `Bearer ${key}` },
       body: JSON.stringify({
         model: MODEL,

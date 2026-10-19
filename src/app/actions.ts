@@ -5,8 +5,7 @@ import { redirect } from "next/navigation";
 import { authUser, createClient } from "@/lib/supabase/server";
 import { fetchOffProduct, isBarcode, searchOff, type OffSearchResult } from "@/lib/off";
 import { fetchCnfFood, searchCnf, type CnfSearchResult } from "@/lib/cnf";
-import { extractLabel, type LabelDraft, type LabelResult } from "@/lib/label";
-import { estimateFromDescription, type DescribeResult } from "@/lib/describe";
+import type { LabelDraft } from "@/lib/label";
 import { generatedFood, recipeFoodId, type RecipeDetails, type RecipeLine } from "@/lib/recipe";
 import {
   sourceRank,
@@ -607,32 +606,12 @@ export async function addCnfFood(
 // numbers land in a form the user was already filling in, and every one of them
 // is editable before anything reaches the database.
 
-export async function estimateEntry(
-  description: string,
-  /** S101. A downscaled data URL, or null for the text-only case. */
-  image?: string | null,
-): Promise<DescribeResult> {
-  const supabase = await createClient();
-  const user = await authUser(supabase);
-  if (!user) return { status: "error", message: "Not signed in" };
-
-  return estimateFromDescription(description, image ?? null);
-}
-
 // ------------------------------------------------------------ label photos
 // S4/S5. The provider lives entirely in lib/label.ts; this action exists so the
 // key never reaches the browser and so an unauthenticated caller cannot spend
 // it. Extraction produces a DRAFT -- nothing is written until the user has
 // looked at every field and confirmed it (readLabel does not touch the
 // database at all).
-
-export async function readLabel(image: string): Promise<LabelResult> {
-  const supabase = await createClient();
-  const user = await authUser(supabase);
-  if (!user) return { status: "error", message: "Not signed in" };
-
-  return extractLabel(image);
-}
 
 /**
  * Write a confirmed label draft to the catalog and hand back the saved food, so

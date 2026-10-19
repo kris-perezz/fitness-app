@@ -20,8 +20,9 @@ import {
   type IntakeEntry,
   type Meal,
 } from "@/lib/food";
-import { addEntry, saveScannedFood, estimateEntry } from "@/app/actions";
-import { reach } from "@/lib/reach";
+import { addEntry, saveScannedFood } from "@/app/actions";
+import type { DescribeResult } from "@/lib/describe";
+import { post, reach } from "@/lib/reach";
 import { FoodPicker, type PickerStep } from "@/components/food-picker";
 import { FoodSourceBadge } from "@/components/food-source-badge";
 import {
@@ -82,12 +83,14 @@ export function AddSheet({
   meal,
   onOpenChange,
   foods,
+  recent,
   date,
   onAdded,
 }: {
   meal: Meal | null;
   onOpenChange: (open: boolean) => void;
   foods: Food[];
+  recent: Food[];
   date: string;
   /** The stored row, so the log can show it without going back to the server. */
   onAdded: (entry: IntakeEntry) => void;
@@ -98,6 +101,8 @@ export function AddSheet({
   // Once a one-off is started it stays mounted until the sheet closes, so
   // stepping back to search does not throw away a description or an estimate.
   const [drafting, setDrafting] = useState(false);
+  // Bumped after each add, so the next food starts from a clean search.
+  const [round, setRound] = useState(0);
 
   // Reset on every OPEN, not merely when a different meal opens the sheet.
   // Keying on the meal meant adding a second food to the same meal reopened on
@@ -121,6 +126,17 @@ export function AddSheet({
    * first: the camera wants the height, and the two forms would otherwise open
    * with their inputs against the fold.
    */
+  // The sheet stays open after an add: a meal is usually more than one food,
+  // and reopening it and searching again for each was most of the work.
+  function added(entry: IntakeEntry) {
+    onAdded(entry);
+    toast.success(`Added ${entry.name}`);
+    setRound((r) => r + 1);
+    setDrafting(false);
+    setStep({ kind: "search" });
+    setSnap(SNAP_POINTS[0]);
+  }
+
   function go(next: Step) {
     setStep(next);
     if (next.kind === "custom") setDrafting(true);
@@ -147,7 +163,9 @@ export function AddSheet({
 
         {meal && (
           <FoodPicker
+            key={round}
             foods={foods}
+            recent={recent}
             step={step.kind === "qty" || step.kind === "custom" ? { kind: "search" } : step}
             hidden={step.kind === "qty" || step.kind === "custom"}
             onStep={go}
@@ -163,10 +181,7 @@ export function AddSheet({
             date={date}
             meal={meal}
             onBack={() => go({ kind: "search" })}
-            onDone={(entry) => {
-              onAdded(entry);
-              onOpenChange(false);
-            }}
+            onDone={added}
           />
         )}
 
@@ -176,10 +191,7 @@ export function AddSheet({
               date={date}
               meal={meal}
               onBack={() => go({ kind: "search" })}
-              onDone={(entry) => {
-                onAdded(entry);
-                onOpenChange(false);
-              }}
+              onDone={added}
             />
           </div>
         )}
@@ -482,13 +494,6 @@ function CustomStep({
    * about one action, and estimating is not saving.
    */
   const [saving, startSaving] = useTransition();
-  /**
-   * The transition's own pending flag is deliberately dropped. It stays true
-   * until the request resolves, which is exactly wrong for a Stop button: the
-   * spinner would keep turning for seconds after the user asked it to stop.
-   * What is on screen follows `estimating` below, which the user can clear.
-   */
-  const [, startEstimating] = useTransition();
   const [estimating, setEstimating] = useState(false);
   /** Whether a field on this step holds focus, which is what the keyboard is
    * up for. Drives the footer below. */
@@ -500,6 +505,9 @@ function CustomStep({
    * now that the photo buttons stay live during a call.
    */
   const attempt = useRef(0);
+  /** Aborts the request in flight, so Stop ends the model call as well. */
+  const inFlight = useRef<AbortController | null>(null);
+  useEffect(() => () => inFlight.current?.abort(), []);
   /**
    * S101. The downscaled data URL and a label for the row that says one is
    * attached. Held here rather than sent immediately: the photo is half the
@@ -552,11 +560,13 @@ function CustomStep({
 
   /**
    * A new photo is a new question, so any answer to the old one is void. Also
-   * what Stop does: the request cannot be recalled from the server, but its
-   * answer can be refused, and the spinner stops the moment it is asked to.
+   * what Stop does: the request is aborted, and the spinner stops the moment
+   * it is asked to.
    */
   function discardInFlight() {
     attempt.current += 1;
+    inFlight.current?.abort();
+    inFlight.current = null;
     setEstimating(false);
   }
 
@@ -609,26 +619,19 @@ function CustomStep({
     const source = description.trim() === "" ? f.name : description;
     const described =
       appended && source.endsWith(appended) ? source.slice(0, -appended.length) : source;
-    startEstimating(async () => {
-      // The action returns its failures as values, but the call itself can
-      // still reject -- a dropped connection mid-upload, or a body the server
-      // refuses. Unhandled, that rejection has no boundary above it and
-      // replaces the whole app with the server error page, losing the meal.
-      let res: Awaited<ReturnType<typeof estimateEntry>>;
-      try {
-        res = await reach(estimateEntry(described, photo));
-      } catch {
-        if (attempt.current !== id) return;
-        setEstimating(false);
-        toast.error("Could not send that. Try again.");
-        return;
-      }
+    const controller = new AbortController();
+    inFlight.current = controller;
+    void (async () => {
+      const res = await post<DescribeResult>(
+        "/api/estimate",
+        { description: described, image: photo },
+        controller.signal,
+      );
 
-      // Stopped, or the photo changed while this was in the air. The request
-      // was still paid for; what is avoided is six numbers appearing for a
-      // question the user has already moved on from. Nothing is reset here --
-      // whatever superseded this call already did that.
-      if (attempt.current !== id) return;
+      // Stopped, or the photo changed while this was in the air. Nothing is
+      // reset here -- whatever superseded this call already did that.
+      if (res === null || attempt.current !== id) return;
+      inFlight.current = null;
       setEstimating(false);
       if (res.status === "error") {
         toast.error(res.message);
@@ -664,7 +667,7 @@ function CustomStep({
         // first estimate and a re-weighed one cannot round differently.
         ...boxesFrom(next),
       }));
-    });
+    })();
   }
 
   function save() {
@@ -855,7 +858,7 @@ function CustomStep({
           }
         >
           {estimating ? <Spinner /> : <Sparkles className="size-4" />}
-          {estimating ? "Stop" : rows.length > 0 ? "Estimate again" : "Estimate these"}
+          {estimating ? "Stop" : rows.length > 0 ? "Estimate again" : "Estimate"}
         </Button>
 
         {/* Announced rather than only drawn, so the state of a call that can

@@ -351,6 +351,8 @@ export async function estimateFromDescription(
   description: string,
   /** A data URL from lib/image.ts, already downscaled. Optional by design. */
   image?: string | null,
+  /** The caller hanging up, which stops the model call too. */
+  abort?: AbortSignal,
 ): Promise<DescribeResult> {
   const text = description.trim();
   const photo = image ?? null;
@@ -377,7 +379,9 @@ export async function estimateFromDescription(
   try {
     response = await fetch(API, {
       method: "POST",
-      signal: AbortSignal.timeout(TIMEOUT_MS),
+      signal: abort
+        ? AbortSignal.any([AbortSignal.timeout(TIMEOUT_MS), abort])
+        : AbortSignal.timeout(TIMEOUT_MS),
       headers: { "Content-Type": "application/json", Authorization: `Bearer ${apiKey}` },
       body: JSON.stringify({
         model: MODEL,

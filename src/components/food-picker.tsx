@@ -7,25 +7,24 @@ import {
   ChevronLeft,
   ImageUp,
   Leaf,
-  Plus,
+  Sparkles,
   Barcode,
   ScanBarcode,
   Search,
 } from "lucide-react";
 import { searchFoods, show, basisLabel, type Food } from "@/lib/food";
 import {
-  readLabel,
   saveLabelFood,
   searchCnfFoods,
   addCnfFood,
   searchOffFoods,
   lookupBarcode,
 } from "@/app/actions";
-import { reach } from "@/lib/reach";
+import { post, reach } from "@/lib/reach";
 import { CNF_ATTRIBUTION, CNF_LICENCE_URL, type CnfHit } from "@/lib/cnf";
 import type { OffHit } from "@/lib/off";
 import { downscaleToDataUrl } from "@/lib/image";
-import type { LabelDraft, PrintedServing } from "@/lib/label";
+import type { LabelDraft, LabelResult, PrintedServing } from "@/lib/label";
 import { BarcodeScanner } from "@/components/barcode-scanner";
 import { FoodSourceBadge } from "@/components/food-source-badge";
 import { Button } from "@/components/ui/button";
@@ -74,6 +73,7 @@ export function FoodPicker({
   onPick,
   onCustom,
   hidden = false,
+  recent = [],
 }: {
   foods: Food[];
   step: PickerStep;
@@ -90,6 +90,8 @@ export function FoodPicker({
   /** The caller is showing a step of its own. The search stays mounted so
    * going back finds the query and the online results where they were. */
   hidden?: boolean;
+  /** Shown before anything is typed, most recent first. */
+  recent?: Food[];
 }) {
   return (
     <>
@@ -114,6 +116,8 @@ export function FoodPicker({
       <div className={hidden || step.kind !== "search" ? "hidden" : "contents"}>
         <SearchStep
           foods={foods}
+          recent={recent}
+          active={!hidden && step.kind === "search"}
           onPick={onPick}
           onScan={() => onStep({ kind: "scan" })}
           onLabel={() => onStep({ kind: "label", barcode: null })}
@@ -126,12 +130,17 @@ export function FoodPicker({
 
 function SearchStep({
   foods,
+  recent,
+  active,
   onPick,
   onScan,
   onLabel,
   onCustom,
 }: {
   foods: Food[];
+  recent: Food[];
+  /** On screen. Coming back to it re-enables the rows a pick disabled. */
+  active: boolean;
   /**
    * `scanned` is threaded through rather than fixed at false: a local result
    * and a Health Canada row are both already in the catalog, but S96's Open
@@ -145,6 +154,11 @@ function SearchStep({
 }) {
   const [query, setQuery] = useState("");
   const [picked, setPicked] = useState<string | null>(null);
+  const [wasActive, setWasActive] = useState(active);
+  if (active !== wasActive) {
+    setWasActive(active);
+    if (active) setPicked(null);
+  }
   const inputRef = useRef<HTMLInputElement>(null);
   const results = useMemo(() => searchFoods(foods, query), [foods, query]);
 
@@ -152,6 +166,37 @@ function SearchStep({
     const t = setTimeout(() => inputRef.current?.focus(), 120);
     return () => clearTimeout(t);
   }, []);
+
+  const row = (f: Food) => (
+    <li key={f.id}>
+      <Item asChild size="sm" className="rounded-none px-5 py-3 active:bg-accent">
+        {/* Disabled while a pick is in flight: a slow request used
+            to let a second tap fire a second insert. */}
+        <button
+          onClick={() => {
+            setPicked(f.id);
+            onPick(f, false);
+          }}
+          disabled={picked !== null}
+          className="text-left disabled:opacity-60"
+        >
+          <ItemContent className="min-w-0">
+            <ItemTitle className="font-normal">{f.name}</ItemTitle>
+            {/* S6. Below the name rather than beside it: the badge
+                must never push the name into an ellipsis, and the
+                description line is where the row already answers
+                "what am I looking at". */}
+            <ItemDescription className="flex items-center gap-1.5 text-xs">
+              <span>
+                {show(f.kcal)} cal per {basisLabel(f)}
+              </span>
+              <FoodSourceBadge source={f.source} />
+            </ItemDescription>
+          </ItemContent>
+        </button>
+      </Item>
+    </li>
+  );
 
   return (
     <div className="flex min-h-0 flex-1 flex-col">
@@ -186,14 +231,21 @@ function SearchStep({
           </Button>
           {onCustom && (
             <Button variant="outline" className="h-11 flex-1" onClick={onCustom}>
-              <Plus className="size-4" /> Create
+              <Sparkles className="size-4" /> Describe
             </Button>
           )}
         </ButtonGroup>
       </div>
 
       <div className="min-h-0 flex-1 overflow-y-auto overscroll-contain pb-safe">
-        {query === "" && (
+        {query === "" && recent.length > 0 && (
+          <>
+            <p className="px-5 pb-1 text-xs font-medium text-muted-foreground">Recent</p>
+            <ul className="divide-y divide-border">{recent.map(row)}</ul>
+          </>
+        )}
+
+        {query === "" && recent.length === 0 && (
           <Empty className="py-10">
             <EmptyHeader>
               <EmptyMedia variant="icon">
@@ -219,40 +271,7 @@ function SearchStep({
           </Empty>
         )}
 
-        {results.length > 0 && (
-          <ul className="divide-y divide-border">
-            {results.map((f) => (
-              <li key={f.id}>
-                <Item asChild size="sm" className="rounded-none px-5 py-3 active:bg-accent">
-                  {/* Disabled while a pick is in flight: a slow request used
-                      to let a second tap fire a second insert. */}
-                  <button
-                    onClick={() => {
-                      setPicked(f.id);
-                      onPick(f, false);
-                    }}
-                    disabled={picked !== null}
-                    className="text-left disabled:opacity-60"
-                  >
-                    <ItemContent className="min-w-0">
-                      <ItemTitle className="font-normal">{f.name}</ItemTitle>
-                      {/* S6. Below the name rather than beside it: the badge
-                          must never push the name into an ellipsis, and the
-                          description line is where the row already answers
-                          "what am I looking at". */}
-                      <ItemDescription className="flex items-center gap-1.5 text-xs">
-                        <span>
-                          {show(f.kcal)} cal per {basisLabel(f)}
-                        </span>
-                        <FoodSourceBadge source={f.source} />
-                      </ItemDescription>
-                    </ItemContent>
-                  </button>
-                </Item>
-              </li>
-            ))}
-          </ul>
-        )}
+        {results.length > 0 && <ul className="divide-y divide-border">{results.map(row)}</ul>}
 
         {/* Keyed on the query so a new search REMOUNTS this rather than
             resetting four pieces of state in an effect. Editing the search
@@ -537,6 +556,8 @@ function LabelStep({
 
   const [phase, setPhase] = useState<Phase>({ kind: "idle" });
   const [form, setForm] = useState<Record<string, string>>({});
+  const reading = useRef<AbortController | null>(null);
+  useEffect(() => () => reading.current?.abort(), []);
   const [pending, startTransition] = useTransition();
   // Two inputs rather than one: `capture` is a hint the browser cannot be asked
   // to drop per click, so a single input either always opens the camera or
@@ -591,17 +612,11 @@ function LabelStep({
       return;
     }
 
-    // The action returns its failures as values, but the call itself can still
-    // reject -- a dropped connection mid-upload, or a body the server refuses.
-    // Unhandled, that rejection has no boundary above it and replaces the whole
-    // app with the server error page, losing the meal being logged.
-    let res: Awaited<ReturnType<typeof readLabel>>;
-    try {
-      res = await reach(readLabel(image));
-    } catch {
-      setPhase({ kind: "failed", message: "That photo could not be sent. Try again." });
-      return;
-    }
+    const controller = new AbortController();
+    reading.current = controller;
+    const res = await post<LabelResult>("/api/label", { image }, controller.signal);
+    // Left the step while reading: there is nowhere to put the answer.
+    if (res === null) return;
 
     if (res.status === "found") loadDraft(res.draft, res.printed, res.warning);
     else setPhase({ kind: "failed", message: res.message });
