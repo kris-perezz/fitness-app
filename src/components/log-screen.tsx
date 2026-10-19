@@ -69,6 +69,7 @@ export function LogScreen({
   entries: initialEntries,
   dayGoals: initialDayGoals,
   strictMode,
+  needsTargets,
 }: {
   /** Oldest and newest day the server sent, inclusive. */
   loadedFrom: string;
@@ -83,6 +84,8 @@ export function LogScreen({
   dayGoals: DayGoal[];
   /** S75/S77. Read live, never dated -- the tone owns no data. */
   strictMode: boolean;
+  /** A new account that has not chosen targets yet (0035). */
+  needsTargets: boolean;
 }) {
   const router = useRouter();
   const [addingTo, setAddingTo] = useState<Meal | null>(null);
@@ -283,6 +286,18 @@ export function LogScreen({
             </Button>
           </div>
         </header>
+
+        {needsTargets && (
+          <Card className={cn(SURFACE, SURFACE_PAD, "flex-row items-center justify-between gap-3")}>
+            <div>
+              <p className="text-sm font-medium">Set your targets</p>
+              <p className="text-xs text-muted-foreground">Calories and protein, in Profile.</p>
+            </div>
+            <Button asChild className="h-11 shrink-0">
+              <Link href="/goals">Set targets</Link>
+            </Button>
+          </Card>
+        )}
 
         <Card className={cn(SURFACE, SURFACE_PAD)}>
           <CalorieRing consumed={totals.kcal} goal={calorieGoal} finished={finished} tone={tone} />

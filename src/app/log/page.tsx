@@ -79,7 +79,8 @@ export default async function LogPage({
       // first entry seeds one, so it reads the prescription instead.
       supabase
         .from("nutrition_settings")
-        .select("strict_mode, calorie_goal, protein_goal_g, carb_goal_g, fat_goal_g")
+        // "*" so a database without 0035 still reads, with `onboarded` absent.
+        .select("*")
         .maybeSingle()
         .then(must),
     ]);
@@ -93,9 +94,10 @@ export default async function LogPage({
       dayGoals={withTodayGoal(
         (dayGoals ?? []).map(toDayGoal),
         today,
-        settings ? toDayGoal({ ...settings, log_date: today }) : null,
+        settings && settings.onboarded !== false ? toDayGoal({ ...settings, log_date: today }) : null,
       )}
       strictMode={settings?.strict_mode === true}
+      needsTargets={settings?.onboarded === false}
     />
   );
 }

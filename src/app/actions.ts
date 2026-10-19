@@ -140,11 +140,18 @@ async function seedDayGoal(
   userId: string,
   logDate: string,
 ) {
-  const { data: settings } = await supabase
+  const { data: row } = await supabase
     .from("nutrition_settings")
-    .select("calorie_goal, protein_goal_g, carb_goal_g, fat_goal_g")
+    .select("*")
     .maybeSingle();
-  if (!settings) return;
+  // Sign-up defaults are nobody's decision (0035), so they grade nothing.
+  if (!row || row.onboarded === false) return;
+  const settings = {
+    calorie_goal: row.calorie_goal,
+    protein_goal_g: row.protein_goal_g,
+    carb_goal_g: row.carb_goal_g,
+    fat_goal_g: row.fat_goal_g,
+  };
 
   const { error } = await supabase
     .from("day_goals")
@@ -390,6 +397,7 @@ export async function saveGoals(goals: Goals) {
     goal_rate_lb_per_week: goals.goal_rate_lb_per_week,
     display_weight_unit: goals.display_weight_unit,
     strict_mode: goals.strict_mode === true,
+    onboarded: true,
     updated_at: new Date().toISOString(),
   });
   if (error) return { error: error.message };
