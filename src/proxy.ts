@@ -41,6 +41,8 @@ export async function proxy(request: NextRequest) {
   if (!user && !isPublic) {
     const url = request.nextUrl.clone();
     url.pathname = "/login";
+    // Where they were going, so signing in lands there rather than on Food.
+    url.search = pathname === "/" ? "" : `?next=${encodeURIComponent(pathname + request.nextUrl.search)}`;
     return NextResponse.redirect(url);
   }
 

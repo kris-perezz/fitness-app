@@ -52,7 +52,7 @@ const TABS = [
 }[];
 
 /** Routes that are not part of the signed-in app shell. */
-const CHROMELESS = ["/login", "/auth"];
+const CHROMELESS = ["/login", "/auth", "/reset-password"];
 
 export function BottomNav({ openWorkoutId: fromServer }: { openWorkoutId?: string | null }) {
   const pathname = usePathname();

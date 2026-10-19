@@ -6,8 +6,17 @@ import { Button } from "@/components/ui/button";
 import { Field, FieldLabel } from "@/components/ui/field";
 import { Input } from "@/components/ui/input";
 import type { EmailOtpType } from "@supabase/supabase-js";
+import { safeNext } from "@/lib/next-path";
 
-type Mode = "password" | "email" | "signup";
+type Mode = "password" | "email" | "signup" | "reset";
+
+/** Whatever Supabase or a link put in the address is not shown verbatim. */
+const LINK_ERROR = "That link has expired or was already used. Send a new one.";
+
+/** Where to go after signing in: the page that sent you here, or Food. */
+function destination(): string {
+  return safeNext(new URLSearchParams(location.search).get("next"));
+}
 type Status = "idle" | "working" | "sent";
 
 const fieldLabel = "text-xs font-normal text-muted-foreground";
@@ -20,6 +29,7 @@ export default function LoginPage() {
   const [error, setError] = useState("");
   /** Which email is waiting to be opened, so the wait screen can name it. */
   const [sent, setSent] = useState<EmailOtpType>("email");
+  const [next, setNext] = useState("/log");
 
   // Supabase reports link failures in the fragment, which never reaches the
   // server. Read it here, then strip it so a refresh does not re-show it.
@@ -34,11 +44,12 @@ export default function LoginPage() {
   useEffect(() => {
     const query = new URLSearchParams(location.search);
     const hash = new URLSearchParams(location.hash.slice(1));
-    const described = hash.get("error_description") ?? query.get("error");
-    if (described) {
-      // eslint-disable-next-line react-hooks/set-state-in-effect
-      setError(described.replace(/\+/g, " "));
-      history.replaceState(null, "", location.pathname);
+    // eslint-disable-next-line react-hooks/set-state-in-effect
+    setNext(destination());
+    if (hash.get("error") || query.get("error")) {
+      setError(LINK_ERROR);
+      const keep = query.get("next");
+      history.replaceState(null, "", keep ? `${location.pathname}?next=${encodeURIComponent(keep)}` : location.pathname);
     }
   }, []);
 
@@ -53,13 +64,29 @@ export default function LoginPage() {
     setError("");
 
     const { error } = await createClient().auth.signInWithPassword({ email, password });
-    if (error) return fail(error.message);
+    if (error) return fail(error.code === "invalid_credentials" ? "Wrong email or password." : error.message);
     // A full reload, not router.push(): the browser client has just written the
     // session cookie, and only a fresh document request makes the server read it
     // and render as the signed-in user. A client-side navigation would keep the
     // signed-out server state and bounce straight back off the middleware.
-    // eslint-disable-next-line @next/next/no-location-assign-relative-destination
-    location.assign("/log");
+     
+    location.assign(next);
+  }
+
+  /** Where a link in an email brings you back to, carrying `next` along. */
+  const confirmUrl = (to: string) => `${location.origin}/auth/confirm?next=${encodeURIComponent(to)}`;
+
+  async function sendReset(e: React.FormEvent) {
+    e.preventDefault();
+    setStatus("working");
+    setError("");
+
+    const { error } = await createClient().auth.resetPasswordForEmail(email, {
+      redirectTo: confirmUrl("/reset-password"),
+    });
+    if (error) return fail(error.message);
+    setSent("recovery");
+    setStatus("sent");
   }
 
   async function sendLink(e: React.FormEvent) {
@@ -69,7 +96,7 @@ export default function LoginPage() {
 
     const { error } = await createClient().auth.signInWithOtp({
       email,
-      options: { emailRedirectTo: `${location.origin}/auth/confirm` },
+      options: { emailRedirectTo: confirmUrl(next) },
     });
     if (error) return fail(error.message);
     setSent("email");
@@ -90,15 +117,15 @@ export default function LoginPage() {
     const { data, error } = await createClient().auth.signUp({
       email,
       password,
-      options: { emailRedirectTo: `${location.origin}/auth/confirm` },
+      options: { emailRedirectTo: confirmUrl(next) },
     });
     if (error) return fail(error.message);
 
     // A session here means the project confirms addresses on sight, so there is
     // nothing to wait for. Otherwise the address has to be confirmed first.
     if (data.session) {
-      // eslint-disable-next-line @next/next/no-location-assign-relative-destination
-      location.assign("/log");
+       
+      location.assign(next);
       return;
     }
     setSent("signup");
@@ -110,7 +137,7 @@ export default function LoginPage() {
   return (
     <main className="mx-auto flex min-h-dvh w-full max-w-sm flex-col justify-center px-6">
       <h1 className="text-xl font-semibold tracking-tight">
-        {mode === "signup" ? "Create an account" : "Sign in"}
+        {mode === "signup" ? "Create an account" : mode === "reset" ? "Reset password" : "Sign in"}
       </h1>
 
       {status === "sent" ? (
@@ -120,8 +147,10 @@ export default function LoginPage() {
         <div className="mt-4 space-y-5">
           <p className="text-sm text-muted-foreground">
             {sent === "signup" ? "Confirm " : "Sent to "}
-            <span className="text-foreground">{email}</span>. Open the link in that email to
-            continue.
+            <span className="text-foreground">{email}</span>.{" "}
+            {sent === "recovery"
+              ? "Open the link in that email to choose a new password."
+              : "Open the link in that email to continue."}
           </p>
 
           {error && <p className="text-sm text-destructive">{error}</p>}
@@ -140,7 +169,15 @@ export default function LoginPage() {
         </div>
       ) : (
         <form
-          onSubmit={mode === "password" ? signInWithPassword : mode === "signup" ? signUp : sendLink}
+          onSubmit={
+            mode === "password"
+              ? signInWithPassword
+              : mode === "signup"
+                ? signUp
+                : mode === "reset"
+                  ? sendReset
+                  : sendLink
+          }
           className="mt-4 space-y-5"
         >
           <Field>
@@ -159,7 +196,7 @@ export default function LoginPage() {
             />
           </Field>
 
-          {mode !== "email" && (
+          {(mode === "password" || mode === "signup") && (
             <Field>
               <FieldLabel htmlFor="password" className={fieldLabel}>
                 Password
@@ -188,20 +225,35 @@ export default function LoginPage() {
                 ? "Sign in"
                 : mode === "signup"
                   ? "Create account"
-                  : "Send link"}
+                  : mode === "reset"
+                    ? "Send reset link"
+                    : "Send link"}
           </Button>
 
           <div className="space-y-1">
+            {mode === "password" && (
+              <Button
+                type="button"
+                variant="ghost"
+                className="w-full text-muted-foreground"
+                onClick={() => {
+                  setMode("reset");
+                  setError("");
+                }}
+              >
+                Forgot password?
+              </Button>
+            )}
             <Button
               type="button"
               variant="ghost"
               className="w-full text-muted-foreground"
               onClick={() => {
-                setMode(mode === "email" ? "password" : "email");
+                setMode(mode === "email" || mode === "reset" ? "password" : "email");
                 setError("");
               }}
             >
-              {mode === "email" ? "Use a password instead" : "Email me a link instead"}
+              {mode === "email" || mode === "reset" ? "Use a password instead" : "Email me a link instead"}
             </Button>
 
             <Button
