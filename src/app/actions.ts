@@ -335,6 +335,25 @@ export async function updateEntryQty(
   return { entry: data as unknown as IntakeEntry, error: null };
 }
 
+/** Logged under the wrong meal. Nothing else about the entry changes. */
+export async function moveEntry(
+  id: string,
+  meal: Meal,
+): Promise<{ entry: IntakeEntry | null; error: string | null }> {
+  if (!MEALS.includes(meal)) return { entry: null, error: "Pick a meal" };
+  const supabase = await createClient();
+  const { data, error } = await supabase
+    .from("intake_entries")
+    .update({ meal })
+    .eq("id", id)
+    .select(ENTRY_COLUMNS)
+    .single();
+  if (error) return { entry: null, error: error.message };
+
+  revalidatePath("/log");
+  return { entry: data as unknown as IntakeEntry, error: null };
+}
+
 export async function deleteEntry(id: string) {
   const supabase = await createClient();
   const { error } = await supabase.from("intake_entries").delete().eq("id", id);

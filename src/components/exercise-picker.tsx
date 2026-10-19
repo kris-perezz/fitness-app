@@ -63,13 +63,14 @@ export function ExercisePicker({
   recentExerciseIds: string[];
   onPick: (exercise: Exercise) => void;
 }) {
-  const [creating, setCreating] = useState(false);
+  // The search that led to "Create", which becomes the new exercise's name.
+  const [creating, setCreating] = useState<string | null>(null);
   const [snap, setSnap] = useState<number | string | null>(SNAP_POINTS[0]);
   const [wasOpen, setWasOpen] = useState(open);
 
   if (open && !wasOpen) {
     setWasOpen(true);
-    setCreating(false);
+    setCreating(null);
     setSnap(SNAP_POINTS[0]);
   } else if (!open && wasOpen) {
     setWasOpen(false);
@@ -91,9 +92,10 @@ export function ExercisePicker({
           </DrawerDescription>
         </DrawerHeader>
 
-        {creating ? (
+        {creating !== null ? (
           <CreateStep
-            onBack={() => setCreating(false)}
+            initialName={creating}
+            onBack={() => setCreating(null)}
             onCreated={(exercise) => onPick(exercise)}
           />
         ) : (
@@ -101,8 +103,8 @@ export function ExercisePicker({
             exercises={exercises}
             recentExerciseIds={recentExerciseIds}
             onPick={onPick}
-            onCreate={() => {
-              setCreating(true);
+            onCreate={(query) => {
+              setCreating(query.trim());
               setSnap(1);
             }}
           />
@@ -121,7 +123,7 @@ function SearchStep({
   exercises: Exercise[];
   recentExerciseIds: string[];
   onPick: (exercise: Exercise) => void;
-  onCreate: () => void;
+  onCreate: (query: string) => void;
 }) {
   const [query, setQuery] = useState("");
   const [picked, setPicked] = useState<string | null>(null);
@@ -169,7 +171,7 @@ function SearchStep({
             `snapped` makes DrawerContent h-full, so anything pinned to the
             bottom sits below the fold until the sheet is dragged up. */}
         <ButtonGroup className="mt-2 w-full">
-          <Button variant="outline" className="h-11 flex-1" onClick={onCreate}>
+          <Button variant="outline" className="h-11 flex-1" onClick={() => onCreate(query)}>
             <Plus className="size-4" /> Create an exercise
           </Button>
         </ButtonGroup>
@@ -247,13 +249,15 @@ function SearchStep({
 
 /** S28. Name, muscle group, equipment. Everything else is optional or absent. */
 function CreateStep({
+  initialName,
   onBack,
   onCreated,
 }: {
+  initialName: string;
   onBack: () => void;
   onCreated: (exercise: Exercise) => void;
 }) {
-  const [name, setName] = useState("");
+  const [name, setName] = useState(initialName);
   const [group, setGroup] = useState<string>("");
   const [equipment, setEquipment] = useState<string>("");
   const [pending, startTransition] = useTransition();

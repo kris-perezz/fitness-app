@@ -251,10 +251,13 @@ export function TrainScreen({
             className="h-11 flex-1"
             disabled={pending}
             onClick={() =>
-              run(() => reach(finishWorkout(workout.id)), () => {
-                toast.success("Session finished");
-                router.replace("/train");
-              })
+              // Already finished: Done only leaves, rather than re-finishing it.
+              workout.ended_at
+                ? router.replace("/train?browse=1")
+                : run(() => reach(finishWorkout(workout.id)), () => {
+                    toast.success("Session finished");
+                    router.replace("/train");
+                  })
             }
           >
             {pending ? "Finishing" : workout.ended_at ? "Done" : "Finish session"}

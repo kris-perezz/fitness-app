@@ -25,13 +25,20 @@ import {
   type IntakeEntry,
   type Meal,
 } from "@/lib/food";
-import { deleteEntry, loadIntakeWindow, saveEntryAsFood, updateEntryQty } from "@/app/actions";
+import {
+  deleteEntry,
+  loadIntakeWindow,
+  moveEntry,
+  saveEntryAsFood,
+  updateEntryQty,
+} from "@/app/actions";
 import { reach } from "@/lib/reach";
 import { deleteWithUndo } from "@/lib/undo";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Card } from "@/components/ui/card";
 import { ButtonGroup } from "@/components/ui/button-group";
+import { ToggleGroup, ToggleGroupItem } from "@/components/ui/toggle-group";
 import {
   Drawer,
   DrawerContent,
@@ -255,6 +262,11 @@ export function LogScreen({
           </h1>
 
           <div className="flex items-center gap-0.5">
+            {date < today && (
+              <Button variant="ghost" className="h-11 px-2 text-sm" onClick={() => setDate(today)}>
+                Today
+              </Button>
+            )}
             <Button
               size="icon-xl"
               variant="ghost"
@@ -397,6 +409,7 @@ export function LogScreen({
         foods={foods}
         recent={recentFoods}
         date={date}
+        dayLabel={date === today ? null : label}
         // The window is what the screen reads now, so a saved entry has to land
         // in it. A revalidate still runs on the server for whoever loads the
         // page next; it can no longer be what puts the food on this one.
@@ -407,9 +420,10 @@ export function LogScreen({
         food={detail?.food_id ? (foods.find((f) => f.id === detail.food_id) ?? null) : null}
         onClose={() => setDetail(null)}
         onDelete={removeEntry}
-        onUpdated={(updated) =>
-          setEntries((prev) => prev.map((e) => (e.id === updated.id ? updated : e)))
-        }
+        onUpdated={(updated) => {
+          setEntries((prev) => prev.map((e) => (e.id === updated.id ? updated : e)));
+          setDetail((d) => (d?.id === updated.id ? updated : d));
+        }}
         // S99. The new row has to reach the catalog this screen was rendered
         // with, or the food you just saved is missing from the next search.
         onSavedAsFood={(entryId, foodId) => {
@@ -591,6 +605,33 @@ function EntryDetail({
                   <span className="text-sm text-muted-foreground">{entry.unit}</span>
                 </div>
               )}
+
+              <ToggleGroup
+                type="single"
+                variant="outline"
+                size="sm"
+                className="mt-4 w-full"
+                value={entry.meal}
+                onValueChange={(next) => {
+                  if (!next || next === entry.meal) return;
+                  startSave(async () => {
+                    const res = await reach(moveEntry(entry.id, next as Meal));
+                    if (res.error || !res.entry) {
+                      toast.error(res.error ?? "Couldn't move that.");
+                      return;
+                    }
+                    onUpdated(res.entry);
+                    toast.success(`Moved to ${next}`);
+                  });
+                }}
+                aria-label="Meal"
+              >
+                {MEALS.map((meal) => (
+                  <ToggleGroupItem key={meal} value={meal} className="h-10 flex-1 text-xs">
+                    {meal}
+                  </ToggleGroupItem>
+                ))}
+              </ToggleGroup>
 
               {/* S100. The longer sentence the name was titled from, kept out
                   of the list and shown only here, where there is room to read

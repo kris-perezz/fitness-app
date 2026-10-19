@@ -85,12 +85,15 @@ export function AddSheet({
   foods,
   recent,
   date,
+  dayLabel,
   onAdded,
 }: {
   meal: Meal | null;
   onOpenChange: (open: boolean) => void;
   foods: Food[];
   recent: Food[];
+  /** Named in the title when it is not today, so a back-dated add is never a surprise. */
+  dayLabel: string | null;
   date: string;
   /** The stored row, so the log can show it without going back to the server. */
   onAdded: (entry: IntakeEntry) => void;
@@ -155,7 +158,10 @@ export function AddSheet({
     >
       <DrawerContent snapped onFocusCapture={liftForKeyboard(setSnap)}>
         <DrawerHeader className="px-5 pb-2 pt-0">
-          <DrawerTitle className="text-base">Add to {meal}</DrawerTitle>
+          <DrawerTitle className="text-base">
+            Add to {meal}
+            {dayLabel && <span className="font-normal text-muted-foreground"> · {dayLabel}</span>}
+          </DrawerTitle>
           <DrawerDescription className="sr-only">
             Search foods or enter one manually.
           </DrawerDescription>
