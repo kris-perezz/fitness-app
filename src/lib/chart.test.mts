@@ -15,7 +15,7 @@ test("a measure axis is fitted, never zero-based", () => {
 test("a measure axis ignores the days with no reading", () => {
   // A gap is not a zero. Coercing one null would drag the floor to 0 and
   // flatten every real difference above it.
-  assert.deepEqual(measureDomain([161.8, null, 163.2, null]), [160, 165]);
+  assert.deepEqual(measureDomain([161.8, null, 163.2, null]), [160, 168]);
   assert.deepEqual(measureDomain([]), [0, 1]);
 });
 
@@ -57,4 +57,12 @@ test("a date tick reads as a day, and cannot slip a day by timezone", () => {
   // 2nd of September anywhere west of Greenwich.
   assert.match(dayTick("2026-09-03"), /3/);
   assert.match(dayTick("2026-09-03"), /Sep/);
+});
+
+test("a measure axis spans four round steps, so every tick is a round number", () => {
+  const [low, high] = measureDomain([149.2, 151, 158, 167.4, 174.1]);
+  const step = (high - low) / 4;
+  assert.ok([1, 2, 2.5, 5, 10].includes(step), `step ${step}`);
+  assert.equal(low % step, 0);
+  assert.ok(low <= 148.2 && high >= 175.1);
 });

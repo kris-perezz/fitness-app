@@ -91,8 +91,21 @@ export function measureDomain(values: (number | null)[], pad = 1): [number, numb
   // A chart with no values at all should be showing an Empty, not an axis; [0,1]
   // is the inert answer for the frame or two before the caller notices.
   if (present.length === 0) return [0, 1];
-  return [Math.floor(Math.min(...present) - pad), Math.ceil(Math.max(...present) + pad)];
+  const lo = Math.min(...present) - pad;
+  const hi = Math.max(...present) + pad;
+  // Exactly four round steps, so MEASURE_TICKS lands on 150, 155, 160, 165,
+  // 170 rather than wherever the data happens to end.
+  for (const step of NICE_STEPS) {
+    const start = Math.floor(lo / step) * step;
+    if (start + 4 * step >= hi) return [start, start + 4 * step];
+  }
+  return [Math.floor(lo), Math.ceil(hi)];
 }
+
+/** Ticks on a `measureDomain` axis: its four steps and both ends. */
+export const MEASURE_TICKS = 5;
+
+const NICE_STEPS = [1, 2, 2.5, 5, 10, 20, 25, 50, 100, 200, 250, 500, 1000];
 
 /**
  * A ZERO-BASED axis for a count or a total (rule 1), with the top rounded UP to

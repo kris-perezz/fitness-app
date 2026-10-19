@@ -3,7 +3,7 @@
 import { CartesianGrid, Line, LineChart, ReferenceLine, XAxis, YAxis } from "recharts";
 import { trim } from "@/lib/training";
 import type { DisplayUnit } from "@/lib/weight";
-import { CHART_CLASS, SERIES, TOOLTIP, X_AXIS, Y_AXIS, dayTick } from "@/lib/chart";
+import { CHART_CLASS, MEASURE_TICKS, SERIES, TOOLTIP, X_AXIS, Y_AXIS, dayTick } from "@/lib/chart";
 import { useFinePointer } from "@/lib/pointer";
 import {
   ChartContainer,
@@ -46,7 +46,7 @@ export function WeightLines({
         <XAxis dataKey="date" {...X_AXIS} tickFormatter={dayTick} />
         {/* Fitted, never zero-based: a 0-200 axis flattens a real cut into a
             horizontal line. The rule is S79's, applied by axisDomain. */}
-        <YAxis domain={domain} {...Y_AXIS} />
+        <YAxis domain={domain} {...Y_AXIS} tickCount={MEASURE_TICKS} />
 
         {/* S60. What the trend is MEASURED AGAINST, not a second measurement
             -- thin, dashed and muted so it never reads as a data series.

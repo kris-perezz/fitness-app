@@ -3,7 +3,7 @@
 import Link from "next/link";
 import { CartesianGrid, Line, LineChart, XAxis, YAxis } from "recharts";
 
-import { CHART_CLASS, SERIES, TOOLTIP, X_AXIS, Y_AXIS, dayTick, measureDomain } from "@/lib/chart";
+import { CHART_CLASS, MEASURE_TICKS, SERIES, TOOLTIP, X_AXIS, Y_AXIS, dayTick, measureDomain } from "@/lib/chart";
 import { useFinePointer } from "@/lib/pointer";
 import { MIN_LIFT_SESSIONS, hasRepBand, repsOnly, type LiftPoint } from "@/lib/training";
 import { toDisplay, type DisplayUnit } from "@/lib/weight";
@@ -50,7 +50,7 @@ export function LiftChart({ points: stored, unit }: { points: LiftPoint[]; unit:
         <XAxis dataKey="date" {...X_AXIS} tickFormatter={dayTick} />
         {/* Fitted, never zero-based: a lift is a measure, not a count (S79
             rule 1), and a 0-300 axis draws a real 20 lb gain as a flat line. */}
-        <YAxis domain={domain} {...Y_AXIS} width={38} />
+        <YAxis domain={domain} {...Y_AXIS} tickCount={MEASURE_TICKS} width={38} />
 
         <Line
           {...SERIES}
@@ -182,7 +182,7 @@ export function PinnedLiftsChart({ lifts, unit }: { lifts: PinnedLift[]; unit: D
           <LineChart data={rows} margin={{ left: 0, right: 8, top: 4 }} accessibilityLayer>
             <CartesianGrid vertical={false} />
             <XAxis dataKey="date" {...X_AXIS} tickFormatter={dayTick} />
-            <YAxis domain={domain} {...Y_AXIS} width={38} />
+            <YAxis domain={domain} {...Y_AXIS} tickCount={MEASURE_TICKS} width={38} />
 
             {drawn.map((s) => (
               <Line

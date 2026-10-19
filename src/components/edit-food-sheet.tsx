@@ -137,7 +137,7 @@ function EditForm({
         toast.error(res.error ?? "Could not save that food");
         return;
       }
-      toast.success("Food updated");
+      toast.success(`Saved ${name.trim()}`);
       onSaved?.(res.food);
       onOpenChange(false);
     });
@@ -150,7 +150,7 @@ function EditForm({
         toast.error(res.error);
         return;
       }
-      toast.success(`Removed ${food.name}`);
+      toast.success(`Deleted ${food.name}`);
       onDeleted?.(food);
       onOpenChange(false);
     });

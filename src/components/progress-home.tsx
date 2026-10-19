@@ -669,7 +669,7 @@ function WeighInSheet({
             </Button>
           )}
           <Button className="h-11 flex-1 text-base" onClick={save} disabled={pending || !value}>
-            {saving ? "Saving" : existing ? "Save" : "Log it"}
+            {saving ? "Saving" : existing ? "Save" : "Weigh in"}
           </Button>
         </div>
       </DrawerContent>

@@ -94,7 +94,7 @@ export function TrendsScreen({
       ) : (
         <>
           <DayChart
-            title="Calories a day"
+            title="Daily calories"
             caption={`${logged} of the last 30 days logged`}
             points={points}
             dataKey="kcal"
@@ -106,7 +106,7 @@ export function TrendsScreen({
           />
 
           <DayChart
-            title="Protein a day"
+            title="Daily protein"
             points={points}
             dataKey="protein_g"
             goalKey="proteinGoal"

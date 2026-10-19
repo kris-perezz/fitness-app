@@ -287,7 +287,7 @@ export async function createExercise(input: {
   const user = await authUser(supabase);
   if (!user) return { exercise: null, error: "Not signed in" };
 
-  const name = input.name.trim();
+  const name = sentenceCase(input.name.trim());
   if (!name) return { exercise: null, error: "Name is required" };
   if (!input.muscle_group) return { exercise: null, error: "Muscle group is required" };
 
@@ -320,6 +320,21 @@ export async function createExercise(input: {
 }
 
 // ------------------------------------------------------------------ helpers
+
+/**
+ * "Low To High Cable Fly" -> "Low to high cable fly", matching the catalog.
+ * Words already in capitals (RDL, EZ) are left as typed.
+ */
+function sentenceCase(name: string): string {
+  return name
+    .split(/\s+/)
+    .map((word, i) => {
+      if (/^[A-Z0-9]{2,}$/.test(word)) return word;
+      const lower = word.toLowerCase();
+      return i === 0 ? lower.charAt(0).toUpperCase() + lower.slice(1) : lower;
+    })
+    .join(" ");
+}
 
 function slug(name: string): string {
   return (
