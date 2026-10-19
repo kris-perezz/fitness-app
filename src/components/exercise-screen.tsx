@@ -15,16 +15,24 @@ import {
   shortDate,
   type Exercise,
   type LiftPoint,
+  enoughSessions,
   type LiftSession,
 } from "@/lib/training";
 import { Button } from "@/components/ui/button";
 import { Card } from "@/components/ui/card";
-import { LiftChart, enoughSessions } from "@/components/lift-chart";
+import dynamic from "next/dynamic";
+import { CHART_CLASS } from "@/lib/chart";
 import { Empty, EmptyDescription, EmptyHeader, EmptyMedia, EmptyTitle } from "@/components/ui/empty";
 import { Item, ItemContent, ItemDescription, ItemTitle } from "@/components/ui/item";
 import { cn } from "@/lib/utils";
 import { PAGE, SURFACE, SURFACE_PAD } from "@/lib/ui";
 import { useSwipe } from "@/lib/swipe";
+
+// Loaded after the page, so the history list never waits on recharts.
+const LiftChart = dynamic(() => import("@/components/lift-chart").then((m) => m.LiftChart), {
+  ssr: false,
+  loading: () => <div className={CHART_CLASS} />,
+});
 
 /**
  * One lift's history (S80).

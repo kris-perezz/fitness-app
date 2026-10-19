@@ -86,9 +86,7 @@ export function BottomNav({ openWorkoutId: fromServer }: { openWorkoutId?: strin
 
     // Train links straight into today's open session rather than through
     // /train, which would otherwise redirect there itself on arrival (S26).
-    // Skipping that hop is the only way this link is ever prefetched all the
-    // way to real data instead of to a redirect the browser has to follow
-    // cold.
+    // Skipping that hop means the prefetched shell is the session's own.
     const target = href === "/train" && openWorkoutId ? `/train/${openWorkoutId}` : href;
 
     return { href, label, Icon, active, target };
@@ -110,19 +108,10 @@ export function BottomNav({ openWorkoutId: fromServer }: { openWorkoutId?: strin
           <li key={href} className="flex-1">
             <Link
               href={target}
-              // Fetched while you are on another tab, so switching is instant
-              // rather than a full server render you sit through. Every tab
-              // here is `force-dynamic`, and Next SKIPS prefetching a dynamic
-              // route unless it has a loading boundary -- every tab here has
-              // its own `loading.tsx`, which is what makes this possible at
-              // all, and prefetch={true} is what makes the result reusable,
-              // since it stores under the static stale time (five minutes)
-              // rather than the dynamic one (zero, meaning never reused).
-              //
-              // Four tabs means four background fetches per page. They are
-              // small, and pre-loading the destination is the entire job of a
-              // bottom nav. Production only -- Next does not prefetch in dev.
-              prefetch
+              // The default prefetch: each tab's shell up to its loading.tsx,
+              // so a tap paints the skeleton at once. A full prefetch would
+              // run four whole server renders, every query included, on every
+              // page view.
               aria-current={active ? "page" : undefined}
               className={cn(
                 // 44px minimum target, which is the floor on both platforms.
@@ -156,7 +145,6 @@ export function BottomNav({ openWorkoutId: fromServer }: { openWorkoutId?: strin
           <li key={href}>
             <Link
               href={target}
-              prefetch
               aria-current={active ? "page" : undefined}
               className={cn(
                 "relative flex flex-col items-center justify-center gap-1 rounded-lg py-3 transition-colors hover:bg-accent",

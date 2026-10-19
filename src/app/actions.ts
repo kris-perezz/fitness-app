@@ -2,7 +2,7 @@
 
 import { revalidatePath } from "next/cache";
 import { redirect } from "next/navigation";
-import { createClient } from "@/lib/supabase/server";
+import { authUser, createClient } from "@/lib/supabase/server";
 import { fetchOffProduct, isBarcode, searchOff, type OffSearchResult } from "@/lib/off";
 import { fetchCnfFood, searchCnf, type CnfSearchResult } from "@/lib/cnf";
 import { extractLabel, type LabelDraft, type LabelResult } from "@/lib/label";
@@ -51,9 +51,7 @@ export async function addEntry(
   entry: NewEntry,
 ): Promise<{ entry: IntakeEntry | null; error: string | null }> {
   const supabase = await createClient();
-  const {
-    data: { user },
-  } = await supabase.auth.getUser();
+  const user = await authUser(supabase);
   if (!user) return { entry: null, error: "Not signed in" };
 
   const invalid = await validateEntry(entry);
@@ -368,9 +366,7 @@ export type Goals = {
 
 export async function saveGoals(goals: Goals) {
   const supabase = await createClient();
-  const {
-    data: { user },
-  } = await supabase.auth.getUser();
+  const user = await authUser(supabase);
   if (!user) return { error: "Not signed in" };
 
   if (!inRange(goals.calorie_goal, 0, 20_000)) return { error: "Calories must be 0 to 20,000" };
@@ -437,9 +433,7 @@ export async function lookupBarcode(code: string): Promise<BarcodeResult> {
   if (!isBarcode(barcode)) return { source: "error", food: null, error: "Not a valid barcode" };
 
   const supabase = await createClient();
-  const {
-    data: { user },
-  } = await supabase.auth.getUser();
+  const user = await authUser(supabase);
 
   // Plural now, not `.maybeSingle()`: since 0007 a barcode is unique per
   // creator rather than globally, so the same product can legitimately carry
@@ -479,9 +473,7 @@ function bestBarcodeMatch<T extends Food & { created_by: string | null; created_
 
 export async function saveScannedFood(food: Food) {
   const supabase = await createClient();
-  const {
-    data: { user },
-  } = await supabase.auth.getUser();
+  const user = await authUser(supabase);
   if (!user) return { error: "Not signed in" };
 
   const barcode = food.barcode ?? null;
@@ -517,6 +509,7 @@ export async function saveScannedFood(food: Food) {
   if (error && error.code !== "23505") return { error: error.message };
 
   revalidatePath("/log");
+  revalidatePath("/foods");
   return { error: null };
 }
 
@@ -531,9 +524,7 @@ export async function saveScannedFood(food: Food) {
 
 export async function searchCnfFoods(query: string): Promise<CnfSearchResult> {
   const supabase = await createClient();
-  const {
-    data: { user },
-  } = await supabase.auth.getUser();
+  const user = await authUser(supabase);
   // Not a data-protection measure -- CNF is public. It stops an unauthenticated
   // caller using this endpoint as a free proxy for a 471 KB fetch.
   if (!user) return { status: "error", message: "Not signed in" };
@@ -551,9 +542,7 @@ export async function searchCnfFoods(query: string): Promise<CnfSearchResult> {
  */
 export async function searchOffFoods(query: string): Promise<OffSearchResult> {
   const supabase = await createClient();
-  const {
-    data: { user },
-  } = await supabase.auth.getUser();
+  const user = await authUser(supabase);
   if (!user) return { status: "error", message: "Not signed in" };
 
   return searchOff(query);
@@ -579,9 +568,7 @@ export async function addCnfFood(
   description: string,
 ): Promise<{ food: Food | null; error: string | null }> {
   const supabase = await createClient();
-  const {
-    data: { user },
-  } = await supabase.auth.getUser();
+  const user = await authUser(supabase);
   if (!user) return { food: null, error: "Not signed in" };
 
   const id = `cnf_${code}`;
@@ -609,6 +596,7 @@ export async function addCnfFood(
   if (error && error.code !== "23505") return { food: null, error: error.message };
 
   revalidatePath("/log");
+  revalidatePath("/foods");
   return { food: result.food, error: null };
 }
 
@@ -625,9 +613,7 @@ export async function estimateEntry(
   image?: string | null,
 ): Promise<DescribeResult> {
   const supabase = await createClient();
-  const {
-    data: { user },
-  } = await supabase.auth.getUser();
+  const user = await authUser(supabase);
   if (!user) return { status: "error", message: "Not signed in" };
 
   return estimateFromDescription(description, image ?? null);
@@ -642,9 +628,7 @@ export async function estimateEntry(
 
 export async function readLabel(image: string): Promise<LabelResult> {
   const supabase = await createClient();
-  const {
-    data: { user },
-  } = await supabase.auth.getUser();
+  const user = await authUser(supabase);
   if (!user) return { status: "error", message: "Not signed in" };
 
   return extractLabel(image);
@@ -664,9 +648,7 @@ export async function saveLabelFood(
   barcode: string | null,
 ): Promise<{ food: Food | null; error: string | null }> {
   const supabase = await createClient();
-  const {
-    data: { user },
-  } = await supabase.auth.getUser();
+  const user = await authUser(supabase);
   if (!user) return { food: null, error: "Not signed in" };
 
   const food: Food = {
@@ -682,6 +664,7 @@ export async function saveLabelFood(
   if (error) return { food: null, error: error.message };
 
   revalidatePath("/log");
+  revalidatePath("/foods");
   return { food, error: null };
 }
 
@@ -704,9 +687,7 @@ export async function saveEntryAsFood(
   entryId: string,
 ): Promise<{ food: Food | null; error: string | null }> {
   const supabase = await createClient();
-  const {
-    data: { user },
-  } = await supabase.auth.getUser();
+  const user = await authUser(supabase);
   if (!user) return { food: null, error: "Not signed in" };
 
   // Scoped to the user as well as the id, matching updateRecipe and
@@ -831,9 +812,7 @@ export async function updateFood(
   edit: FoodEdit,
 ): Promise<{ food: Food | null; error: string | null }> {
   const supabase = await createClient();
-  const {
-    data: { user },
-  } = await supabase.auth.getUser();
+  const user = await authUser(supabase);
   if (!user) return { food: null, error: "Not signed in" };
 
   const invalid = validateEdit(edit);
@@ -917,6 +896,7 @@ export async function updateFood(
 
     await republishRecipesUsing(supabase, user.id, id, id);
     revalidatePath("/log");
+    revalidatePath("/foods");
     return { food: updated as Food, error: null };
   }
 
@@ -942,6 +922,7 @@ export async function updateFood(
 
   await republishRecipesUsing(supabase, user.id, current.id, fork.id);
   revalidatePath("/log");
+  revalidatePath("/foods");
   return { food: inserted as Food, error: null };
 }
 
@@ -955,9 +936,7 @@ export async function updateFood(
  */
 export async function deleteFood(id: string): Promise<{ error: string | null }> {
   const supabase = await createClient();
-  const {
-    data: { user },
-  } = await supabase.auth.getUser();
+  const user = await authUser(supabase);
   if (!user) return { error: "Not signed in" };
 
   const { data, error } = await supabase
@@ -1071,9 +1050,7 @@ export async function createRecipe(
   details: RecipeDetails,
 ): Promise<{ error: string | null; id: string | null }> {
   const supabase = await createClient();
-  const {
-    data: { user },
-  } = await supabase.auth.getUser();
+  const user = await authUser(supabase);
   if (!user) return { error: "Not signed in", id: null };
 
   const invalid = validateDetails(details);
@@ -1098,9 +1075,7 @@ export async function createRecipe(
 /** Name / servings / cooked weight only; ingredients have their own actions. */
 export async function updateRecipe(id: string, details: RecipeDetails) {
   const supabase = await createClient();
-  const {
-    data: { user },
-  } = await supabase.auth.getUser();
+  const user = await authUser(supabase);
   if (!user) return { error: "Not signed in" };
 
   const invalid = validateDetails(details);
@@ -1137,9 +1112,7 @@ export async function duplicateRecipe(
   id: string,
 ): Promise<{ error: string | null; id: string | null }> {
   const supabase = await createClient();
-  const {
-    data: { user },
-  } = await supabase.auth.getUser();
+  const user = await authUser(supabase);
   if (!user) return { error: "Not signed in", id: null };
 
   const { data: source, error: sourceError } = await supabase
@@ -1199,9 +1172,7 @@ export async function duplicateRecipe(
  */
 export async function deleteRecipe(id: string) {
   const supabase = await createClient();
-  const {
-    data: { user },
-  } = await supabase.auth.getUser();
+  const user = await authUser(supabase);
   if (!user) return { error: "Not signed in" };
 
   const { error } = await supabase.from("recipes").delete().eq("id", id).eq("user_id", user.id);
@@ -1213,9 +1184,7 @@ export async function deleteRecipe(id: string) {
 
 export async function addRecipeIngredient(recipeId: string, foodId: string, qty: number) {
   const supabase = await createClient();
-  const {
-    data: { user },
-  } = await supabase.auth.getUser();
+  const user = await authUser(supabase);
   if (!user) return { error: "Not signed in" };
   if (!Number.isFinite(qty) || qty <= 0) return { error: "Quantity must be greater than zero" };
 
@@ -1247,9 +1216,7 @@ export async function addRecipeIngredient(recipeId: string, foodId: string, qty:
 
 export async function updateRecipeIngredient(id: string, qty: number) {
   const supabase = await createClient();
-  const {
-    data: { user },
-  } = await supabase.auth.getUser();
+  const user = await authUser(supabase);
   if (!user) return { error: "Not signed in" };
   if (!Number.isFinite(qty) || qty <= 0) return { error: "Quantity must be greater than zero" };
 
@@ -1267,9 +1234,7 @@ export async function updateRecipeIngredient(id: string, qty: number) {
 
 export async function removeRecipeIngredient(id: string) {
   const supabase = await createClient();
-  const {
-    data: { user },
-  } = await supabase.auth.getUser();
+  const user = await authUser(supabase);
   if (!user) return { error: "Not signed in" };
 
   const { data, error } = await supabase
@@ -1292,9 +1257,7 @@ export async function removeRecipeIngredient(id: string) {
  */
 export async function saveRecipe(id: string, details: RecipeDetails) {
   const supabase = await createClient();
-  const {
-    data: { user },
-  } = await supabase.auth.getUser();
+  const user = await authUser(supabase);
   if (!user) return { error: "Not signed in" };
 
   const detailsError = await updateRecipe(id, details);
@@ -1392,7 +1355,8 @@ async function publishRecipe(
     .eq("id", recipeId)
     .eq("user_id", userId);
 
-  revalidatePath("/recipes");
+  // The layout, so the open editor re-renders in this same response.
+  revalidatePath("/recipes", "layout");
   if (lines.length === 0) return { error: null, published: false };
 
   const food = generatedFood(recipeId, { ...details, name: details.name.trim() }, lines);

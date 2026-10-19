@@ -36,3 +36,15 @@ export function must<T>(result: { data: T; error: { message: string; code?: stri
   if (result.error) throw new Error(result.error.message);
   return result.data;
 }
+
+/**
+ * Who is asking, from the session token itself. With asymmetric signing keys
+ * this is verified locally; with the legacy shared secret it falls back to
+ * asking Supabase over the network, like `getUser()`.
+ */
+export async function authUser(
+  supabase: Awaited<ReturnType<typeof createClient>>,
+): Promise<{ id: string } | null> {
+  const { data } = await supabase.auth.getClaims();
+  return data?.claims.sub ? { id: data.claims.sub } : null;
+}

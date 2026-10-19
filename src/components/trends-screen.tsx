@@ -3,20 +3,13 @@
 import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { ChevronLeft, ChartNoAxesColumn } from "lucide-react";
-import { Bar, BarChart, CartesianGrid, Line, XAxis, YAxis } from "recharts";
+import dynamic from "next/dynamic";
 
-import {
-  CHART_CLASS,
-  X_AXIS,
-  Y_AXIS,
-  countDomain,
-  dayTick,
-  enoughToPlot,
-} from "@/lib/chart";
+import { CHART_CLASS, enoughToPlot } from "@/lib/chart";
 import { estimateShare, loggedDays, type IntakeDay, type TopFood, type TrendPoint } from "@/lib/trends";
 import { Button } from "@/components/ui/button";
 import { Card } from "@/components/ui/card";
-import { ChartContainer, type ChartConfig } from "@/components/ui/chart";
+import type { ChartConfig } from "@/components/ui/chart";
 import { Empty, EmptyDescription, EmptyHeader, EmptyMedia, EmptyTitle } from "@/components/ui/empty";
 import { Item, ItemContent, ItemDescription, ItemTitle } from "@/components/ui/item";
 import { cn } from "@/lib/utils";
@@ -41,6 +34,12 @@ import { useSwipe } from "@/lib/swipe";
  * `destructive` -- there is no health limit on this screen, and the one place
  * the app does paint one is sodium (S73).
  */
+
+// Loaded after the page, so the header and lists never wait on recharts.
+const DayBars = dynamic(() => import("@/components/day-bars").then((m) => m.DayBars), {
+  ssr: false,
+  loading: () => <div className={`mt-3 ${CHART_CLASS}`} />,
+});
 
 /** Below this a chart is a sentence rather than a picture (S79 rule 4). */
 const MIN_DAYS = 5;
@@ -250,50 +249,14 @@ function DayChart({
       {!enoughToPlot(values, MIN_DAYS) ? (
         <p className="mt-2 text-xs text-muted-foreground">{thin}</p>
       ) : (
-        <ChartContainer config={config} className={`mt-3 ${CHART_CLASS}`}>
-          <BarChart data={points} margin={{ left: 0, right: 8, top: 4 }} accessibilityLayer>
-            <CartesianGrid vertical={false} />
-            <XAxis dataKey="date" {...X_AXIS} tickFormatter={dayTick} />
-            <YAxis
-              {...Y_AXIS}
-              width={38}
-              // The goal line is inside the domain on purpose: above the
-              // tallest bar it would otherwise be clipped off the top, and an
-              // invisible reference is worse than none.
-              domain={countDomain(
-                [
-                  ...values.filter((v): v is number => v !== null),
-                  ...goalValues.filter((v): v is number => v !== null),
-                ],
-                dataKey === "kcal" ? 500 : 25,
-              )}
-            />
-            <Bar
-              dataKey={dataKey}
-              fill={`var(--color-${dataKey})`}
-              radius={[3, 3, 0, 0]}
-              // No animation, per the contract. A bar chart of a fixed 30-day
-              // window has nothing to animate between -- unlike the month
-              // pager on Train, nothing here swaps underneath it.
-              isAnimationActive={false}
-            />
-            {/* Neutral and dashed, never red on the wrong side of it (S79
-                rule 5 / S70). The line states where the target is; it does
-                not grade the bars against it. Drawn after the bars so it
-                sits on top of them rather than under. */}
-            <Line
-              dataKey={goalKey}
-              type="stepAfter"
-              stroke="var(--muted-foreground)"
-              strokeDasharray="4 4"
-              strokeOpacity={0.7}
-              strokeWidth={1.5}
-              dot={false}
-              isAnimationActive={false}
-              connectNulls={false}
-            />
-          </BarChart>
-        </ChartContainer>
+        <DayBars
+          points={points}
+          dataKey={dataKey}
+          goalKey={goalKey}
+          config={config}
+          values={values}
+          goalValues={goalValues}
+        />
       )}
     </Card>
   );

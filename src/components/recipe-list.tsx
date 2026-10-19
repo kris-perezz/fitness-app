@@ -54,7 +54,6 @@ export function RecipeList({ recipes }: { recipes: RecipeSummary[] }) {
         toast.error(res.error);
         return;
       }
-      router.refresh();
     });
   }
 

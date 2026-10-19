@@ -44,7 +44,7 @@ export function IngredientSheet({
   foods: Food[];
   open: boolean;
   onOpenChange: (open: boolean) => void;
-  onAdded: () => void;
+  onAdded?: () => void;
 }) {
   const [step, setStep] = useState<Step>({ kind: "search" });
   const [snap, setSnap] = useState<number | string | null>(SNAP_POINTS[0]);
@@ -100,7 +100,7 @@ export function IngredientSheet({
             scanned={step.scanned}
             onBack={() => go({ kind: "search" })}
             onDone={() => {
-              onAdded();
+              onAdded?.();
               onOpenChange(false);
             }}
           />

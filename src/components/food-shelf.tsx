@@ -101,7 +101,6 @@ export function FoodShelf({ foods }: { foods: Food[] }) {
       }
       setStep(null);
       toast.success(`Saved ${food.name}`);
-      router.refresh();
     });
   }
 
@@ -214,14 +213,8 @@ export function FoodShelf({ foods }: { foods: Food[] }) {
       <EditFoodSheet
         food={editing}
         onOpenChange={(isOpen) => !isOpen && setEditing(null)}
-        onSaved={() => {
-          setEditing(null);
-          router.refresh();
-        }}
-        onDeleted={() => {
-          setEditing(null);
-          router.refresh();
-        }}
+        onSaved={() => setEditing(null)}
+        onDeleted={() => setEditing(null)}
       />
     </>
   );

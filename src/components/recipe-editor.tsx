@@ -114,7 +114,6 @@ export function RecipeEditor({
         return;
       }
       toast.success("Recipe saved");
-      router.refresh();
     });
   }
 
@@ -301,7 +300,7 @@ export function RecipeEditor({
             // that spaces children with a gap, and these rows are flush.
             <ul>
               {lines.map((line) => (
-                <IngredientRow key={line.id} line={line} onChanged={() => router.refresh()} />
+                <IngredientRow key={line.id} line={line} />
               ))}
             </ul>
           )}
@@ -353,7 +352,6 @@ export function RecipeEditor({
         foods={foods}
         open={adding}
         onOpenChange={setAdding}
-        onAdded={() => router.refresh()}
       />
 
       <AlertDialog open={confirmDelete} onOpenChange={setConfirmDelete}>
@@ -380,7 +378,7 @@ export function RecipeEditor({
  * is the commonest edit there is, and sending it through a sheet for one number
  * would be slower than re-adding the food.
  */
-function IngredientRow({ line, onChanged }: { line: EditorLine; onChanged: () => void }) {
+function IngredientRow({ line }: { line: EditorLine }) {
   const [qty, setQty] = useState(String(line.qty));
   const [pending, startTransition] = useTransition();
 
@@ -404,7 +402,6 @@ function IngredientRow({ line, onChanged }: { line: EditorLine; onChanged: () =>
         setQty(String(line.qty));
         return;
       }
-      onChanged();
     });
   }
 
@@ -415,7 +412,6 @@ function IngredientRow({ line, onChanged }: { line: EditorLine; onChanged: () =>
         toast.error(res.error);
         return;
       }
-      onChanged();
     });
   }
 

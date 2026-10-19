@@ -16,14 +16,14 @@ import { PATHS } from "@/lib/dumbbell-icon";
  * byte this app can control and needs nothing to hydrate before it shows. It
  * fades on a timer rather than on a "content ready" signal because there is no
  * cheap way to know that from a layout that wraps every route -- the timer is
- * tuned to a warm request (a couple hundred ms) so it clears just behind the
- * real content arriving, and simply gets out of the way sooner on a cold one.
+ * short, because on a warm load the page is already painted behind it, and a
+ * splash that outlasts the content only makes the app feel slower.
  */
 export function StartupSplash() {
   return (
     <div
       aria-hidden
-      className="pointer-events-none fixed inset-0 z-50 flex items-center justify-center bg-background [animation:app-splash-out_220ms_ease-in_520ms_forwards]"
+      className="pointer-events-none fixed inset-0 z-50 flex items-center justify-center bg-background [animation:app-splash-out_180ms_ease-in_150ms_forwards]"
     >
       <svg
         width={56}

@@ -110,11 +110,6 @@ export function LiftChart({ points }: { points: LiftPoint[] }) {
   );
 }
 
-/** Enough sessions to draw at all (S79 rule 4). Shared so both callers agree. */
-export function enoughSessions(points: LiftPoint[]): boolean {
-  return points.filter((p) => p.e1rm !== null || p.repBand !== null).length >= MIN_LIFT_SESSIONS;
-}
-
 export type PinnedLift = { id: string; name: string; points: LiftPoint[] };
 
 const LIFT_COLOURS = 4;

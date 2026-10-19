@@ -8,7 +8,7 @@
  */
 
 import { revalidatePath } from "next/cache";
-import { createClient } from "@/lib/supabase/server";
+import { authUser, createClient } from "@/lib/supabase/server";
 import { toWeighIn, type WeighIn } from "@/lib/weight";
 import { serverToday } from "@/lib/server-time";
 
@@ -31,9 +31,7 @@ export async function saveWeighIn(
   note?: string | null,
 ): Promise<{ error: string | null }> {
   const supabase = await createClient();
-  const {
-    data: { user },
-  } = await supabase.auth.getUser();
+  const user = await authUser(supabase);
   if (!user) return { error: "Not signed in" };
 
   if (!/^\d{4}-\d{2}-\d{2}$/.test(date)) return { error: "Not a valid date" };
@@ -74,9 +72,7 @@ export async function saveWeighIn(
  */
 export async function deleteWeighIn(date: string): Promise<{ error: string | null }> {
   const supabase = await createClient();
-  const {
-    data: { user },
-  } = await supabase.auth.getUser();
+  const user = await authUser(supabase);
   if (!user) return { error: "Not signed in" };
 
   if (!/^\d{4}-\d{2}-\d{2}$/.test(date)) return { error: "Not a valid date" };
@@ -138,9 +134,7 @@ export async function pinExercise(
   pinned: boolean,
 ): Promise<{ error: string | null }> {
   const supabase = await createClient();
-  const {
-    data: { user },
-  } = await supabase.auth.getUser();
+  const user = await authUser(supabase);
   if (!user) return { error: "Not signed in" };
 
   const { error } = pinned

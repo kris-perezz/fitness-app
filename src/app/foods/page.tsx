@@ -1,4 +1,4 @@
-import { createClient, must } from "@/lib/supabase/server";
+import { authUser, createClient, must } from "@/lib/supabase/server";
 import type { Food } from "@/lib/food";
 import { toMicros } from "@/lib/micros";
 import { FoodShelf } from "@/components/food-shelf";
@@ -16,9 +16,7 @@ type CatalogRow = Food & { created_by: string | null; supersedes: string | null 
  */
 export default async function FoodsPage() {
   const supabase = await createClient();
-  const {
-    data: { user },
-  } = await supabase.auth.getUser();
+  const user = await authUser(supabase);
   if (!user) return <FoodShelf foods={[]} />;
 
   const data = must(

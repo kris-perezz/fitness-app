@@ -1,11 +1,10 @@
-import { createClient, must } from "@/lib/supabase/server";
+import { authUser, createClient, must } from "@/lib/supabase/server";
+import { catalog, visibleFoods } from "@/lib/catalog";
 import {
   LOG_WINDOW_DAYS,
   shiftDate,
-  type Food,
   type IntakeEntry,
 } from "@/lib/food";
-import { toMicros } from "@/lib/micros";
 import { toDayGoal, withTodayGoal } from "@/lib/goals";
 import { LogScreen } from "@/components/log-screen";
 import { serverToday } from "@/lib/server-time";
@@ -13,7 +12,6 @@ import { serverToday } from "@/lib/server-time";
 export const dynamic = "force-dynamic";
 
 /** A row as it comes out of the catalog, before the supersede filter below. */
-type CatalogRow = Food & { created_by: string | null; supersedes: string | null };
 
 /**
  * A WINDOW, FETCHED ONCE, EXTENDED BEFORE ITS EDGE -- the same contract the
@@ -49,10 +47,11 @@ export default async function LogPage({
   const to = ahead > today ? today : ahead;
 
   const supabase = await createClient();
+  const user = await authUser(supabase);
 
-  const [foods, entries, dayGoals, settings, { data: auth }] =
+  const [foods, entries, dayGoals, settings] =
     await Promise.all([
-      supabase.from("foods").select("*").order("name").then(must),
+      catalog(supabase, user?.id ?? null).then(must),
       supabase
         .from("intake_entries")
         .select("*")
@@ -78,7 +77,6 @@ export default async function LogPage({
         .select("strict_mode, calorie_goal, protein_goal_g, carb_goal_g, fat_goal_g")
         .maybeSingle()
         .then(must),
-      supabase.auth.getUser(),
     ]);
 
   return (
@@ -86,7 +84,7 @@ export default async function LogPage({
       date={date}
       loadedFrom={from}
       loadedTo={to}
-      foods={visibleFoods((foods ?? []) as CatalogRow[], auth.user?.id ?? null)}
+      foods={visibleFoods(foods ?? [], user?.id ?? null)}
       entries={(entries ?? []) as IntakeEntry[]}
       dayGoals={withTodayGoal(
         (dayGoals ?? []).map(toDayGoal),
@@ -96,25 +94,4 @@ export default async function LogPage({
       strictMode={settings?.strict_mode === true}
     />
   );
-}
-
-/**
- * Hide the rows this user has corrected (S7). A fork carries `supersedes`, and
- * the original is only hidden from whoever wrote the fork -- everybody else
- * still sees the row they have been using, because a correction is one person's
- * reading of one package, not a fact about the catalog.
- */
-function visibleFoods(rows: CatalogRow[], userId: string | null): Food[] {
-  const corrected = new Set(
-    rows
-      .filter((r) => userId !== null && r.created_by === userId && r.supersedes)
-      .map((r) => r.supersedes as string),
-  );
-  return rows
-    .filter((r) => !corrected.has(r.id))
-    // S36. `micros` is jsonb, so what comes back is whatever is stored -- not
-    // necessarily the vocabulary this app recognises. Narrowed here, at the one
-    // boundary where a database value becomes a `Food`, so nothing downstream
-    // has to wonder whether a key is one of ours.
-    .map((r) => ({ ...r, micros: toMicros(r.micros) }));
 }

@@ -9,7 +9,7 @@
  */
 
 import { revalidatePath } from "next/cache";
-import { createClient } from "@/lib/supabase/server";
+import { authUser, createClient } from "@/lib/supabase/server";
 import { clearOpenWorkoutCookie, setOpenWorkoutCookie } from "@/lib/open-workout-cookie";
 import type { Exercise, SetType } from "@/lib/training";
 import { serverToday } from "@/lib/server-time";
@@ -31,9 +31,7 @@ export async function openWorkoutOn(
   date: string,
 ): Promise<{ id: string | null; error: string | null }> {
   const supabase = await createClient();
-  const {
-    data: { user },
-  } = await supabase.auth.getUser();
+  const user = await authUser(supabase);
   if (!user) return { id: null, error: "Not signed in" };
 
   if (!/^\d{4}-\d{2}-\d{2}$/.test(date)) return { id: null, error: "Not a valid date" };
@@ -94,9 +92,7 @@ export async function openWorkoutOn(
  */
 export async function closeStaleWorkouts(): Promise<{ error: string | null }> {
   const supabase = await createClient();
-  const {
-    data: { user },
-  } = await supabase.auth.getUser();
+  const user = await authUser(supabase);
   if (!user) return { error: "Not signed in" };
 
   const failed = await closeStaleWorkout(supabase, user.id, await serverToday());
@@ -108,9 +104,7 @@ export async function closeStaleWorkouts(): Promise<{ error: string | null }> {
 
 export async function finishWorkout(id: string) {
   const supabase = await createClient();
-  const {
-    data: { user },
-  } = await supabase.auth.getUser();
+  const user = await authUser(supabase);
   if (!user) return { error: "Not signed in" };
 
   const failed = await closeWorkout(supabase, id, user.id);
@@ -128,9 +122,7 @@ export async function finishWorkout(id: string) {
  */
 export async function discardWorkout(id: string) {
   const supabase = await createClient();
-  const {
-    data: { user },
-  } = await supabase.auth.getUser();
+  const user = await authUser(supabase);
   if (!user) return { error: "Not signed in" };
 
   const { error } = await supabase.from("workouts").delete().eq("id", id).eq("user_id", user.id);
@@ -199,9 +191,7 @@ export type SetInput = {
  */
 export async function logSet(workoutExerciseId: string, input: SetInput) {
   const supabase = await createClient();
-  const {
-    data: { user },
-  } = await supabase.auth.getUser();
+  const user = await authUser(supabase);
   if (!user) return { error: "Not signed in" };
 
   const invalid = validateSet(input);
@@ -294,9 +284,7 @@ export async function createExercise(input: {
   equipment: string | null;
 }): Promise<{ exercise: Exercise | null; error: string | null }> {
   const supabase = await createClient();
-  const {
-    data: { user },
-  } = await supabase.auth.getUser();
+  const user = await authUser(supabase);
   if (!user) return { exercise: null, error: "Not signed in" };
 
   const name = input.name.trim();

@@ -527,3 +527,8 @@ export function liftHistory(
 export function hasRepBand(points: LiftPoint[]): boolean {
   return points.some((p) => p.repBand !== null);
 }
+
+/** Enough sessions to draw at all (S79 rule 4). Shared so both callers agree. */
+export function enoughSessions(points: LiftPoint[]): boolean {
+  return points.filter((p) => p.e1rm !== null || p.repBand !== null).length >= MIN_LIFT_SESSIONS;
+}

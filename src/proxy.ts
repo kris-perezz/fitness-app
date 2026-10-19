@@ -22,9 +22,10 @@ export async function proxy(request: NextRequest) {
     },
   );
 
-  const {
-    data: { user },
-  } = await supabase.auth.getUser();
+  // Claims, not getUser(): verified from the token without a round trip to
+  // Supabase on every request, once the project uses asymmetric signing keys.
+  const { data } = await supabase.auth.getClaims();
+  const user = data?.claims.sub ?? null;
 
   const { pathname } = request.nextUrl;
   // `/api/health` is public HERE and authenticated by the route itself, which

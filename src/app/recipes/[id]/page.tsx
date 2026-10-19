@@ -1,5 +1,6 @@
 import { notFound } from "next/navigation";
-import { createClient, must } from "@/lib/supabase/server";
+import { authUser, createClient, must } from "@/lib/supabase/server";
+import { catalog, visibleFoods } from "@/lib/catalog";
 import type { Food } from "@/lib/food";
 import type { RecipeRow } from "@/app/actions";
 import { recipeFoodId } from "@/lib/recipe";
@@ -10,6 +11,7 @@ export const dynamic = "force-dynamic";
 export default async function RecipePage({ params }: PageProps<"/recipes/[id]">) {
   const { id } = await params;
   const supabase = await createClient();
+  const user = await authUser(supabase);
 
   const [recipe, ingredients, foods] = await Promise.all([
     // RLS scopes this to the caller, so somebody else's recipe id is a 404
@@ -22,7 +24,7 @@ export default async function RecipePage({ params }: PageProps<"/recipes/[id]">)
       .eq("recipe_id", id)
       .order("sort_order", { ascending: true })
       .then(must),
-    supabase.from("foods").select("*").order("name").then(must),
+    catalog(supabase, user?.id ?? null).then(must),
   ]);
 
   if (!recipe) notFound();
@@ -41,7 +43,7 @@ export default async function RecipePage({ params }: PageProps<"/recipes/[id]">)
     <RecipeEditor
       recipe={recipe as RecipeRow}
       lines={lines}
-      foods={((foods ?? []) as Food[]).filter((food) => food.id !== recipeFoodId(id))}
+      foods={visibleFoods(foods ?? [], user?.id ?? null).filter((food) => food.id !== recipeFoodId(id))}
     />
   );
 }
