@@ -53,3 +53,6 @@ supabase/personal/
 
 # eval harness: raw API responses, re-scoreable, not worth versioning
 /scripts/eval/runs/
+
+# Work set aside for later, kept locally and out of the repo.
+/docs/parked/
