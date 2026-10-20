@@ -323,13 +323,13 @@ export async function createExercise(input: {
 
 /**
  * "Low To High Cable Fly" -> "Low to high cable fly", matching the catalog.
- * Words already in capitals (RDL, EZ) are left as typed.
+ * Words with two capitals in a row (RDL, EZ-bar) are left as typed.
  */
 function sentenceCase(name: string): string {
   return name
     .split(/\s+/)
     .map((word, i) => {
-      if (/^[A-Z0-9]{2,}$/.test(word)) return word;
+      if (/[A-Z]{2}/.test(word)) return word;
       const lower = word.toLowerCase();
       return i === 0 ? lower.charAt(0).toUpperCase() + lower.slice(1) : lower;
     })

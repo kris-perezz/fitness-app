@@ -276,7 +276,7 @@ export function countLabel(food: Food, n: number): string {
   return food.unit;
 }
 
-const MEASURES = new Set(["g", "ml", "mg", "kg", "oz", "lb", "l"]);
+const MEASURES = new Set(["g", "ml", "mg", "kg", "oz", "lb", "l", "tbsp", "tsp"]);
 // Weighed entries store the spelled-out unit; a log row reads better short.
 const SHORT: Record<string, string> = { grams: "g", millilitres: "ml" };
 
