@@ -97,6 +97,8 @@ export function VolumeBars({ volume, scale }: { volume: MuscleVolume[]; scale: n
             offset={6}
             fontSize={11}
             className="fill-muted-foreground tabular-nums"
+            // The empty row already says zero; a printed 0 on each is noise.
+            formatter={(v) => (v === 0 ? "" : v)}
           />
         </Bar>
 

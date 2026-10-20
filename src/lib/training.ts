@@ -413,7 +413,7 @@ export function suggestFor(
   if (prior) {
     return {
       draft: { reps: prior.reps, load_lb: prior.load_lb, set_type: "straight" },
-      from: `Set ${prior.set_index + 1} today`,
+      from: "Last set",
       detail: loadReps(prior.load_lb, prior.reps, unit),
     };
   }

@@ -12,7 +12,6 @@ import {
   WINDOW_MONTHS,
   shiftMonth,
   shortDate,
-  trim,
   type MuscleVolume,
 } from "@/lib/training";
 import dynamic from "next/dynamic";
@@ -189,6 +188,19 @@ export function TrainHome({
     else setAdding(date);
   }
 
+  const [starting, startStarting] = useTransition();
+  function startToday() {
+    if (starting) return;
+    startStarting(async () => {
+      const res = await reach(openWorkoutOn(today));
+      if (res.error || !res.id) {
+        toast.error(res.error ?? "Couldn't start the session");
+        return;
+      }
+      router.push(`/train/${res.id}`);
+    });
+  }
+
   // S53. Forgetting to press Finish is the normal case -- the last thing you do
   // in a gym is leave -- so a session left open on an earlier day is closed on
   // sight rather than waiting for the next deliberate action. Guarded by a ref
@@ -230,9 +242,19 @@ export function TrainHome({
               </Link>
             </Button>
           ) : (
-            <Button className="h-12 w-full text-base" onClick={() => setAdding(today)}>
-              <CalendarPlus className="size-4" /> Add session
-            </Button>
+            <div className="flex gap-2">
+              <Button className="h-12 flex-1 text-base" disabled={starting} onClick={startToday}>
+                <Play className="size-4" />
+                {starting ? "Opening" : byDate.has(today) ? "Open today's session" : "Start today's workout"}
+              </Button>
+              <Button
+                variant="outline"
+                className="h-12"
+                onClick={() => setAdding(dateKey(new Date(toDate(today).getTime() - 864e5)))}
+              >
+                <CalendarPlus className="size-4" /> Past day
+              </Button>
+            </div>
           )}
         </header>
 
@@ -240,7 +262,7 @@ export function TrainHome({
             chart is the one block on this screen that actually uses extra
             width, the same role the trend chart plays on the progress tab. */}
         <div className="space-y-2">
-        <MonthVolume volume={monthVolume} month={month} scale={volumeScale} />
+        <MonthVolume volume={monthVolume} month={month} today={today} scale={volumeScale} />
         </div>
 
         {/* THE CALENDAR COLUMN. Fixed-width on desktop (PAGE_SPLIT's 22rem),
@@ -309,8 +331,7 @@ export function TrainHome({
               </EmptyMedia>
               <EmptyTitle>Nothing logged this month</EmptyTitle>
               <EmptyDescription>
-                Filled days are days you trained. Tap any day up to today, or use
-                Add session above.
+                Filled days are training days. Tap a day to log it.
               </EmptyDescription>
             </EmptyHeader>
           </Empty>
@@ -490,10 +511,12 @@ function PickDay({
 function MonthVolume({
   volume,
   month,
+  today,
   scale,
 }: {
   volume: MuscleVolume[];
   month: string;
+  today: string;
   /** The shared denominator across every loaded month. See `volumeScale`. */
   scale: number;
 }) {
@@ -501,12 +524,9 @@ function MonthVolume({
 
   return (
     <Card className={cn(SURFACE, SURFACE_PAD)}>
-      <div className="flex items-baseline justify-between gap-2">
-        <h2 className="text-xs font-semibold uppercase tracking-[0.08em] text-muted-foreground">
-          Sets per muscle
-        </h2>
-        <span className="text-xs tabular-nums text-muted-foreground">{trim(total)} total</span>
-      </div>
+      <h2 className="text-xs font-semibold uppercase tracking-[0.08em] text-muted-foreground">
+        Sets per muscle · {monthTitle(month, today)}
+      </h2>
 
       {total === 0 ? (
         <p className="mt-2 text-xs text-muted-foreground">
@@ -514,9 +534,20 @@ function MonthVolume({
           directly, and half for each one it helps.
         </p>
       ) : (
-        <VolumeBars volume={volume} scale={scale} />
+        <>
+          <VolumeBars volume={volume} scale={scale} />
+          <p className="text-xs text-muted-foreground">Assisting muscles count half a set.</p>
+        </>
       )}
     </Card>
+  );
+}
+
+/** "October", or "October 2025" outside the current year. */
+function monthTitle(month: string, today: string): string {
+  return toDate(month).toLocaleDateString(
+    "en-US",
+    month.startsWith(today.slice(0, 4)) ? { month: "long" } : { month: "long", year: "numeric" },
   );
 }
 

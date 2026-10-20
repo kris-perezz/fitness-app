@@ -251,9 +251,8 @@ export function TrainScreen({
           <Plus className="size-4" /> Add exercise
         </Button>
 
-        <ButtonGroup className="w-full">
+        <div className="flex w-full gap-3">
           <Button
-            variant="outline"
             className="h-11 flex-1"
             disabled={pending}
             onClick={() =>
@@ -261,7 +260,8 @@ export function TrainScreen({
               workout.ended_at
                 ? router.replace("/train?browse=1")
                 : run(() => reach(finishWorkout(workout.id)), () => {
-                    toast.success("Session finished");
+                    // The server deletes a session with no lifts rather than keeping it.
+                    toast.success(slots.length === 0 ? "Empty session discarded" : "Session finished");
                     router.replace("/train");
                   })
             }
@@ -288,7 +288,8 @@ export function TrainScreen({
             trigger={
               <Button
                 size="icon-xl"
-                variant="destructive"
+                variant="outline"
+                className="text-destructive"
                 aria-label={allSets === 0 ? "Discard session" : "Delete session"}
                 disabled={pending}
               >
@@ -296,7 +297,7 @@ export function TrainScreen({
               </Button>
             }
           />
-        </ButtonGroup>
+        </div>
       </main>
 
       <ExercisePicker
@@ -502,14 +503,17 @@ function SlotSection({
           and it keeps the columns aligned down the session the way the food
           list keeps calories aligned. */}
       {sets.length > 0 && (
-        <Table>
+        // Fixed layout, so every card's columns line up down the session.
+        <Table className="table-fixed">
           <TableHeader>
             <TableRow className="hover:bg-transparent">
-              <TableHead className="w-10 pl-5">#</TableHead>
+              <TableHead className="w-12 pl-5">#</TableHead>
               <TableHead>{exercise?.load_is_per_side ? "Load / side" : "Load"}</TableHead>
-              <TableHead>Reps</TableHead>
-              <TableHead>RIR</TableHead>
-              <TableHead className="w-14 pr-3">
+              <TableHead className="w-16">Reps</TableHead>
+              <TableHead className="w-14">
+                <abbr title="Reps in reserve" className="no-underline">RIR</abbr>
+              </TableHead>
+              <TableHead className="w-16 pr-3">
                 <span className="sr-only">Edit</span>
               </TableHead>
             </TableRow>
@@ -778,6 +782,13 @@ function SetForm({
   }
 
   return (
+    // A form, so the keyboard's Go key logs the set.
+    <form
+      onSubmit={(e) => {
+        e.preventDefault();
+        if (ready) submit();
+      }}
+    >
     <Card size="sm">
       <CardHeader>
         <CardTitle className="text-xs font-medium">{title}</CardTitle>
@@ -785,9 +796,8 @@ function SetForm({
           // CardAction, not a sibling span: the header grid grows a second
           // column on its own when this slot is present, so the badge lands
           // right-aligned without a justify-between that the title has to fight.
-          <CardAction className="flex items-center gap-1.5 text-xs text-muted-foreground">
-            <Badge variant="outline">{suggestion.from}</Badge>
-            <span className="tabular-nums">{suggestion.detail}</span>
+          <CardAction className="text-xs tabular-nums text-muted-foreground">
+            {suggestion.from}: {suggestion.detail}
           </CardAction>
         )}
       </CardHeader>
@@ -807,6 +817,7 @@ function SetForm({
             value={load}
             onChange={(e) => edit("load", setLoad)(e.target.value)}
             onFocus={selectSuggested("load")}
+            autoFocus
             className={`h-12 text-base tabular-nums${tone("load", load)}`}
             // "BW" is an answer, so it is only offered where it is a true one.
             placeholder={bodyweight ? "BW" : "—"}
@@ -830,12 +841,12 @@ function SetForm({
             placeholder="—"
           />
         </Field>
-        <Field className="w-16 shrink-0 gap-1">
+        <Field className="w-20 shrink-0 gap-1">
           <FieldLabel
             htmlFor={`rir_${title}`}
             className="text-xs font-normal text-muted-foreground"
           >
-            RIR
+            Reps left
           </FieldLabel>
           <Input
             id={`rir_${title}`}
@@ -868,25 +879,28 @@ function SetForm({
           Warm-up
         </Toggle>
 
-        <ButtonGroup className="ml-auto">
-          {onDelete && (
-            <Button
-              size="icon-xl"
-              variant="destructive"
-              aria-label="Delete this set"
-              onClick={onDelete}
-            >
-              <Trash2 className="size-4" />
-            </Button>
-          )}
-          <Button variant="outline" className="h-10" onClick={onCancel}>
+        {onDelete && (
+          <Button
+            type="button"
+            size="icon-xl"
+            variant="ghost"
+            className="ml-auto text-destructive"
+            aria-label="Delete this set"
+            onClick={onDelete}
+          >
+            <Trash2 className="size-4" />
+          </Button>
+        )}
+        <ButtonGroup className={onDelete ? "" : "ml-auto"}>
+          <Button type="button" variant="outline" className="h-10" onClick={onCancel}>
             Cancel
           </Button>
-          <Button className="h-10" disabled={!ready} onClick={submit}>
+          <Button type="submit" className="h-10" disabled={!ready}>
             <Check className="size-4" /> {confirmLabel}
           </Button>
         </ButtonGroup>
       </CardFooter>
     </Card>
+    </form>
   );
 }
