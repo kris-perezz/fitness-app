@@ -4,7 +4,7 @@ import { useMemo, useState, useTransition } from "react";
 import { ChevronLeft, Package, Plus, Search } from "lucide-react";
 import { saveScannedFood } from "@/app/actions";
 import { reach } from "@/lib/reach";
-import { basisLabel, searchFoods, show, type Food } from "@/lib/food";
+import { basisLabel, searchFoods, type Food } from "@/lib/food";
 import { FoodPicker, type PickerStep } from "@/components/food-picker";
 import { EditFoodSheet } from "@/components/edit-food-sheet";
 import { FoodSourceBadge } from "@/components/food-source-badge";
