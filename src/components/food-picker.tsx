@@ -359,7 +359,7 @@ function CnfSection({ query, onPick }: { query: string; onPick: (food: Food) => 
           linked where feasible, and the grant ends automatically if it is not.
           It sits with the results rather than in an About screen because this
           is the screen where the information is actually used. */}
-      <p className="px-5 pt-1 text-[11px] text-muted-foreground">
+      <p className="px-5 pt-1 text-xs text-muted-foreground">
         {CNF_ATTRIBUTION}{" "}
         <a
           href={CNF_LICENCE_URL}

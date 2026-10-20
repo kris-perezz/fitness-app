@@ -148,7 +148,7 @@ export function MonthLog({
           verdict: the same token appears here whether the month ran over or
           under, exactly as it does on every one of the month's days. */}
       {strictMode && (
-        <div className="flex items-center justify-center gap-3 px-1 text-[11px] text-muted-foreground">
+        <div className="flex items-center justify-center gap-3 px-1 text-xs text-muted-foreground">
           {RING_LEGEND.map(({ key, label, dot }) => (
             <span key={key} className="flex items-center gap-1">
               <span aria-hidden className={cn("size-1.5 rounded-full", dot)} />
@@ -221,11 +221,11 @@ export function MonthLog({
           mode="single"
           className={cn(
             "bg-transparent p-0",
-            // 32px square in calm, matching train-home.tsx and
+            // 44px square in calm, a full touch target, matching train-home.tsx and
             // progress-home.tsx exactly. 52px in strict mode, which is the
             // widest a column can be here: the page gutter and this card's
             // padding take 24px of a 393px phone, and 369 / 7 is 52.7.
-            strictMode ? "[--cell-size:--spacing(13)]" : "[--cell-size:--spacing(8)]",
+            strictMode ? "[--cell-size:--spacing(13)]" : "[--cell-size:--spacing(11)]",
           )}
         />
       </Card>

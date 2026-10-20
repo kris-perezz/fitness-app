@@ -6,8 +6,8 @@ import { useRouter } from "next/navigation";
 import Link from "next/link";
 import {
   BookmarkPlus,
+  CalendarDays,
   ChartNoAxesColumn,
-  ChevronDown,
   ChevronLeft,
   ChevronRight,
   CookingPot,
@@ -237,10 +237,8 @@ export function LogScreen({
             <ChevronLeft className="size-5" />
           </Button>
 
-          {/* S103. The one way into the month view -- a chevron beside the
-              date rather than a second calendar icon competing with Recipes
-              and Trends for the same row. The date text stays the label; the
-              chevron is the whole affordance. */}
+          {/* S103. The one way into the month view: the date itself, with a
+              calendar beside it to say a tap opens one. */}
           <h1 className="flex-1">
             <Button
               variant="ghost"
@@ -249,7 +247,7 @@ export function LogScreen({
             >
               <Link href="/log/month" prefetch>
                 {label}
-                <ChevronDown className="size-4 text-muted-foreground" />
+                <CalendarDays className="size-4 text-muted-foreground" />
               </Link>
             </Button>
           </h1>
@@ -269,28 +267,24 @@ export function LogScreen({
             >
               <ChevronRight className="size-5" />
             </Button>
-            {/* Foods, Recipes and Trends are Food-section destinations with no
-                tab of their own (see bottom-nav.tsx), so this header is the way
-                in. They sit after the day arrows because they are not part of
-                them -- and Trends sits last because it is the one that leaves
-                today behind entirely. */}
-            <Button size="icon-xl" variant="ghost" aria-label="Foods" asChild>
-              <Link href="/foods" prefetch>
-                <Package className="size-5" />
-              </Link>
-            </Button>
-            <Button size="icon-xl" variant="ghost" aria-label="Recipes" asChild>
-              <Link href="/recipes">
-                <CookingPot className="size-5" />
-              </Link>
-            </Button>
-            <Button size="icon-xl" variant="ghost" aria-label="Trends" asChild>
-              <Link href="/trends">
-                <ChartNoAxesColumn className="size-5" />
-              </Link>
-            </Button>
           </div>
         </header>
+
+        {/* Food-section destinations with no tab of their own (see
+            bottom-nav.tsx). Labeled, because three bare icons read as a guess. */}
+        <nav aria-label="Food tools" className="grid grid-cols-3 gap-2">
+          {[
+            { href: "/foods", label: "My foods", Icon: Package },
+            { href: "/recipes", label: "Recipes", Icon: CookingPot },
+            { href: "/trends", label: "Trends", Icon: ChartNoAxesColumn },
+          ].map(({ href, label: text, Icon }) => (
+            <Button key={href} variant="secondary" className="h-11 text-sm" asChild>
+              <Link href={href}>
+                <Icon className="size-4" /> {text}
+              </Link>
+            </Button>
+          ))}
+        </nav>
 
         {needsTargets && (
           <Card className={cn(SURFACE, SURFACE_PAD, "flex-row items-center justify-between gap-3")}>
@@ -306,6 +300,9 @@ export function LogScreen({
 
         <Card className={cn(SURFACE, SURFACE_PAD)}>
           <CalorieRing consumed={totals.kcal} goal={calorieGoal} finished={finished} tone={tone} />
+          {finished && dayEntries.length === 0 && (
+            <p className="mt-2 text-center text-sm text-muted-foreground">Nothing logged this day</p>
+          )}
 
           <div className="mt-4 grid grid-cols-3 gap-2">
             <MacroMeter
@@ -386,7 +383,8 @@ export function LogScreen({
                   as a form rather than as a day. */}
               <Button
                 variant="ghost"
-                className="h-10 w-full justify-start px-3.5 text-sm font-normal text-muted-foreground"
+                className="h-11 w-full justify-start px-3.5 text-sm font-medium text-primary"
+                aria-label={`Add food to ${meal}`}
                 onClick={() => setAddingTo(meal)}
               >
                 <Plus className="size-4" /> Add food
@@ -475,12 +473,11 @@ function MacroMeter({
   const against = tone === "strict" ? goal : null;
   // Graded on the rounded figures the tile prints, so 55.4 g against a 55 g
   // share is not painted over a goal the reader can see it is sitting on.
-  const paint = toneOf(
-    metric,
-    statusOf(metric, round(value), against === null ? null : round(against), finished),
-    tone,
-  );
+  const status = statusOf(metric, round(value), against === null ? null : round(against), finished);
+  const paint = toneOf(metric, status, tone);
   const paintClass = PAINT[paint];
+  // Words beside the colour, so the grade never rests on hue alone.
+  const word = paint === "none" ? null : status === "over" ? "over" : status === "short" ? "short" : "met";
 
   return (
     // A TILE, not a line. Label-left value-right across a third of the width
@@ -488,7 +485,7 @@ function MacroMeter({
     // and the three of them then read across as one run-on string. Bounds and a
     // stack are what separate them.
     <div className="py-1 text-center">
-      <div className="text-[11px] uppercase tracking-[0.06em] text-muted-foreground">
+      <div className="text-xs uppercase tracking-[0.06em] text-muted-foreground">
         {label}
       </div>
       <div className={cn("mt-1 text-xl font-semibold leading-none tabular-nums", paintClass)}>
@@ -499,6 +496,7 @@ function MacroMeter({
           <span className="text-xs font-normal text-muted-foreground"> / {round(against)} g</span>
         )}
       </div>
+      {word && <div className={cn("mt-1 text-xs", paintClass)}>{word}</div>}
     </div>
   );
 }

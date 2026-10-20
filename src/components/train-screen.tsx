@@ -531,7 +531,7 @@ function SlotSection({
                         load that would otherwise hint at it is exactly what a
                         warm-up shares with a bad day. */}
                     {set.set_type === "warmup" && (
-                      <Badge variant="secondary" className="px-1.5 text-[10px]">
+                      <Badge variant="secondary" className="px-1.5 text-xs">
                         Warm-up
                       </Badge>
                     )}
@@ -796,7 +796,7 @@ function SetForm({
         <Field className="min-w-0 flex-1 gap-1">
           <FieldLabel
             htmlFor={`load_${title}`}
-            className="text-[11px] font-normal text-muted-foreground"
+            className="text-xs font-normal text-muted-foreground"
           >
             {loadLabel(exercise, unit)}
           </FieldLabel>
@@ -815,7 +815,7 @@ function SetForm({
         <Field className="min-w-0 flex-1 gap-1">
           <FieldLabel
             htmlFor={`reps_${title}`}
-            className="text-[11px] font-normal text-muted-foreground"
+            className="text-xs font-normal text-muted-foreground"
           >
             Reps
           </FieldLabel>
@@ -833,7 +833,7 @@ function SetForm({
         <Field className="w-16 shrink-0 gap-1">
           <FieldLabel
             htmlFor={`rir_${title}`}
-            className="text-[11px] font-normal text-muted-foreground"
+            className="text-xs font-normal text-muted-foreground"
           >
             RIR
           </FieldLabel>

@@ -297,7 +297,7 @@ export function TrainHome({
             }}
             onSelect={(day) => day && open(dateKey(day))}
             mode="single"
-            className="bg-transparent p-0 [--cell-size:--spacing(8)]"
+            className="bg-transparent p-0 [--cell-size:--spacing(11)]"
           />
         </Card>
 
@@ -502,7 +502,7 @@ function MonthVolume({
   return (
     <Card className={cn(SURFACE, SURFACE_PAD)}>
       <div className="flex items-baseline justify-between gap-2">
-        <h2 className="text-[11px] font-semibold uppercase tracking-[0.08em] text-muted-foreground">
+        <h2 className="text-xs font-semibold uppercase tracking-[0.08em] text-muted-foreground">
           Sets per muscle
         </h2>
         <span className="text-xs tabular-nums text-muted-foreground">{trim(total)} total</span>

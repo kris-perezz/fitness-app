@@ -230,7 +230,7 @@ export function RecipeEditor({
             ].map(([label, value]) => (
               <div key={label as string}>
                 <div className="text-lg tabular-nums">{value}</div>
-                <div className="mt-0.5 text-[11px] text-muted-foreground">{label}</div>
+                <div className="mt-0.5 text-xs text-muted-foreground">{label}</div>
               </div>
             ))}
           </div>

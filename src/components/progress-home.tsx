@@ -338,7 +338,7 @@ export function ProgressHome({
             }}
             onSelect={(day) => day && setEditing(dateKey(day))}
             mode="single"
-            className="bg-transparent p-0 [--cell-size:--spacing(8)]"
+            className="bg-transparent p-0 [--cell-size:--spacing(11)]"
           />
         </Card>
         </div>
@@ -468,7 +468,7 @@ function Headline({
         {/* Labelled for the same reason the trend is, and labelled DIFFERENTLY:
             below the floor this is the scale, not a trend, and the two states
             must not look like the same number changing its mind. */}
-        <p className="text-[11px] font-semibold uppercase tracking-[0.08em] text-muted-foreground">
+        <p className="text-xs font-semibold uppercase tracking-[0.08em] text-muted-foreground">
           Last reading
         </p>
         <p className="mt-1 text-[40px] font-semibold leading-none tracking-[-0.03em] tabular-nums">
@@ -490,7 +490,7 @@ function Headline({
           question this tab exists to answer -- which of these am I? The word
           used to be on the third line, attached to the rate, where it labelled
           the wrong number. */}
-      <p className="text-[11px] font-semibold uppercase tracking-[0.08em] text-muted-foreground">
+      <p className="text-xs font-semibold uppercase tracking-[0.08em] text-muted-foreground">
         Trend weight
       </p>
       {/* Both weights to one decimal. `trim` drops a trailing .0, which printed
@@ -692,7 +692,7 @@ function PinnedLiftsBlock({ pinned, unit }: { pinned: PinnedLift[]; unit: Displa
     <Card className={cn(SURFACE, SURFACE_PAD)}>
       <div className="flex items-baseline justify-between gap-2">
         <h2 className="text-[17px] font-semibold tracking-[-0.01em]">Pinned lifts</h2>
-        <span className="text-[11px] font-semibold uppercase tracking-[0.08em] text-muted-foreground">
+        <span className="text-xs font-semibold uppercase tracking-[0.08em] text-muted-foreground">
           Estimated 1RM
         </span>
       </div>
@@ -786,7 +786,7 @@ function WeightChart({
   return (
     <Card className={cn(SURFACE, SURFACE_PAD)}>
       <div className="flex items-center justify-between gap-3">
-        <h2 className="text-[11px] font-semibold uppercase tracking-[0.08em] text-muted-foreground">
+        <h2 className="text-xs font-semibold uppercase tracking-[0.08em] text-muted-foreground">
           {chartWindow(windowKey).title}
         </h2>
         {/* One container with a moving selection, not five outlined chips in a

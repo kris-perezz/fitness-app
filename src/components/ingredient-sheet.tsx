@@ -248,7 +248,7 @@ function IngredientQtyStep({
           {previewRows.map(([label, value]) => (
             <div key={label}>
               <dd className="text-lg tabular-nums">{value ?? "-"}</dd>
-              <dt className="mt-0.5 text-[11px] text-muted-foreground">{label}</dt>
+              <dt className="mt-0.5 text-xs text-muted-foreground">{label}</dt>
             </div>
           ))}
         </dl>

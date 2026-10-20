@@ -446,7 +446,7 @@ function QtyStep({
           {previewRows.map((row) => (
             <div key={row.label}>
               <dd className="text-lg tabular-nums">{row.value ?? "-"}</dd>
-              <dt className="mt-0.5 text-[11px] text-muted-foreground">{row.label}</dt>
+              <dt className="mt-0.5 text-xs text-muted-foreground">{row.label}</dt>
             </div>
           ))}
         </dl>
