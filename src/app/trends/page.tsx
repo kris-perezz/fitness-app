@@ -24,7 +24,7 @@ export default async function TrendsPage() {
   const today = await serverToday();
   const { from, to } = trendsWindow(today, TREND_DAYS);
 
-  const [days, settings, dayGoals, top] = await Promise.all([
+  const [days, settings, dayGoals, top, { estimate }] = await Promise.all([
     supabase
       .from("intake_days")
       .select("log_date, kcal, protein_g, estimate_count, item_count")
@@ -51,9 +51,8 @@ export default async function TrendsPage() {
     // exist, and one missing section is a better failure than a blank screen
     // where the two charts above it would have worked.
     supabase.rpc("top_foods", { from_date: from, to_date: to, row_limit: 10 }),
+    loadExpenditure(supabase, today),
   ]);
-
-  const { estimate } = await loadExpenditure(supabase, today, settings?.strict_mode === true);
 
   const rows = (days ?? []) as IntakeDay[];
   // S79. THE GOAL LINES ARE A STRICT-MODE IDEA, here as much as on the log
