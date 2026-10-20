@@ -71,6 +71,9 @@ export function RecipeList({ recipes }: { recipes: RecipeSummary[] }) {
             <ChevronLeft className="size-5" />
           </Button>
           <span className="text-sm font-medium">Recipes</span>
+          <Button variant="outline" className="ml-auto h-11" onClick={() => setNaming(true)}>
+            <Plus className="size-4" /> New recipe
+          </Button>
         </header>
 
         {recipes.length === 0 && (
@@ -120,10 +123,6 @@ export function RecipeList({ recipes }: { recipes: RecipeSummary[] }) {
             </ul>
           </Card>
         )}
-
-        <Button variant="outline" className="h-11 w-full" onClick={() => setNaming(true)}>
-          <Plus className="size-4" /> New recipe
-        </Button>
       </main>
 
       <NewRecipeSheet open={naming} onOpenChange={setNaming} />
