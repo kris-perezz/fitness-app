@@ -124,12 +124,12 @@ export function LiftChart({ points: stored, unit }: { points: LiftPoint[]; unit:
             content={
               <ChartTooltipContent
                 labelFormatter={(_, payload) => shortDate(String(payload[0]?.payload?.date))}
-                formatter={(value, name, item) =>
+                formatter={(value, name) =>
                   value == null ? null : (
                     <>
                       <div
                         className="h-2.5 w-2.5 shrink-0 rounded-[2px]"
-                        style={{ background: item.color }}
+                        style={{ background: `var(--color-${name})` }}
                       />
                       <span className="text-muted-foreground">
                         {config[name as keyof typeof config]?.label ?? name}

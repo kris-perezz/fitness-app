@@ -280,7 +280,7 @@ export function LogScreen({
             { href: "/trends", label: "Trends", Icon: ChartNoAxesColumn },
           ].map(({ href, label: text, Icon }) => (
             <Button key={href} variant="secondary" className="h-11 text-sm" asChild>
-              <Link href={href}>
+              <Link href={href} prefetch>
                 <Icon className="size-4" /> {text}
               </Link>
             </Button>
