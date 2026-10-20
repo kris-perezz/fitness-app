@@ -235,16 +235,24 @@ export function ProgressHome({
   // The gesture's own path to the same delete the weigh-in sheet offers. It
   // drops the row from the window in place, exactly as the sheet's `onDeleted`
   // does, so the chart and the calendar follow without a refetch.
+  const parkedDeletes = useRef(new Map<string, () => void>());
+  function openWeighIn(date: string) {
+    parkedDeletes.current.get(date)?.();
+    parkedDeletes.current.delete(date);
+    setEditing(date);
+  }
+
   function removeWeighIn(date: string) {
     const entry = entries.find((e) => e.date === date);
     if (!entry) return;
-    deleteWithUndo({
+    const commitNow = deleteWithUndo({
       message: `Deleted ${shortDate(date)}`,
       hide: () => setEntries((prev) => prev.filter((e) => e.date !== date)),
       // The list sorts itself by date, so order does not need restoring.
       restore: () => setEntries((prev) => [...prev, entry]),
       commit: () => reach(deleteWeighIn(date)),
     });
+    parkedDeletes.current.set(date, commitNow);
   }
 
   return (
@@ -255,7 +263,7 @@ export function ProgressHome({
             have already done. Spans both desktop columns -- it is not the
             trend's action or the calendar's, it is the screen's. */}
         <header className="pt-1 lg:order-1 lg:col-span-2">
-          <Button className="h-12 w-full text-base" onClick={() => setEditing(today)}>
+          <Button className="h-12 w-full text-base" onClick={() => openWeighIn(today)}>
             <Scale className="size-4" />
             {byDate.has(today) ? `Weighed in · ${toDisplay(byDate.get(today)!.weightLb, unit).toFixed(1)} ${unit}` : "Weigh in"}
           </Button>
@@ -343,7 +351,7 @@ export function ProgressHome({
               outside: "opacity-45",
               today: "rounded-full ring-2 ring-ring ring-inset",
             }}
-            onSelect={(day) => day && setEditing(dateKey(day))}
+            onSelect={(day) => day && openWeighIn(dateKey(day))}
             mode="single"
             className="bg-transparent p-0 [--cell-size:--spacing(11)]"
           />
@@ -381,7 +389,7 @@ export function ProgressHome({
                     <ItemActions className="shrink-0 gap-3 text-right tabular-nums">
                       <button
                         type="button"
-                        onClick={() => setEditing(e.date)}
+                        onClick={() => openWeighIn(e.date)}
                         className="text-left"
                         aria-label={`Edit ${shortDate(e.date)}`}
                       >
@@ -714,7 +722,7 @@ function PinnedLiftsBlock({ pinned, unit }: { pinned: PinnedLift[]; unit: Displa
       <div className="flex items-baseline justify-between gap-2">
         <h2 className="text-[17px] font-semibold tracking-[-0.01em]">Pinned lifts</h2>
         <span className="text-xs font-semibold uppercase tracking-[0.08em] text-muted-foreground">
-          Estimated 1RM
+          Best 1RM, 6 weeks
         </span>
       </div>
 

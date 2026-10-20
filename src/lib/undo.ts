@@ -7,6 +7,9 @@ const UNDO_MS = 5000;
  * delete waits behind an Undo toast, so a mistaken swipe costs one tap rather
  * than a dialog on every intended one. Leaving the app commits straight away:
  * a delete parked in a backgrounded tab may never run.
+ *
+ * Returns a commit-now, for a caller about to write the same row again: a
+ * parked delete that lands after the rewrite would remove the new one.
  */
 export function deleteWithUndo({
   message,
@@ -18,7 +21,7 @@ export function deleteWithUndo({
   hide: () => void;
   restore: () => void;
   commit: () => Promise<{ error: string | null }>;
-}) {
+}): () => void {
   hide();
   let settled = false;
 
@@ -37,7 +40,7 @@ export function deleteWithUndo({
   }
   document.addEventListener("visibilitychange", onHidden);
 
-  toast(message, {
+  const id = toast(message, {
     duration: UNDO_MS,
     action: {
       label: "Undo",
@@ -50,4 +53,9 @@ export function deleteWithUndo({
     onAutoClose: finish,
     onDismiss: finish,
   });
+
+  return () => {
+    finish();
+    toast.dismiss(id);
+  };
 }
