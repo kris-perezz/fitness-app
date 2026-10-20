@@ -188,7 +188,7 @@ function SearchStep({
                 "what am I looking at". */}
             <ItemDescription className="flex items-center gap-1.5 text-xs">
               <span>
-                {show(f.kcal)} cal per {basisLabel(f)}
+                {Math.round(f.kcal).toLocaleString()} cal per {basisLabel(f)}
               </span>
               <FoodSourceBadge source={f.source} />
             </ItemDescription>
@@ -212,6 +212,9 @@ function SearchStep({
             placeholder="Search for a food"
             autoComplete="off"
             enterKeyHint="search"
+            // Search runs as you type, so the key's job is to put the keyboard
+            // away and show the results under it.
+            onKeyDown={(e) => e.key === "Enter" && e.currentTarget.blur()}
             className="text-base"
           />
         </InputGroup>
@@ -756,10 +759,13 @@ function LabelStep({
               <EmptyMedia variant="icon">
                 <Camera />
               </EmptyMedia>
-              <EmptyTitle>Photograph the nutrition panel</EmptyTitle>
+              <EmptyTitle>
+                {barcode === null ? "Photograph the nutrition panel" : "No match for that barcode"}
+              </EmptyTitle>
               <EmptyDescription>
-                Take a photo with the panel filling the frame, or upload one you already
-                have. Everything read off it is editable before anything is saved.
+                {barcode === null
+                  ? "Take a photo with the panel filling the frame, or upload one. You can edit every number before saving."
+                  : `Barcode ${barcode} scanned, but no database has it. Photograph its nutrition panel to add it.`}
               </EmptyDescription>
             </EmptyHeader>
           </Empty>

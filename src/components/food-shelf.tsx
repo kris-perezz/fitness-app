@@ -174,7 +174,7 @@ export function FoodShelf({ foods }: { foods: Food[] }) {
                           <ItemTitle className="font-normal">{f.name}</ItemTitle>
                           <ItemDescription className="flex items-center gap-1.5 text-xs">
                             <span>
-                              {show(f.kcal)} cal per {basisLabel(f)}
+                              {Math.round(f.kcal).toLocaleString()} cal per {basisLabel(f)}
                             </span>
                             <FoodSourceBadge source={f.source} />
                           </ItemDescription>

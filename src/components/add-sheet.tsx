@@ -3,6 +3,7 @@
 import { useEffect, useRef, useState, useTransition } from "react";
 import { Camera, ChevronLeft, ImageUp, Sparkles, X } from "lucide-react";
 import {
+  amountLabel,
   scale,
   show,
   basisLabel,
@@ -157,11 +158,20 @@ export function AddSheet({
       dismissible={step.kind !== "custom" && step.kind !== "label"}
     >
       <DrawerContent snapped onFocusCapture={liftForKeyboard(setSnap)}>
-        <DrawerHeader className="px-5 pb-2 pt-0">
+        <DrawerHeader className="flex-row items-center justify-between gap-2 px-5 pb-2 pt-0">
           <DrawerTitle className="text-base">
             Add to {meal}
             {dayLabel && <span className="font-normal text-muted-foreground"> · {dayLabel}</span>}
           </DrawerTitle>
+          <Button
+            size="icon"
+            variant="ghost"
+            aria-label="Close"
+            className="-mr-2 text-muted-foreground"
+            onClick={() => onOpenChange(false)}
+          >
+            <X className="size-4" />
+          </Button>
           <DrawerDescription className="sr-only">
             Search foods or enter one manually.
           </DrawerDescription>
@@ -212,10 +222,16 @@ function isField(el: EventTarget | null): boolean {
   return el instanceof HTMLInputElement || el instanceof HTMLTextAreaElement;
 }
 
-/** "Servings", "Cups", "Slices" -- the counting noun as a field label. */
+/** "servings" from "serving (1/3 cup)": the noun alone, pluralised. */
+function countNoun(food: Food): string {
+  return amountLabel(2, countLabel(food, 2).split(" (")[0]).slice(2);
+}
+
+/** "Servings · 1/3 cup each", "Cups", "Slices" -- the counting noun as a field label. */
 function countFieldLabel(food: Food): string {
-  const label = countLabel(food, 2);
-  return label.charAt(0).toUpperCase() + label.slice(1);
+  const noun = countNoun(food);
+  const size = /\(([^)]+)\)/.exec(countLabel(food, 1))?.[1];
+  return `${noun.charAt(0).toUpperCase()}${noun.slice(1)}${size ? ` · ${size} each` : ""}`;
 }
 
 function QtyStep({
@@ -294,11 +310,12 @@ function QtyStep({
   // difference between "not yet known" and "zero" has to survive into the UI.
   const preview = Number.isFinite(n) && n > 0 ? scale(food, scaleQty) : null;
 
-  const previewRows: { label: string; value: number | null }[] = [
-    { label: "Calories", value: preview?.kcal ?? null },
-    { label: "Protein", value: preview?.protein_g ?? null },
-    { label: "Carbs", value: preview?.carb_g ?? null },
-    { label: "Fat", value: preview?.fat_g ?? null },
+  const grams = (v: number | undefined) => (v === undefined ? null : `${show(v)} g`);
+  const previewRows: { label: string; value: string | null }[] = [
+    { label: "Calories", value: preview ? Math.round(preview.kcal).toLocaleString() : null },
+    { label: "Protein", value: grams(preview?.protein_g) },
+    { label: "Carbs", value: grams(preview?.carb_g) },
+    { label: "Fat", value: grams(preview?.fat_g) },
   ];
 
   useEffect(() => {
@@ -382,7 +399,7 @@ function QtyStep({
           <p className="mt-1 text-xs text-muted-foreground">{sourceHint(food.source, food.derived_from)}</p>
         )}
         <p className="mt-1 text-xs text-muted-foreground">
-          {show(food.kcal)} cal · {show(food.protein_g)} g protein · {show(food.carb_g)} g carbs ·{" "}
+          {Math.round(food.kcal).toLocaleString()} cal · {show(food.protein_g)} g protein · {show(food.carb_g)} g carbs ·{" "}
           {show(food.fat_g)} g fat per {basisLabel(food)}
           {food.grams_per_unit
             ? ` · 1 ${countLabel(food, 1)} = ${food.grams_per_unit} ${food.weight_unit}`
@@ -405,7 +422,7 @@ function QtyStep({
                 onValueChange={(next) => next && switchMode(next as "count" | "measure")}
               >
                 <ToggleGroupItem value="count" className="px-3 text-xs">
-                  {countLabel(food, 2)}
+                  {countNoun(food)}
                 </ToggleGroupItem>
                 <ToggleGroupItem value="measure" className="px-3 text-xs">
                   {food.weight_unit}
@@ -431,11 +448,12 @@ function QtyStep({
           {presets.map((p) => (
             <Button
               key={p}
-              variant="outline"
+              variant={Number(qty) === p ? "secondary" : "outline"}
+              aria-pressed={Number(qty) === p}
               className="h-11 flex-1 tabular-nums"
               onClick={() => setQty(String(p))}
             >
-              {p}
+              {mode === "count" ? (p === 0.5 ? "½" : p) : `${p} ${food.weight_unit}`}
             </Button>
           ))}
         </ButtonGroup>
@@ -445,7 +463,7 @@ function QtyStep({
         <dl className="mt-6 grid grid-cols-4 gap-2 border-t border-border pt-4 text-center">
           {previewRows.map((row) => (
             <div key={row.label}>
-              <dd className="text-lg tabular-nums">{row.value ?? "-"}</dd>
+              <dd className="text-lg tabular-nums">{row.value ?? "—"}</dd>
               <dt className="mt-0.5 text-xs text-muted-foreground">{row.label}</dt>
             </div>
           ))}
@@ -531,15 +549,10 @@ function CustomStep({
   /** S102. The itemised plate behind the six numbers. See lib/portion.ts. */
   const [rows, setRows] = useState<Row[]>([]);
   /**
-   * Exactly what the last estimate appended to the description, so the next one
-   * can take it back off before asking again.
-   *
-   * Without this, estimating twice sends the model its own assumptions as part
-   * of the question and the field grows a tail of them. If the user has since
-   * edited the end of the description, the suffix no longer matches and the
-   * whole field is used -- which is right, because then it is theirs again.
+   * What the last estimate assumed, shown apart from the description so the
+   * user's own words are never rewritten, and joined onto them only on save.
    */
-  const [appended, setAppended] = useState<string | null>(null);
+  const [assumptions, setAssumptions] = useState<string | null>(null);
   const num = (v: string) => (v === "" ? 0 : Number(v));
 
   const fields: [keyof typeof f, string][] = [
@@ -622,9 +635,7 @@ function CustomStep({
     // The name stands in when nothing has been described yet: somebody who
     // types "korean army stew" into the title and asks for an estimate has
     // said enough, and the estimate writes the sentence back into description.
-    const source = description.trim() === "" ? f.name : description;
-    const described =
-      appended && source.endsWith(appended) ? source.slice(0, -appended.length) : source;
+    const described = description.trim() === "" ? f.name : description;
     const controller = new AbortController();
     inFlight.current = controller;
     void (async () => {
@@ -656,11 +667,7 @@ function CustomStep({
       // protected from it any more.
       corrected.current.clear();
       setRows(next);
-      // The assumptions go into the DESCRIPTION, which is where this user
-      // already writes them by hand -- the name is staying short from here on.
-      const suffix = e.assumptions ? ` — ${e.assumptions}` : null;
-      setAppended(suffix);
-      setDescription(`${described.trim()}${suffix ?? ""}`);
+      setAssumptions(e.assumptions || null);
       setF((prev) => ({
         ...prev,
         // Estimating overwrites the title exactly as it overwrites the
@@ -683,7 +690,8 @@ function CustomStep({
         meal,
         food_id: null,
         name: f.name,
-        description: description.trim() || null,
+        description:
+          [description.trim(), assumptions].filter(Boolean).join(" — ") || null,
         qty: 1,
         unit: "serving",
         estimate: true,
@@ -734,6 +742,11 @@ function CustomStep({
         >
           <ChevronLeft className="size-4" /> Back
         </Button>
+
+        <h3 className="text-base font-semibold leading-tight">Describe a food</h3>
+        <p className="mt-1 mb-4 text-xs text-muted-foreground">
+          Type it, photograph it, or both. Then estimate.
+        </p>
 
         {/* S100. The name is the short title the log list will show; the
             description below is the fuller sentence the estimate reads --
@@ -872,6 +885,10 @@ function CustomStep({
         <span role="status" aria-live="polite" className="sr-only">
           {estimating ? "Estimating" : ""}
         </span>
+
+        {assumptions && (
+          <p className="mt-3 text-xs text-muted-foreground">Assumed: {assumptions}</p>
+        )}
 
         {/* S102. The masses the estimate ran on, where the person who saw the
             plate can overrule them. This is the whole point of itemising: a

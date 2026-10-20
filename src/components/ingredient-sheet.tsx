@@ -203,7 +203,7 @@ function IngredientQtyStep({
           <FoodSourceBadge source={food.source} />
         </div>
         <p className="mt-0.5 text-xs text-muted-foreground">
-          {show(food.kcal)} cal · {show(food.protein_g)} g protein · {show(food.carb_g)} g carbs ·{" "}
+          {Math.round(food.kcal).toLocaleString()} cal · {show(food.protein_g)} g protein · {show(food.carb_g)} g carbs ·{" "}
           {show(food.fat_g)} g fat per {basisLabel(food)}
         </p>
 

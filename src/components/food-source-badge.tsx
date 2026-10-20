@@ -1,5 +1,6 @@
 import { sourceLabel, type FoodSource } from "@/lib/food";
 import { Badge } from "@/components/ui/badge";
+import { cn } from "@/lib/utils";
 
 /**
  * S6. Where a food's numbers came from, in the two words a person needs to
@@ -14,16 +15,21 @@ import { Badge } from "@/components/ui/badge";
  * CNF (S89) is `secondary` rather than `destructive`: it is not a warning, but
  * it is not the packet either. The numbers are laboratory-grade and the food is
  * a reference preparation, so the honest signal is "this is a stand-in", which
- * is the same thing `recipe` is saying. Making it loud would spend the one red
+ * is the same thing `recipe` is saying. Making it loud would spend the one tinted
  * badge on the more trustworthy of the two databases.
  */
-const VARIANT: Record<FoodSource, "outline" | "secondary" | "destructive"> = {
+const VARIANT: Record<FoodSource, "outline" | "secondary"> = {
   label: "outline",
   seed: "outline",
   manual: "outline",
   recipe: "secondary",
   cnf: "secondary",
-  off: "destructive",
+  off: "outline",
+};
+
+// Amber rather than red: red reads as an error, and this is a caution.
+const TINT: Partial<Record<FoodSource, string>> = {
+  off: "border-warning/60 text-warning",
 };
 
 export function FoodSourceBadge({
@@ -34,7 +40,7 @@ export function FoodSourceBadge({
   className?: string;
 }) {
   return (
-    <Badge variant={VARIANT[source]} className={className}>
+    <Badge variant={VARIANT[source]} className={cn(TINT[source], className)}>
       {sourceLabel(source)}
     </Badge>
   );

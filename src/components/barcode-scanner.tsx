@@ -6,8 +6,8 @@ import { lookupBarcode } from "@/app/actions";
 import { reach } from "@/lib/reach";
 import type { Food } from "@/lib/food";
 import { Button } from "@/components/ui/button";
+import { Input } from "@/components/ui/input";
 import { Spinner } from "@/components/ui/spinner";
-import { toast } from "sonner";
 
 type Status =
   | { kind: "starting" }
@@ -15,7 +15,9 @@ type Status =
   | { kind: "looking-up" }
   // The camera is unavailable for a reason the user has to act on, so the
   // message stays on screen instead of bouncing them out with a toast.
-  | { kind: "blocked"; message: string };
+  | { kind: "blocked"; message: string }
+  // The code read fine and the lookup did not; kept so a retry needs no rescan.
+  | { kind: "failed"; code: string; message: string };
 
 /**
  * getUserMedia rejects with a DOMException whose `name` is the only reliable
@@ -26,14 +28,14 @@ function cameraMessage(err: unknown): string {
   switch (name) {
     case "NotAllowedError":
     case "SecurityError":
-      return "Camera access was blocked. Allow the camera in your browser settings, or search for the food instead.";
+      return "Camera access is blocked. Allow it in settings, or type the barcode.";
     case "NotFoundError":
     case "OverconstrainedError":
-      return "No camera was found on this device. Search for the food instead.";
+      return "No camera found. Type the barcode instead.";
     case "NotReadableError":
-      return "The camera is being used by another app. Close it and try again, or search for the food instead.";
+      return "Another app is using the camera. Type the barcode instead.";
     default:
-      return "The camera could not be started. Search for the food instead.";
+      return "The camera didn't start. Type the barcode instead.";
   }
 }
 
@@ -49,50 +51,48 @@ export function BarcodeScanner({
 }) {
   const videoRef = useRef<HTMLVideoElement>(null);
   const [status, setStatus] = useState<Status>({ kind: "starting" });
+  const [typed, setTyped] = useState("");
+  const live = useRef(true);
 
-  // Callbacks are read through a ref so the camera effect can run exactly once:
-  // re-running it would tear down and re-acquire the stream on every render.
-  const handlers = useRef({ onFood, onMiss, onBack });
+  async function lookup(code: string) {
+    setStatus({ kind: "looking-up" });
+    const res = await reach(lookupBarcode(code));
+    if (!live.current) return;
+
+    if (res.source === "catalog" || res.source === "remote") {
+      // Never logs directly -- the existing quantity/meal step is the confirm.
+      handlers.current.onFood(res.food);
+      return;
+    }
+    // A miss is not a dead end: the code scanned fine, no database has the
+    // product, and the packet with the panel on it is already in the user's
+    // hand. Hand the barcode to the label reader so the food it saves is
+    // found instantly on the next scan (S2, S3).
+    if (res.source === "miss") {
+      handlers.current.onMiss(code);
+      return;
+    }
+    setStatus({ kind: "failed", code, message: res.error ?? "Couldn't look that up." });
+  }
+
+  // Read through a ref so the camera effect can run exactly once: re-running
+  // it would tear down and re-acquire the stream on every render.
+  const handlers = useRef({ onFood, onMiss, onBack, lookup });
   useEffect(() => {
-    handlers.current = { onFood, onMiss, onBack };
+    handlers.current = { onFood, onMiss, onBack, lookup };
   });
 
   useEffect(() => {
     let controls: IScannerControls | undefined;
-    let live = true;
+    live.current = true;
     // The decoder keeps firing while the video is up; only the first code wins.
     let decoded = false;
-
-    async function lookup(code: string) {
-      controls?.stop();
-      if (!live) return;
-      setStatus({ kind: "looking-up" });
-
-      const res = await reach(lookupBarcode(code));
-      if (!live) return;
-
-      if (res.source === "catalog" || res.source === "remote") {
-        // Never logs directly -- the existing quantity/meal step is the confirm.
-        handlers.current.onFood(res.food);
-        return;
-      }
-      // A miss is not a dead end: the code scanned fine, no database has the
-      // product, and the packet with the panel on it is already in the user's
-      // hand. Hand the barcode to the label reader so the food it saves is
-      // found instantly on the next scan (S2, S3).
-      if (res.source === "miss") {
-        handlers.current.onMiss(code);
-        return;
-      }
-      toast.error(res.error);
-      handlers.current.onBack();
-    }
 
     async function start() {
       if (typeof navigator === "undefined" || !navigator.mediaDevices?.getUserMedia) {
         setStatus({
           kind: "blocked",
-          message: "This browser can't open the camera here. Search for the food instead.",
+          message: "This browser can't open the camera. Type the barcode instead.",
         });
         return;
       }
@@ -101,7 +101,7 @@ export function BarcodeScanner({
         // Loaded on demand: the decoder is a large bundle and most add-sheet
         // opens never reach the scanner.
         const { BarcodeFormat, BrowserMultiFormatReader } = await import("@zxing/browser");
-        if (!live || !videoRef.current) return;
+        if (!live.current || !videoRef.current) return;
 
         const reader = new BrowserMultiFormatReader(undefined, {
           delayBetweenScanAttempts: 100,
@@ -143,19 +143,20 @@ export function BarcodeScanner({
           (result) => {
             if (!result || decoded) return;
             decoded = true;
-            void lookup(result.getText());
+            controls?.stop();
+            void handlers.current.lookup(result.getText());
           },
         );
 
         // Unmounted while getUserMedia was still resolving -- the cleanup below
         // already ran, so this stream would otherwise leak the camera.
-        if (!live) {
+        if (!live.current) {
           controls.stop();
           return;
         }
         setStatus({ kind: "scanning" });
       } catch (err) {
-        if (!live) return;
+        if (!live.current) return;
         setStatus({ kind: "blocked", message: cameraMessage(err) });
       }
     }
@@ -163,18 +164,50 @@ export function BarcodeScanner({
     void start();
 
     return () => {
-      live = false;
+      live.current = false;
       controls?.stop();
     };
   }, []);
 
-  const blocked = status.kind === "blocked";
+  const blocked = status.kind === "blocked" || status.kind === "failed";
+  const code = typed.replace(/\D/g, "");
 
   return (
     <div className="flex min-h-0 flex-1 flex-col">
       <div className="min-h-0 flex-1 overflow-y-auto overscroll-contain px-5 pb-4">
         {blocked ? (
-          <p className="py-6 text-sm text-muted-foreground">{status.message}</p>
+          <div className="py-6">
+            <p aria-live="polite" className="text-sm text-muted-foreground">
+              {status.message}
+            </p>
+            {status.kind === "failed" && (
+              <Button className="mt-4 h-11 w-full" onClick={() => void lookup(status.code)}>
+                Try again
+              </Button>
+            )}
+            {/* The digits under the bars, for when the camera can't be used. */}
+            <form
+              className="mt-4 flex gap-2"
+              onSubmit={(e) => {
+                e.preventDefault();
+                if (code.length >= 8) void lookup(code);
+              }}
+            >
+              <Input
+                value={typed}
+                onChange={(e) => setTyped(e.target.value)}
+                inputMode="numeric"
+                enterKeyHint="search"
+                autoComplete="off"
+                placeholder="Barcode number"
+                aria-label="Barcode number"
+                className="h-11 flex-1 text-base tabular-nums"
+              />
+              <Button type="submit" variant="outline" className="h-11" disabled={code.length < 8}>
+                Look up
+              </Button>
+            </form>
+          </div>
         ) : (
           <>
             <div className="relative overflow-hidden rounded-lg bg-black">
