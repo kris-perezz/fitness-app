@@ -190,7 +190,7 @@ function TopFoods({ foods }: { foods: TopFood[] | null }) {
                 </ItemDescription>
               </ItemContent>
               <span className="shrink-0 text-sm tabular-nums">
-                {Math.round(food.kcal).toLocaleString()}
+                {Math.round(food.kcal).toLocaleString()} cal
               </span>
             </Item>
           </li>

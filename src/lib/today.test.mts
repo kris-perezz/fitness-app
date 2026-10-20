@@ -51,6 +51,7 @@ test("amounts round to two places and plural units read naturally", async () => 
   const { amountLabel } = await import("./food.ts");
   assert.equal(amountLabel(0.6666666666666666, "cup"), "0.67 cups");
   assert.equal(amountLabel(2, "serving"), "2 servings");
+  assert.equal(amountLabel(55, "grams"), "55 g");
   assert.equal(amountLabel(1, "serving"), "1 serving");
   assert.equal(amountLabel(2, "serving (1/3 cup)"), "2 servings (1/3 cup)");
   assert.equal(amountLabel(150, "g"), "150 g");

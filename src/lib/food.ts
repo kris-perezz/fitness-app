@@ -277,6 +277,8 @@ export function countLabel(food: Food, n: number): string {
 }
 
 const MEASURES = new Set(["g", "ml", "mg", "kg", "oz", "lb", "l"]);
+// Weighed entries store the spelled-out unit; a log row reads better short.
+const SHORT: Record<string, string> = { grams: "g", millilitres: "ml" };
 
 /**
  * "2 servings", "0.67 cup" -> "0.67 cups", "150 g". At most two decimals, and
@@ -285,6 +287,7 @@ const MEASURES = new Set(["g", "ml", "mg", "kg", "oz", "lb", "l"]);
  */
 export function amountLabel(qty: number, unit: string): string {
   const n = Math.round(qty * 100) / 100;
+  if (SHORT[unit]) return `${n} ${SHORT[unit]}`;
   if (MEASURES.has(unit.toLowerCase()) || n === 1) return `${n} ${unit}`;
   const [word, ...rest] = unit.split(" ");
   // A single trailing s is already plural ("slices"); "ss" is not ("glass").

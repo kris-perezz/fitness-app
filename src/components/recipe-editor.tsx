@@ -229,9 +229,7 @@ export function RecipeEditor({
           </div>
 
           <p className="mt-2 text-xs text-muted-foreground">
-            Servings split the macros exactly: water lost in cooking carries no calories, so
-            one portion is one portion&rsquo;s share whatever the pot weighs. A cooked weight
-            is only needed to log an odd-sized portion by grams.
+            Add a cooked weight to log portions by grams.
           </p>
         </Card>
 
