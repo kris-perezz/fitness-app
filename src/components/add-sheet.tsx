@@ -1,7 +1,7 @@
 "use client";
 
 import { useEffect, useRef, useState, useTransition } from "react";
-import { Camera, ChevronLeft, ImageUp, Sparkles, X } from "lucide-react";
+import { Camera, ChevronDown, ChevronLeft, ImageUp, Sparkles, X } from "lucide-react";
 import {
   MEALS,
   amountLabel,
@@ -37,6 +37,13 @@ import {
 import { Button } from "@/components/ui/button";
 import { ButtonGroup } from "@/components/ui/button-group";
 import { ToggleGroup, ToggleGroupItem } from "@/components/ui/toggle-group";
+import {
+  DropdownMenu,
+  DropdownMenuContent,
+  DropdownMenuRadioGroup,
+  DropdownMenuRadioItem,
+  DropdownMenuTrigger,
+} from "@/components/ui/dropdown-menu";
 import { Input } from "@/components/ui/input";
 import { Field, FieldGroup, FieldLabel } from "@/components/ui/field";
 import {
@@ -164,7 +171,26 @@ export function AddSheet({
       <DrawerContent snapped onFocusCapture={liftForKeyboard(setSnap)}>
         <DrawerHeader className="flex-row items-center justify-between gap-2 px-5 pb-2 pt-0">
           <DrawerTitle className="text-base">
-            Add to {meal}
+            <DropdownMenu>
+              <DropdownMenuTrigger asChild>
+                <Button variant="ghost" className="-ml-2 h-11 px-2 text-base font-semibold">
+                  Add to {meal}
+                  <ChevronDown className="size-4 text-muted-foreground" />
+                </Button>
+              </DropdownMenuTrigger>
+              <DropdownMenuContent align="start">
+                <DropdownMenuRadioGroup
+                  value={meal ?? undefined}
+                  onValueChange={(next) => setPicked(next as Meal)}
+                >
+                  {MEALS.map((m) => (
+                    <DropdownMenuRadioItem key={m} value={m} className="h-11">
+                      {m}
+                    </DropdownMenuRadioItem>
+                  ))}
+                </DropdownMenuRadioGroup>
+              </DropdownMenuContent>
+            </DropdownMenu>
             {dayLabel && <span className="font-normal text-muted-foreground"> · {dayLabel}</span>}
           </DrawerTitle>
           <Button
@@ -180,26 +206,6 @@ export function AddSheet({
             Search foods or enter one manually.
           </DrawerDescription>
         </DrawerHeader>
-
-        {meal && (step.kind === "qty" || step.kind === "custom") && (
-          <div className="mb-2 px-5">
-            <ToggleGroup
-              type="single"
-              variant="outline"
-              size="sm"
-              className="w-full"
-              value={meal}
-              onValueChange={(next) => next && setPicked(next as Meal)}
-              aria-label="Meal"
-            >
-              {MEALS.map((m) => (
-                <ToggleGroupItem key={m} value={m} className="h-11 flex-1 text-xs">
-                  {m}
-                </ToggleGroupItem>
-              ))}
-            </ToggleGroup>
-          </div>
-        )}
 
         {meal && (
           <FoodPicker
