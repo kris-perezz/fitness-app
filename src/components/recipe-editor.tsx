@@ -107,8 +107,11 @@ export function RecipeEditor({
   const [saved, setSaved] = useState({ name, servings, cooked });
   const dirty = name !== saved.name || servings !== saved.servings || cooked !== saved.cooked;
 
-  /** True when nothing is left unsaved. */
-  async function persist(): Promise<boolean> {
+  /**
+   * True when nothing is left unsaved. `discard` puts a way out on the error,
+   * so a draft the server rejects cannot trap you on the screen.
+   */
+  async function persist(discard?: () => void): Promise<boolean> {
     if (!dirty) return true;
     const details = { name, servings: servingCount, cooked_weight_g: cookedWeight };
     // An empty pot has nothing to publish yet, but its name still keeps.
@@ -116,7 +119,7 @@ export function RecipeEditor({
       lines.length > 0 ? saveRecipe(recipe.id, details) : updateRecipe(recipe.id, details),
     );
     if (res.error) {
-      toast.error(res.error);
+      toast.error(res.error, discard && { action: { label: "Discard edits", onClick: discard } });
       return false;
     }
     setSaved({ name, servings, cooked });
@@ -161,7 +164,7 @@ export function RecipeEditor({
   const leave = useBack("/recipes");
   const goBack = () =>
     startTransition(async () => {
-      if (await persist()) leave();
+      if (await persist(leave)) leave();
     });
   const back = useSwipe({ onRight: goBack });
 
