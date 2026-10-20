@@ -635,12 +635,7 @@ function WeighInSheet({
   }
 
   return (
-    // repositionInputs={false}: the layout viewport already shrinks for the
-    // keyboard (see interactiveWidget in app/layout.tsx), so vaul's own lift
-    // on focus is a second response to the same event -- it shoves the sheet
-    // against the notch and, with no snapPoints here, takes the drag height
-    // with it. The field still clears the keyboard; the viewport does that part.
-    <Drawer open={date !== null} onOpenChange={onOpenChange} repositionInputs={false}>
+    <Drawer open={date !== null} onOpenChange={onOpenChange}>
       <DrawerContent>
         <DrawerHeader className="px-5 pb-2 pt-0">
           <DrawerTitle className="text-base">
