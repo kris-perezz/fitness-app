@@ -29,13 +29,11 @@ export type { Component };
 const API = "https://api.openai.com/v1/responses";
 
 /**
- * The same model lib/label.ts settled on, for the same reason: on Roboflow's
- * vision evals the 5.6 tiers separate on detection and reasoning, which neither
- * of these features needs, and barely separate on extraction, which is what
- * both do. Keeping the two files on one model is deliberate -- two estimators
- * disagreeing about the same lunch would be a bug nobody could see.
+ * A tier above lib/label.ts, because this is not extraction: sizing a portion is
+ * judgement, and on weighed Nutrition5k plates luna overstated mass by about 60%
+ * where terra came within 5% at the same latency.
  */
-const MODEL = "gpt-5.6-luna";
+const MODEL = "gpt-5.6-terra";
 
 /**
  * Set explicitly rather than left to the default. The default is not documented
@@ -88,16 +86,35 @@ version, a weight from a scale. Where the description states a fact, take it --
 a stated weight always beats an eyeballed one. Where it is silent, read the photo.
 Where they genuinely conflict, follow the description and say so in assumptions.
 
-Judge portion size from what is next to the food. A standard dinner plate is
-about 27 cm, a fork about 19 cm, a can 355 mL. Say in the assumptions what you
+SIZE EACH ITEM FROM WHAT YOU CAN SEE, NOT FROM WHAT A SERVING USUALLY IS. The
+most common mistake is to replace what is on the plate with a standard serving:
+a spoonful of rice is not a cup of rice, and five potato cubes are not a side of
+potatoes. For each component, first write in amount what you can see -- a count
+and size of pieces ("6 cubes about 2 cm"), or the size of a mound, slice or
+pour, ending in its volume ("mound 8 x 6 cm, 1.5 cm deep, about 55 mL"). Judge
+depth honestly: food spread or scattered across a plate is a layer 1 cm deep
+or less, and only a heap that visibly stands up is deeper. Then turn the volume
+into grams with the food's density: cooked grains and most cooked food 0.6 to
+0.9 g per mL, meat about 1, leafy greens 0.1 to 0.2, loose fried pieces 0.4.
+
+Scale against the container and anything else of known size: a fork is 19 cm,
+a can 355 mL. Plates and bowls vary, so read their size from the room around
+them; with nothing to go on, take a plate as 23 cm and a bowl as 14 cm, not the
+largest size they could be. Food usually covers less of a plate than it seems;
+a full dinner plate rarely holds more than 500 g. Say in assumptions what you
 scaled against.
+
+A single whole item -- an apple, an egg, a bar, a slice of pizza -- is weighed
+by its kind and size class (medium apple 180 g, large egg 50 g, slice of bread
+30 g), never by how much of the frame it fills: a close-up makes anything look
+large.
 
 ITEMISE THE PLATE BEFORE YOU PUT A NUMBER ON IT. Return one component for each
 distinct food you can name -- the fries, the curds, the gravy, the meat -- each
 with the grams you are assuming for that item and the macros for that mass
-alone. Never return a single component standing for the whole meal, and never
-name one "meal" or "plate": the assumed grams are the part most likely to be
-wrong, and separating them is what lets a wrong answer be corrected instead of
+alone. One food is one component, but never return a single component
+standing for a meal of several foods, and never name one "meal" or "plate":
+the assumed grams are the part most likely to be wrong, and separating them is what lets a wrong answer be corrected instead of
 thrown away. Combine two foods only when they are genuinely inseparable, such
 as a sauce already stirred through.
 
@@ -126,9 +143,10 @@ list the component masses again -- they are already itemised, and repeating them
 here only makes the sentence longer. Do not restate the description back. Do not
 apologise or hedge in general terms.
 
-Estimate conservatively upward where a dish is typically prepared with more fat
-than a home cook would use -- restaurant portions, deep-fried items, anything
-finished with butter or oil in a pan you did not control.
+Give your best typical estimate, not a cautious high or low one. Add cooking fat
+or a sauce you cannot see only when the food looks glossy, fried or dressed, at
+a light amount, and say so in assumptions. Plain steamed, boiled or raw food
+gets none.
 
 Numbers are for the whole portion, in the units named: kcal, grams for protein,
 fat, carbohydrate and fibre, milligrams for sodium.
@@ -190,6 +208,9 @@ const COMPONENT_SCHEMA = {
   type: "object",
   properties: {
     item: { type: "string" },
+    // Before grams, so the mass is converted from a size the model has already
+    // written down rather than recalled from a typical serving.
+    amount: { type: "string" },
     grams: { type: ["number", "null"] },
     kcal: { type: ["number", "null"] },
     protein_g: { type: ["number", "null"] },
@@ -200,6 +221,7 @@ const COMPONENT_SCHEMA = {
   },
   required: [
     "item",
+    "amount",
     "grams",
     "kcal",
     "protein_g",
