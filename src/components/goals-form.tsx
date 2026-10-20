@@ -24,6 +24,8 @@ import {
   type MacroKey,
 } from "@/lib/goals";
 import { ToggleGroup, ToggleGroupItem } from "@/components/ui/toggle-group";
+import { Badge } from "@/components/ui/badge";
+import { calorieTarget, CONFIDENT_AFTER_DAYS, type Expenditure } from "@/lib/expenditure";
 import { Switch } from "@/components/ui/switch";
 import { ThemeToggle } from "@/components/theme-toggle";
 import { fromDisplay, toDisplay, type DisplayUnit } from "@/lib/weight";
@@ -38,6 +40,7 @@ type Goals =
       goal_rate_lb_per_week: number | null;
       display_weight_unit?: DisplayUnit | null;
       strict_mode?: boolean | null;
+      expenditure_enabled?: boolean | null;
     } & MacroGoals)
   | null;
 
@@ -93,7 +96,15 @@ const MACRO_LABELS: Record<MacroKey, string> = {
   fat_goal_g: "Fat (g)",
 };
 
-export function GoalsForm({ goals, email }: { goals: Goals; email: string | null }) {
+export function GoalsForm({
+  goals,
+  email,
+  expenditure,
+}: {
+  goals: Goals;
+  email: string | null;
+  expenditure: { enabled: boolean; estimate: Expenditure | null };
+}) {
   /**
    * S69. The unit every weight on screen is shown in. Storage is always pounds,
    * so this converts at the edges -- here, and on the progress tab.
@@ -111,6 +122,7 @@ export function GoalsForm({ goals, email }: { goals: Goals; email: string | null
    * only a default if nothing nags you out of it.
    */
   const [strict, setStrict] = useState(goals?.strict_mode === true);
+  const [burn, setBurn] = useState(goals?.expenditure_enabled === true);
   // The sign of the rate, chosen rather than typed: the iPhone decimal keypad
   // has no minus key. Empty is no goal on file.
   const storedRate = goals?.goal_rate_lb_per_week ?? null;
@@ -182,11 +194,14 @@ export function GoalsForm({ goals, email }: { goals: Goals; email: string | null
       const n = parseGoal(form.goal_rate_lb_per_week);
       return n === null ? null : sign * Math.abs(fromDisplay(n, unit));
     })();
+    const burnOn = strict && burn;
     return {
       goal_weight_lb: weightLb,
       goal_rate_lb_per_week: rateLb,
       display_weight_unit: unit,
       strict_mode: strict,
+      // Omitted when unchanged: the column only exists once its migration has run.
+      ...(burnOn === (goals?.expenditure_enabled === true) ? {} : { expenditure_enabled: burnOn }),
     };
   };
 
@@ -210,6 +225,53 @@ export function GoalsForm({ goals, email }: { goals: Goals; email: string | null
   }
 
   const current = numbers();
+
+  const burnBlock = (() => {
+    const kcal = expenditure.estimate?.kcal ?? null;
+    if (kcal === null) {
+      return (
+        <p className="text-xs text-muted-foreground">
+          Log food and weigh in for two weeks to see this.
+        </p>
+      );
+    }
+    const rate = goals?.goal_rate_lb_per_week;
+    const target = rate == null ? null : Math.round(calorieTarget(kcal, Number(rate)) / 10) * 10;
+    return (
+      <div className="space-y-1 text-sm">
+        <p>You burn about {kcal.toLocaleString()} cal a day</p>
+        {!expenditure.estimate?.confident && (
+          <p className="text-xs text-muted-foreground">
+            Still learning · {expenditure.estimate?.updates} of {CONFIDENT_AFTER_DAYS} days
+          </p>
+        )}
+        {target !== null && (
+          <>
+            <p className="text-xs text-muted-foreground">
+              Suggested target {target.toLocaleString()} cal
+            </p>
+            <Button
+              type="button"
+              variant="outline"
+              className="h-11"
+              onClick={() => {
+                const fixed = balance(target, numbers());
+                setForm({
+                  ...form,
+                  calorie_goal: String(target),
+                  protein_goal_g: String(fixed.protein_goal_g),
+                  carb_goal_g: String(fixed.carb_goal_g),
+                  fat_goal_g: String(fixed.fat_goal_g),
+                });
+              }}
+            >
+              Use {target.toLocaleString()} cal
+            </Button>
+          </>
+        )}
+      </div>
+    );
+  })();
 
   /**
    * Calories are the anchor, so every edit ends with the macros sitting on the
@@ -282,6 +344,18 @@ export function GoalsForm({ goals, email }: { goals: Goals; email: string | null
             <Switch id="strict_mode" checked={strict} onCheckedChange={setStrict} />
           </Field>
           <FieldDescription>Shows targets and marks days over or short.</FieldDescription>
+          {strict && (
+            <>
+              <Field orientation="horizontal" className="justify-between pt-2">
+                <div className="flex items-center gap-2">
+                  <FieldLabel htmlFor="expenditure_enabled">Adaptive expenditure</FieldLabel>
+                  <Badge variant="secondary">Experimental</Badge>
+                </div>
+                <Switch id="expenditure_enabled" checked={burn} onCheckedChange={setBurn} />
+              </Field>
+              <FieldDescription>Estimates your daily burn from your log and weight.</FieldDescription>
+            </>
+          )}
         </FieldGroup>
 
         {/* S79. EVERY TARGET ON THIS SCREEN IS A STRICT-MODE IDEA, so in calm
@@ -310,6 +384,7 @@ export function GoalsForm({ goals, email }: { goals: Goals; email: string | null
                 onBlur={() => reconcile("calorie_goal")}
                 className="h-12 text-base tabular-nums"
               />
+              {expenditure.enabled && burn && burnBlock}
             </Field>
 
             {/* The three fields had no group label at all -- the paragraph

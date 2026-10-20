@@ -2,6 +2,7 @@ import { createClient, must } from "@/lib/supabase/server";
 import { TREND_DAYS, dailySeries, trendsWindow, type IntakeDay, type TopFood } from "@/lib/trends";
 import { toDayGoal, withTodayGoal, type DayGoal } from "@/lib/goals";
 import { TrendsScreen } from "@/components/trends-screen";
+import { loadExpenditure } from "@/lib/expenditure-load";
 import { serverToday } from "@/lib/server-time";
 
 export const metadata = { title: "Trends" };
@@ -52,6 +53,8 @@ export default async function TrendsPage() {
     supabase.rpc("top_foods", { from_date: from, to_date: to, row_limit: 10 }),
   ]);
 
+  const { estimate } = await loadExpenditure(supabase, today, settings?.strict_mode === true);
+
   const rows = (days ?? []) as IntakeDay[];
   // S79. THE GOAL LINES ARE A STRICT-MODE IDEA, here as much as on the log
   // tab: a line across the chart turns thirty days of eating into thirty
@@ -71,6 +74,7 @@ export default async function TrendsPage() {
     <TrendsScreen
       points={dailySeries(rows, goals, from, to)}
       days={rows}
+      burn={estimate?.kcal ?? null}
       topFoods={top.error ? null : ((top.data ?? []) as TopFood[])}
     />
   );

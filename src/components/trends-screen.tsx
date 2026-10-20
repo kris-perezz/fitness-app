@@ -55,11 +55,13 @@ export function TrendsScreen({
   points,
   days,
   topFoods,
+  burn,
 }: {
   points: TrendPoint[];
   days: IntakeDay[];
   /** Null means the query failed -- see TopFoods. Empty means nothing logged. */
   topFoods: TopFood[] | null;
+  burn: number | null;
 }) {
   const logged = loggedDays(days);
   const share = estimateShare(days);
@@ -103,6 +105,7 @@ export function TrendsScreen({
             /* A day short of the goal is not a verdict, and the last bar is
                usually TODAY, which is unfinished rather than low (S71). */
             thin="A few more logged days and this becomes a pattern."
+            burn={burn}
           />
 
           <DayChart
@@ -223,6 +226,7 @@ function DayChart({
   goalKey,
   config,
   thin,
+  burn = null,
 }: {
   title: string;
   caption?: string;
@@ -231,6 +235,7 @@ function DayChart({
   goalKey: "calorieGoal" | "proteinGoal";
   config: ChartConfig;
   thin: string;
+  burn?: number | null;
 }) {
   const values = points.map((p) => p[dataKey]);
   const goalValues = points.map((p) => p[goalKey]);
@@ -266,6 +271,11 @@ function DayChart({
 
       {notes.length > 0 && (
         <p className="mt-2 text-xs text-muted-foreground">{notes.join(" · ")}</p>
+      )}
+      {burn !== null && (
+        <p className="mt-1 text-xs text-muted-foreground">
+          You burn about {burn.toLocaleString()} cal a day
+        </p>
       )}
     </Card>
   );

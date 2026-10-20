@@ -398,6 +398,8 @@ export type Goals = {
    * while it was on (S77).
    */
   strict_mode: boolean;
+  /** Left out when unchanged, so saving works before the column exists. */
+  expenditure_enabled?: boolean;
 };
 
 export async function saveGoals(goals: Goals) {
@@ -427,6 +429,9 @@ export async function saveGoals(goals: Goals) {
     goal_rate_lb_per_week: goals.goal_rate_lb_per_week,
     display_weight_unit: goals.display_weight_unit,
     strict_mode: goals.strict_mode === true,
+    ...(goals.expenditure_enabled === undefined
+      ? {}
+      : { expenditure_enabled: goals.strict_mode === true && goals.expenditure_enabled }),
     onboarded: true,
     updated_at: new Date().toISOString(),
   });
