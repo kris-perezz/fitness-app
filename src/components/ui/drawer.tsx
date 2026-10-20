@@ -4,10 +4,12 @@ import * as React from "react"
 import { Drawer as DrawerPrimitive } from "vaul"
 
 import { cn } from "@/lib/utils"
+import { useSheetBack } from "@/lib/sheet-back"
 
 function Drawer({
   ...props
 }: React.ComponentProps<typeof DrawerPrimitive.Root>) {
+  useSheetBack((props.open ?? false) && props.dismissible !== false, () => props.onOpenChange?.(false))
   return <DrawerPrimitive.Root data-slot="drawer" {...props} />
 }
 

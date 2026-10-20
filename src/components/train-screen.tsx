@@ -738,6 +738,17 @@ function SetForm({
   const [warmup, setWarmup] = useState(initial.set_type === "warmup");
   const [touched, setTouched] = useState<Record<string, boolean>>({});
 
+  // History streams in after the page, so the suggestion can arrive while the
+  // form is already open. Refill from it, but never over anything typed.
+  const [seen, setSeen] = useState(shownLoad + "|" + initial.reps);
+  if (seen !== shownLoad + "|" + initial.reps) {
+    setSeen(shownLoad + "|" + initial.reps);
+    if (Object.keys(touched).length === 0) {
+      setLoad(shownLoad);
+      setReps(initial.reps === null ? "" : String(initial.reps));
+    }
+  }
+
   /** Muted while it is still the suggestion; solid once it is yours. */
   const tone = (key: string, value: string) =>
     suggestion && !touched[key] && value !== "" ? " text-muted-foreground" : "";

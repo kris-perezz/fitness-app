@@ -34,10 +34,11 @@ import {
   updateEntryQty,
 } from "@/app/actions";
 import { reach } from "@/lib/reach";
-import { dayTitle } from "@/lib/training";
+import { dayTitle, shortDate } from "@/lib/training";
 import { deleteWithUndo } from "@/lib/undo";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
+import { Field, FieldLabel } from "@/components/ui/field";
 import { Card } from "@/components/ui/card";
 import { ButtonGroup } from "@/components/ui/button-group";
 import { ToggleGroup, ToggleGroupItem } from "@/components/ui/toggle-group";
@@ -606,7 +607,7 @@ function EntryDetail({
                 onValueChange={(next) => {
                   if (!next || next === entry.meal) return;
                   startSave(async () => {
-                    const res = await reach(moveEntry(entry.id, next as Meal));
+                    const res = await reach(moveEntry(entry.id, { meal: next as Meal }));
                     if (res.error || !res.entry) {
                       toast.error(res.error ?? "Couldn't move that.");
                       return;
@@ -623,6 +624,36 @@ function EntryDetail({
                   </ToggleGroupItem>
                 ))}
               </ToggleGroup>
+
+              <Field className="mt-3">
+                <FieldLabel htmlFor="entry_date" className="text-xs font-normal text-muted-foreground">
+                  Day
+                </FieldLabel>
+                <Input
+                  id="entry_date"
+                  type="date"
+                  value={entry.log_date}
+                  min="2000-01-01"
+                  max={todayDate()}
+                  disabled={pending}
+                  onChange={(e) => {
+                    const date = e.target.value;
+                    // Typing a year fires once per digit, passing through year 0002.
+                    if (date < "2000-01-01" || date === entry.log_date) return;
+                    startSave(async () => {
+                      const res = await reach(moveEntry(entry.id, { date }));
+                      if (res.error || !res.entry) {
+                        toast.error(res.error ?? "Couldn't move that.");
+                        return;
+                      }
+                      onUpdated(res.entry);
+                      toast.success(`Moved to ${shortDate(date)}`);
+                      onClose();
+                    });
+                  }}
+                  className="h-11 text-base"
+                />
+              </Field>
 
               {/* S100. The longer sentence the name was titled from, kept out
                   of the list and shown only here, where there is room to read

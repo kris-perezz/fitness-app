@@ -1,6 +1,7 @@
+import type { Metadata } from "next";
 import { notFound } from "next/navigation";
 import { createClient, must } from "@/lib/supabase/server";
-import { NO_BESTS, NO_HISTORY } from "@/lib/training";
+import { NO_BESTS, NO_HISTORY, shortDate } from "@/lib/training";
 import type {
   Bests,
   Exercise,
@@ -14,6 +15,13 @@ import { TrainScreen } from "@/components/train-screen";
 import { serverToday } from "@/lib/server-time";
 
 export const dynamic = "force-dynamic";
+
+export async function generateMetadata({ params }: PageProps<"/train/[id]">): Promise<Metadata> {
+  const { id } = await params;
+  const supabase = await createClient();
+  const { data } = await supabase.from("workouts").select("log_date").eq("id", id).maybeSingle();
+  return { title: data ? `Session · ${shortDate(data.log_date)}` : "Session" };
+}
 
 export default async function WorkoutPage({ params }: PageProps<"/train/[id]">) {
   const { id } = await params;

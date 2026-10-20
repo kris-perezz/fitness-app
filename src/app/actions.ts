@@ -335,16 +335,27 @@ export async function updateEntryQty(
   return { entry: data as unknown as IntakeEntry, error: null };
 }
 
-/** Logged under the wrong meal. Nothing else about the entry changes. */
+/** Logged under the wrong meal or day. Nothing else about the entry changes. */
 export async function moveEntry(
   id: string,
-  meal: Meal,
+  change: { meal?: Meal; date?: string },
 ): Promise<{ entry: IntakeEntry | null; error: string | null }> {
-  if (!MEALS.includes(meal)) return { entry: null, error: "Pick a meal" };
+  const { meal, date } = change;
+  if (meal !== undefined && !MEALS.includes(meal)) return { entry: null, error: "Pick a meal" };
+  if (
+    date !== undefined &&
+    (!DATE.test(date) ||
+      date < "2000-01-01" ||
+      Number.isNaN(Date.parse(date)) ||
+      new Date(date).toISOString().slice(0, 10) !== date ||
+      date > (await serverToday()))
+  ) {
+    return { entry: null, error: "Pick a valid day" };
+  }
   const supabase = await createClient();
   const { data, error } = await supabase
     .from("intake_entries")
-    .update({ meal })
+    .update({ ...(meal && { meal }), ...(date && { log_date: date }) })
     .eq("id", id)
     .select(ENTRY_COLUMNS)
     .single();

@@ -1,9 +1,17 @@
+import type { Metadata } from "next";
 import { notFound } from "next/navigation";
 import { createClient, must } from "@/lib/supabase/server";
 import { liftHistory, type Exercise, type WorkoutSet } from "@/lib/training";
 import { ExerciseScreen } from "@/components/exercise-screen";
 
 export const dynamic = "force-dynamic";
+
+export async function generateMetadata({ params }: PageProps<"/exercise/[id]">): Promise<Metadata> {
+  const { id } = await params;
+  const supabase = await createClient();
+  const { data } = await supabase.from("exercises").select("name").eq("id", id).maybeSingle();
+  return { title: data?.name ?? "Exercise" };
+}
 
 /**
  * One lift, over months (S80).

@@ -1,3 +1,4 @@
+import type { Metadata } from "next";
 import { notFound } from "next/navigation";
 import { authUser, createClient, must } from "@/lib/supabase/server";
 import { catalog, visibleFoods } from "@/lib/catalog";
@@ -7,6 +8,13 @@ import { recipeFoodId } from "@/lib/recipe";
 import { RecipeEditor, type EditorLine } from "@/components/recipe-editor";
 
 export const dynamic = "force-dynamic";
+
+export async function generateMetadata({ params }: PageProps<"/recipes/[id]">): Promise<Metadata> {
+  const { id } = await params;
+  const supabase = await createClient();
+  const { data } = await supabase.from("recipes").select("name").eq("id", id).maybeSingle();
+  return { title: data?.name ?? "Recipe" };
+}
 
 export default async function RecipePage({ params }: PageProps<"/recipes/[id]">) {
   const { id } = await params;

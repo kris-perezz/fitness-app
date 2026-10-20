@@ -3,6 +3,7 @@
 import { useEffect, useRef, useState, useTransition } from "react";
 import { Camera, ChevronLeft, ImageUp, Sparkles, X } from "lucide-react";
 import {
+  MEALS,
   amountLabel,
   scale,
   show,
@@ -81,7 +82,7 @@ type Step =
   | { kind: "custom" };
 
 export function AddSheet({
-  meal,
+  meal: openedFor,
   onOpenChange,
   foods,
   recent,
@@ -100,7 +101,9 @@ export function AddSheet({
   onAdded: (entry: IntakeEntry) => void;
 }) {
   const [step, setStep] = useState<Step>({ kind: "search" });
-  const [wasOpen, setWasOpen] = useState(meal !== null);
+  const [picked, setPicked] = useState<Meal | null>(null);
+  const meal = openedFor && (picked ?? openedFor);
+  const [wasOpen, setWasOpen] = useState(openedFor !== null);
   const [snap, setSnap] = useState<number | string | null>(SNAP_POINTS[0]);
   // Once a one-off is started it stays mounted until the sheet closes, so
   // stepping back to search does not throw away a description or an estimate.
@@ -116,12 +119,13 @@ export function AddSheet({
   // Adjusted during render rather than in an effect: an effect would paint the
   // stale step for a frame first, and React re-runs this before committing.
   // Reset on open rather than on close so the exit animation keeps its content.
-  if (meal !== null && !wasOpen) {
+  if (openedFor !== null && !wasOpen) {
     setWasOpen(true);
+    setPicked(null);
     setStep({ kind: "search" });
     setSnap(SNAP_POINTS[0]);
     setDrafting(false);
-  } else if (meal === null && wasOpen) {
+  } else if (openedFor === null && wasOpen) {
     setWasOpen(false);
   }
 
@@ -149,7 +153,7 @@ export function AddSheet({
 
   return (
     <Drawer
-      open={meal !== null}
+      open={openedFor !== null}
       onOpenChange={onOpenChange}
       snapPoints={[...SNAP_POINTS]}
       activeSnapPoint={snap}
@@ -176,6 +180,26 @@ export function AddSheet({
             Search foods or enter one manually.
           </DrawerDescription>
         </DrawerHeader>
+
+        {meal && (step.kind === "qty" || step.kind === "custom") && (
+          <div className="mb-2 px-5">
+            <ToggleGroup
+              type="single"
+              variant="outline"
+              size="sm"
+              className="w-full"
+              value={meal}
+              onValueChange={(next) => next && setPicked(next as Meal)}
+              aria-label="Meal"
+            >
+              {MEALS.map((m) => (
+                <ToggleGroupItem key={m} value={m} className="h-11 flex-1 text-xs">
+                  {m}
+                </ToggleGroupItem>
+              ))}
+            </ToggleGroup>
+          </div>
+        )}
 
         {meal && (
           <FoodPicker
