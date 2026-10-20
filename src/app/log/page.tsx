@@ -87,6 +87,17 @@ export default async function LogPage({
         .then(must),
     ]);
 
+  // A shared Health Canada or Open Food Facts row someone else added is outside
+  // the catalog, but once logged it has to stay findable in Recent and search.
+  const known = new Set((foods ?? []).map((f) => f.id));
+  const missing = [...new Set((entries ?? []).map((e) => e.food_id as string | null))].filter(
+    (id): id is string => id !== null && !known.has(id),
+  );
+  if (missing.length > 0) {
+    const extra = await supabase.from("foods").select("*").in("id", missing);
+    if (!extra.error) foods?.push(...(extra.data as typeof foods));
+  }
+
   return (
     <LogScreen
       loadedFrom={from}
