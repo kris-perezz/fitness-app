@@ -24,7 +24,7 @@ const geistMono = Geist_Mono({
 export const metadata: Metadata = {
   // Matches the manifest's `name`, so the browser tab, the Add to Home Screen
   // prompt and the installed app all say the same thing.
-  title: "Jacked AF",
+  title: { default: "Jacked AF", template: "%s · Jacked AF" },
   description: "Food and training log",
 };
 

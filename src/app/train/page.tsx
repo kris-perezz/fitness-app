@@ -4,6 +4,8 @@ import { WINDOW_MONTHS, shiftMonth } from "@/lib/training";
 import { TrainHome, type DayVolume, type SessionSummary } from "@/components/train-home";
 import { serverToday } from "@/lib/server-time";
 
+export const metadata = { title: "Train" };
+
 export const dynamic = "force-dynamic";
 
 /**

@@ -4,6 +4,8 @@ import type { Food } from "@/lib/food";
 import type { RecipeRow } from "@/app/actions";
 import { RecipeList, type RecipeSummary } from "@/components/recipe-list";
 
+export const metadata = { title: "Recipes" };
+
 export const dynamic = "force-dynamic";
 
 /**

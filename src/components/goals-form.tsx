@@ -6,7 +6,7 @@ import { reach } from "@/lib/reach";
 import { Button } from "@/components/ui/button";
 import { Card } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
-import { Field, FieldGroup, FieldLabel } from "@/components/ui/field";
+import { Field, FieldDescription, FieldGroup, FieldLabel } from "@/components/ui/field";
 import {
   Popover,
   PopoverContent,
@@ -93,7 +93,7 @@ const MACRO_LABELS: Record<MacroKey, string> = {
   fat_goal_g: "Fat (g)",
 };
 
-export function GoalsForm({ goals }: { goals: Goals }) {
+export function GoalsForm({ goals, email }: { goals: Goals; email: string | null }) {
   /**
    * S69. The unit every weight on screen is shown in. Storage is always pounds,
    * so this converts at the edges -- here, and on the progress tab.
@@ -251,6 +251,10 @@ export function GoalsForm({ goals }: { goals: Goals }) {
 
   return (
     <main className={PAGE}>
+      <header className="px-1 pt-1">
+        <h1 className="text-[17px] font-semibold tracking-[-0.01em]">Profile</h1>
+        {email && <p className="text-xs text-muted-foreground">{email}</p>}
+      </header>
       <Card className={cn(SURFACE, SURFACE_PAD, "space-y-5")}>
         {/* S75/S79. FIRST ON THE SCREEN, because it now decides what the rest
             of the screen is for: with it off there are no macro targets to set,
@@ -277,6 +281,7 @@ export function GoalsForm({ goals }: { goals: Goals }) {
             </div>
             <Switch id="strict_mode" checked={strict} onCheckedChange={setStrict} />
           </Field>
+          <FieldDescription>Shows targets and marks days over or short.</FieldDescription>
         </FieldGroup>
 
         {/* S79. EVERY TARGET ON THIS SCREEN IS A STRICT-MODE IDEA, so in calm

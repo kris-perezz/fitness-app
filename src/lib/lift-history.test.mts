@@ -34,20 +34,29 @@ test("rep bands never share a line", () => {
   // under Brzycki, and merging the bands would rate it above a heavy triple.
   const { points } = liftHistory([
     { log_date: "2026-09-01", sets: [set({ reps: 3, load_lb: 275 })] },
-    { log_date: "2026-09-08", sets: [set({ reps: 30, load_lb: 140 })] },
+    { log_date: "2026-09-08", sets: [set({ reps: 20, load_lb: 140 })] },
   ]);
 
   assert.ok(points[0].e1rm !== null);
   assert.equal(points[0].repBand, null, "a heavy triple contributes nothing to the rep band");
-  assert.equal(points[1].e1rm, null, "a 30-rep set contributes nothing to the max band");
+  assert.equal(points[1].e1rm, null, "a 20-rep set contributes nothing to the max band");
   assert.ok(points[1].repBand !== null);
 
   // And the merged mistake, stated as a number so it cannot creep back: a
-  // 140 x 30 estimates ABOVE a genuine 275 x 3.
+  // 140 x 20 estimates ABOVE a genuine 275 x 3.
   assert.ok(
     points[1].repBand! > points[0].e1rm!,
     "this is exactly why the two bands must not share an axis series",
   );
+});
+
+test("a set past the plot limit never stretches the axis", () => {
+  const { points, sessions } = liftHistory([
+    { log_date: "2026-09-01", sets: [set({ reps: 30, load_lb: 140 })] },
+  ]);
+  assert.equal(points[0].repBand, null);
+  assert.equal(points[0].e1rm, null);
+  assert.equal(sessions[0].sets.length, 1, "the set is still listed");
 });
 
 test("warm-ups and skipped sets never reach the chart", () => {

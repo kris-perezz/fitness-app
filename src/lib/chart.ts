@@ -152,3 +152,13 @@ export function dayTick(date: string): string {
   const thisYear = d.getFullYear() === new Date().getFullYear();
   return d.toLocaleDateString("en-US", thisYear ? { day: "numeric", month: "short" } : { month: "short", year: "numeric" });
 }
+
+/** A date-only string as a numeric x value, for an axis spaced by time. */
+export function dayStamp(date: string): number {
+  return Date.parse(`${date}T12:00:00Z`);
+}
+
+/** The date-only string a `dayStamp` came from. */
+export function stampDay(stamp: number): string {
+  return new Date(stamp).toISOString().slice(0, 10);
+}

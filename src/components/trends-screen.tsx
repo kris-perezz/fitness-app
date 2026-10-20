@@ -119,18 +119,17 @@ export function TrendsScreen({
           {/* S86. Stated flat, never coloured or graded: an estimate is a
               legitimate entry (S35), and this is context for how hard to lean
               on the two charts above rather than a score. */}
-          {share.entries > 0 && (
+          {share.estimates > 0 && (
             <Card className={cn(SURFACE, SURFACE_PAD)}>
               <p className="text-sm">
                 <span className="font-medium tabular-nums">{share.percent}%</span> of the{" "}
                 <span className="tabular-nums">{share.entries}</span>{" "}
                 {share.entries === 1 ? "entry" : "entries"} in the last 30 days{" "}
-                {share.estimates === 1 ? "was an estimate" : "were estimates"}.
+                {share.estimates === 1 ? "was" : "were"} typed in by hand.
               </p>
               <p className="mt-1 text-xs text-muted-foreground">
-                An estimate is something you typed in yourself, with no food from the catalog
-                behind it. It says how hard to lean on the numbers above, not that anything is
-                wrong with them.
+                Typed in by hand means no food from the catalog is behind it. It says how hard
+                to lean on the numbers above, not that anything is wrong with them.
               </p>
             </Card>
           )}
@@ -236,6 +235,15 @@ function DayChart({
   const values = points.map((p) => p[dataKey]);
   const goalValues = points.map((p) => p[goalKey]);
 
+  // The window ends today, and today is unfinished, so it stays out of the average.
+  const past = values.slice(0, -1).filter((v): v is number => v !== null);
+  const average = past.length > 0 ? Math.round(past.reduce((a, b) => a + b, 0) / past.length) : null;
+  const notes = [
+    average !== null && `Daily average ${average.toLocaleString()} ${dataKey === "kcal" ? "cal" : "g"}`,
+    goalValues.some((v) => v !== null) && "Dashed line is your goal",
+    values[values.length - 1] !== null && "Lighter bar is today so far",
+  ].filter(Boolean);
+
   return (
     <Card className={cn(SURFACE, SURFACE_PAD)}>
       <div className="flex items-baseline justify-between gap-2">
@@ -254,6 +262,10 @@ function DayChart({
           values={values}
           goalValues={goalValues}
         />
+      )}
+
+      {notes.length > 0 && (
+        <p className="mt-2 text-xs text-muted-foreground">{notes.join(" · ")}</p>
       )}
     </Card>
   );

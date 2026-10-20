@@ -9,6 +9,8 @@ import { toDayGoal, withTodayGoal } from "@/lib/goals";
 import { LogScreen } from "@/components/log-screen";
 import { serverToday } from "@/lib/server-time";
 
+export const metadata = { title: "Food" };
+
 export const dynamic = "force-dynamic";
 
 /** A row as it comes out of the catalog, before the supersede filter below. */

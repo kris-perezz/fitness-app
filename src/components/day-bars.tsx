@@ -1,6 +1,6 @@
 "use client";
 
-import { Bar, BarChart, CartesianGrid, Line, XAxis, YAxis } from "recharts";
+import { Bar, BarChart, CartesianGrid, Cell, Line, XAxis, YAxis } from "recharts";
 import { CHART_CLASS, X_AXIS, Y_AXIS, countDomain, dayTick } from "@/lib/chart";
 import type { TrendPoint } from "@/lib/trends";
 import { ChartContainer, type ChartConfig } from "@/components/ui/chart";
@@ -48,7 +48,12 @@ export function DayBars({
           // window has nothing to animate between -- unlike the month
           // pager on Train, nothing here swaps underneath it.
           isAnimationActive={false}
-        />
+        >
+          {/* The window ends today, so the last bar is the unfinished day. */}
+          {points.map((p, i) => (
+            <Cell key={p.date} fillOpacity={i === points.length - 1 ? 0.45 : 1} />
+          ))}
+        </Bar>
         {/* Neutral and dashed, never red on the wrong side of it (S79
             rule 5 / S70). The line states where the target is; it does
             not grade the bars against it. Drawn after the bars so it

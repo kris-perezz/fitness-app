@@ -5,6 +5,8 @@ import { MonthLog } from "@/components/month-log";
 import { toDayGoal, withTodayGoal } from "@/lib/goals";
 import { serverToday } from "@/lib/server-time";
 
+export const metadata = { title: "Month" };
+
 export const dynamic = "force-dynamic";
 
 /**

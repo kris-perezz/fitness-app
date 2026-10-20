@@ -163,13 +163,15 @@ export function chartSeries(
   entries: WeighIn[],
   fromDate?: string,
   halfLife = HALF_LIFE_DAYS,
+  through?: string,
 ): ChartPoint[] {
   const series = trendSeries(entries, halfLife).filter((p) => (fromDate ? p.date >= fromDate : true));
   if (series.length === 0) return [];
 
   const byDate = new Map(series.map((p) => [p.date, p]));
   const firstDay = series[0].date;
-  const lastDay = series[series.length - 1].date;
+  const lastReading = series[series.length - 1].date;
+  const lastDay = through && through > lastReading ? through : lastReading;
   const trend = bridge(series);
   const out: ChartPoint[] = [];
 
@@ -368,6 +370,21 @@ export function rateLabel(rate: Rate, unit: DisplayUnit = "lb"): string {
   // offset is ever added.
   const shown = Math.abs(rateToDisplay(rate.lbPerWeek, unit));
   return `${sign}${shown.toFixed(1)} ${unit}/week`;
+}
+
+/** The reading closest in time to `date`, ignoring any on `date` itself. */
+export function nearestReading(entries: WeighIn[], date: string): WeighIn | null {
+  let best: WeighIn | null = null;
+  for (const e of entries) {
+    if (e.date === date) continue;
+    if (!best || Math.abs(daysBetween(e.date, date)) < Math.abs(daysBetween(best.date, date))) best = e;
+  }
+  return best;
+}
+
+/** More than 10% off the neighbouring reading is a typo until the user says otherwise. */
+export function isOutlier(weightLb: number, nearbyLb: number): boolean {
+  return Math.abs(weightLb - nearbyLb) / nearbyLb > 0.1;
 }
 
 /** "over the last 4 weeks" -- a rate without its window is not a fact (S59). */

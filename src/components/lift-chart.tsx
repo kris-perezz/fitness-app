@@ -3,9 +3,9 @@
 import Link from "next/link";
 import { CartesianGrid, Line, LineChart, XAxis, YAxis } from "recharts";
 
-import { CHART_CLASS, MEASURE_TICKS, SERIES, TOOLTIP, X_AXIS, Y_AXIS, dayTick, measureDomain } from "@/lib/chart";
+import { CHART_CLASS, MEASURE_TICKS, SERIES, TOOLTIP, X_AXIS, Y_AXIS, dayStamp, dayTick, measureDomain, stampDay } from "@/lib/chart";
 import { useFinePointer } from "@/lib/pointer";
-import { MIN_LIFT_SESSIONS, hasRepBand, repsOnly, shortDate, type LiftPoint } from "@/lib/training";
+import { MAX_PINS, MIN_LIFT_SESSIONS, hasRepBand, repsOnly, shortDate, type LiftPoint } from "@/lib/training";
 import { toDisplay, type DisplayUnit } from "@/lib/weight";
 import {
   ChartContainer,
@@ -20,6 +20,15 @@ const liftConfig = {
   repBand: { label: "High-rep", color: "var(--muted-foreground)" },
 } satisfies ChartConfig;
 
+const TIME_AXIS = {
+  ...X_AXIS,
+  dataKey: "t",
+  type: "number",
+  scale: "time",
+  domain: ["dataMin", "dataMax"],
+  tickFormatter: (t: number) => dayTick(stampDay(t)),
+} as const;
+
 /** Stored pounds in the reader's unit, to the tenth a plate can be read to. */
 function inUnit(points: LiftPoint[], unit: DisplayUnit): LiftPoint[] {
   if (unit === "lb") return points;
@@ -29,9 +38,10 @@ function inUnit(points: LiftPoint[], unit: DisplayUnit): LiftPoint[] {
 
 export function LiftChart({ points: stored, unit }: { points: LiftPoint[]; unit: DisplayUnit }) {
   const byReps = repsOnly(stored);
-  const points = byReps
+  const points = (byReps
     ? stored.map((p) => ({ ...p, e1rm: p.reps, repBand: null }))
-    : inUnit(stored, unit);
+    : inUnit(stored, unit)
+  ).map((p) => ({ ...p, t: dayStamp(p.date) }));
   const suffix = byReps ? "reps" : unit;
   const config = byReps ? { ...liftConfig, e1rm: { ...liftConfig.e1rm, label: "Best reps" } } : liftConfig;
   const showRepBand = hasRepBand(points);
@@ -47,7 +57,7 @@ export function LiftChart({ points: stored, unit }: { points: LiftPoint[]; unit:
     <ChartContainer config={config} className={`mt-3 ${CHART_CLASS}`}>
       <LineChart data={points} margin={{ left: 0, right: 8, top: 4 }} accessibilityLayer>
         <CartesianGrid vertical={false} />
-        <XAxis dataKey="date" {...X_AXIS} tickFormatter={dayTick} />
+        <XAxis {...TIME_AXIS} />
         {/* Fitted, never zero-based: a lift is a measure, not a count (S79
             rule 1), and a 0-300 axis draws a real 20 lb gain as a flat line. */}
         <YAxis domain={domain} {...Y_AXIS} tickCount={MEASURE_TICKS} width={38} />
@@ -98,7 +108,7 @@ export function LiftChart({ points: stored, unit }: { points: LiftPoint[]; unit:
             {...TOOLTIP}
             content={
               <ChartTooltipContent
-                labelFormatter={(value) => shortDate(String(value))}
+                labelFormatter={(value) => shortDate(stampDay(Number(value)))}
                 formatter={(value, name, item) =>
                   value == null ? null : (
                     <>
@@ -126,8 +136,6 @@ export function LiftChart({ points: stored, unit }: { points: LiftPoint[]; unit:
 
 export type PinnedLift = { id: string; name: string; points: LiftPoint[] };
 
-const LIFT_COLOURS = 4;
-
 /**
  * Estimated max only. The high-rep band is Brzycki past ten reps, which rates a
  * 140 x 30 squat at 720 (S33), and on a chart headed 1RM it reads as one.
@@ -149,7 +157,7 @@ export function PinnedLiftsChart({ lifts, unit }: { lifts: PinnedLift[]; unit: D
     ...lift,
     key: `l${i}`,
     drawn: drawable(lift.points),
-    color: `var(--lift-${(i % LIFT_COLOURS) + 1})`,
+    color: `var(--lift-${i % MAX_PINS + 1})`,
   }));
   const drawn = series.filter((s) => s.drawn);
 
@@ -163,7 +171,7 @@ export function PinnedLiftsChart({ lifts, unit }: { lifts: PinnedLift[]; unit: D
   for (const s of drawn) {
     for (const p of inUnit(s.points, unit)) {
       if (p.e1rm === null) continue;
-      const row = byDate.get(p.date) ?? { date: p.date };
+      const row = byDate.get(p.date) ?? { date: p.date, t: dayStamp(p.date) };
       row[s.key] = p.e1rm;
       byDate.set(p.date, row);
     }
@@ -181,7 +189,7 @@ export function PinnedLiftsChart({ lifts, unit }: { lifts: PinnedLift[]; unit: D
         <ChartContainer config={config} className={`mt-3 ${CHART_CLASS}`}>
           <LineChart data={rows} margin={{ left: 0, right: 8, top: 4 }} accessibilityLayer>
             <CartesianGrid vertical={false} />
-            <XAxis dataKey="date" {...X_AXIS} tickFormatter={dayTick} />
+            <XAxis {...TIME_AXIS} />
             <YAxis domain={domain} {...Y_AXIS} tickCount={MEASURE_TICKS} width={38} />
 
             {drawn.map((s) => (
@@ -203,7 +211,7 @@ export function PinnedLiftsChart({ lifts, unit }: { lifts: PinnedLift[]; unit: D
                 {...TOOLTIP}
                 content={
                   <ChartTooltipContent
-                    labelFormatter={(value) => shortDate(String(value))}
+                    labelFormatter={(value) => shortDate(stampDay(Number(value)))}
                     formatter={(value, name, item) =>
                       value == null ? null : (
                         <>

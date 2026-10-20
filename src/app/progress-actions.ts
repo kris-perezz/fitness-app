@@ -10,6 +10,7 @@
 import { revalidatePath } from "next/cache";
 import { authUser, createClient, plain } from "@/lib/supabase/server";
 import { toWeighIn, type WeighIn } from "@/lib/weight";
+import { MAX_PINS } from "@/lib/training";
 import { serverToday } from "@/lib/server-time";
 
 /**
@@ -136,6 +137,14 @@ export async function pinExercise(
   const supabase = await createClient();
   const user = await authUser(supabase);
   if (!user) return { error: "Not signed in" };
+
+  if (pinned) {
+    const { data } = await supabase.from("pinned_exercises").select("exercise_id").eq("user_id", user.id);
+    const ids = (data ?? []).map((r) => r.exercise_id);
+    if (!ids.includes(exerciseId) && ids.length >= MAX_PINS) {
+      return { error: `Pin up to ${MAX_PINS} lifts. Unpin one first.` };
+    }
+  }
 
   const { error } = pinned
     ? await supabase

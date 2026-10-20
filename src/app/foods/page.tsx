@@ -3,6 +3,8 @@ import type { Food } from "@/lib/food";
 import { toMicros } from "@/lib/micros";
 import { FoodShelf } from "@/components/food-shelf";
 
+export const metadata = { title: "Foods" };
+
 export const dynamic = "force-dynamic";
 
 type CatalogRow = Food & { created_by: string | null; supersedes: string | null };

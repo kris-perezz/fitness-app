@@ -54,6 +54,6 @@ export const config = {
     // Metadata routes are excluded deliberately: a browser fetches the manifest
     // and icons without credentials, so redirecting them to /login breaks
     // installing the app.
-    "/((?!_next/static|_next/image|favicon.ico|manifest.webmanifest|icon|apple-icon|.*\.(?:svg|png|jpg|webp)$).*)",
+    "/((?!_next/static|_next/image|favicon.ico|manifest.webmanifest|icon|apple-icon|pwa-icon|.*\.(?:svg|png|jpg|webp)$).*)",
   ],
 };

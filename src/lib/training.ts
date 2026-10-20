@@ -261,6 +261,12 @@ export function estimated1RM(loadLb: number, reps: number | null): number {
 /** Above this, a set is judged as a rep effort rather than as a projected max. */
 export const REP_CAP = 10;
 
+/** One colour per pinned lift on the progress chart. */
+export const MAX_PINS = 4;
+
+/** Past this, Brzycki is a guess large enough to flatten the chart, so the set is not plotted. */
+export const PLOT_REP_LIMIT = 20;
+
 /**
  * The three kinds of best, kept apart (S33).
  *
@@ -539,7 +545,7 @@ export function liftHistory(
       }
       const e = estimated1RM(set.load_lb, set.reps);
       if (reps <= REP_CAP) e1rm = Math.max(e1rm, e);
-      else repBand = Math.max(repBand, e);
+      else if (reps <= PLOT_REP_LIMIT) repBand = Math.max(repBand, e);
     }
     // A session with only unfilled or zero-rep sets contributes no point at
     // all, rather than a zero -- it is a slot somebody opened and left.

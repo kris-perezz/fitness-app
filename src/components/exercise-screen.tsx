@@ -8,6 +8,7 @@ import { reach } from "@/lib/reach";
 import {
   dayTitle,
   MIN_LIFT_SESSIONS,
+  PLOT_REP_LIMIT,
   REP_CAP,
   hasRepBand,
   setSummary,
@@ -16,6 +17,7 @@ import {
   enoughSessions,
   hasLiftValue,
   repsOnly,
+  trim,
   type LiftSession,
 } from "@/lib/training";
 import { Button } from "@/components/ui/button";
@@ -27,7 +29,7 @@ import { Item, ItemContent, ItemDescription, ItemTitle } from "@/components/ui/i
 import { cn } from "@/lib/utils";
 import { PAGE, SURFACE, SURFACE_PAD } from "@/lib/ui";
 import { useSwipe } from "@/lib/swipe";
-import type { DisplayUnit } from "@/lib/weight";
+import { toDisplay, type DisplayUnit } from "@/lib/weight";
 import { todayDate } from "@/lib/food";
 import { useBack } from "@/lib/back";
 
@@ -83,6 +85,9 @@ export function ExerciseScreen({
   const plottable = points.filter(hasLiftValue);
   const enough = enoughSessions(points);
   const showRepBand = hasRepBand(points);
+  const byReps = repsOnly(points);
+  const marks = points.map((p) => (byReps ? p.reps : p.e1rm)).filter((v): v is number => v !== null);
+  const show = (v: number) => (byReps ? `${v} reps` : `${trim(toDisplay(v, unit))} ${unit}`);
 
   // The back arrow in the header, as a gesture. Installed to a home screen
   // there is no browser edge-swipe to fall back on, so a stacked screen that
@@ -128,11 +133,24 @@ export function ExerciseScreen({
         <>
           <Card className={cn(SURFACE, SURFACE_PAD)}>
             <div className="flex items-baseline justify-between gap-2">
-              <h2 className="text-sm font-medium">{repsOnly(points) ? "Best reps" : "Estimated 1RM"}</h2>
+              <h2 className="text-sm font-medium">{byReps ? "Best reps" : "Estimated 1RM"}</h2>
               <span className="text-xs text-muted-foreground">
-                {sessions.length} {sessions.length === 1 ? "session" : "sessions"}
+                {plottable.length} {plottable.length === 1 ? "session" : "sessions"}
               </span>
             </div>
+
+            {marks.length > 0 && (
+              <dl className="mt-2 flex gap-6 tabular-nums">
+                <div>
+                  <dt className="text-xs text-muted-foreground">Current</dt>
+                  <dd className="text-lg font-medium">{show(marks[marks.length - 1])}</dd>
+                </div>
+                <div>
+                  <dt className="text-xs text-muted-foreground">Best</dt>
+                  <dd className="text-lg font-medium">{show(Math.max(...marks))}</dd>
+                </div>
+              </dl>
+            )}
 
             {!enough ? (
               /* S79 rule 4. Four sessions, because a beginner's lifts climb
@@ -148,7 +166,7 @@ export function ExerciseScreen({
 
             {showRepBand && enough && (
               <p className="mt-2 text-xs text-muted-foreground">
-                The dashed line is sets above {REP_CAP} reps, kept separate because an estimated max
+                The dashed line is sets of {REP_CAP + 1} to {PLOT_REP_LIMIT} reps, kept separate because an estimated max
                 from a long set is not comparable to one from a heavy set.
               </p>
             )}

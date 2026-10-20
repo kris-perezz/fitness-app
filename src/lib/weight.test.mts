@@ -30,6 +30,8 @@ import {
   rateLabel,
   shiftDays,
   trendSeries,
+  isOutlier,
+  nearestReading,
   weeklyRate,
   windowLabel,
   type WeighIn,
@@ -371,4 +373,23 @@ test("S69: a rate converts as a difference, not as a weight", () => {
   // an offset the way a temperature conversion would.
   assert.equal(Number(rateToDisplay(-2, "kg").toFixed(2)), -0.91);
   assert.equal(rateToDisplay(-2, "lb"), -2);
+});
+
+test("the nearest reading skips the date itself and picks the closer side", () => {
+  const log = series("2026-09-01", 3, 160, 1, 10); // 09-01, 09-11, 09-21
+  assert.equal(nearestReading(log, "2026-09-12")?.date, "2026-09-11");
+  assert.equal(nearestReading(log, "2026-09-11")?.date, "2026-09-01");
+  assert.equal(nearestReading([], "2026-09-11"), null);
+});
+
+test("a typo of a decimal point is an outlier and a real swing is not", () => {
+  assert.equal(isOutlier(1550, 155), true);
+  assert.equal(isOutlier(15.5, 155), true);
+  assert.equal(isOutlier(165, 155), false);
+});
+
+test("a chart can run past the last reading to today", () => {
+  const points = chartSeries(series("2026-09-01", 6, 160, 0), undefined, undefined, "2026-09-10");
+  assert.equal(points[points.length - 1].date, "2026-09-10");
+  assert.equal(points[points.length - 1].weightLb, null);
 });

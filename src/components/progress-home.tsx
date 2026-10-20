@@ -17,8 +17,11 @@ import {
   chartSeries,
   chartWindow,
   chartWindowFrom,
+  daysBetween,
   deltaLabel,
   headline as headlineOf,
+  isOutlier,
+  nearestReading,
   rateLabel,
   weeklyRate,
   windowLabel,
@@ -79,6 +82,8 @@ const PinnedLiftsChart = dynamic(
   () => import("@/components/lift-chart").then((m) => m.PinnedLiftsChart),
   { ssr: false, loading: () => <div className={`mt-3 ${CHART_CLASS}`} /> },
 );
+
+const STALE_DAYS = 14;
 
 export type WeightGoal = { weightLb: number | null; rateLbPerWeek: number | null };
 
@@ -251,7 +256,8 @@ export function ProgressHome({
             trend's action or the calendar's, it is the screen's. */}
         <header className="pt-1 lg:order-1 lg:col-span-2">
           <Button className="h-12 w-full text-base" onClick={() => setEditing(today)}>
-            <Scale className="size-4" /> Weigh in
+            <Scale className="size-4" />
+            {byDate.has(today) ? `Weighed in · ${toDisplay(byDate.get(today)!.weightLb, unit).toFixed(1)} ${unit}` : "Weigh in"}
           </Button>
         </header>
 
@@ -284,7 +290,7 @@ export function ProgressHome({
             so the small screen, which is the one this app is for, never pays
             for the large one's layout. */}
         <div className="lg:order-2 lg:col-span-2">
-          <Headline head={head} rate={rate} goal={goal} unit={unit} />
+          <Headline head={head} rate={rate} goal={goal} unit={unit} today={today} />
         </div>
 
         {/* BOTH COLUMNS from `lg`. Of everything on this tab the time series
@@ -300,6 +306,7 @@ export function ProgressHome({
           onWindowChange={setWindowKey}
           extending={chartUnderCovered}
           goal={goal}
+          today={today}
         />
         </div>
 
@@ -414,10 +421,10 @@ export function ProgressHome({
         onOpenChange={(open) => !open && setEditing(null)}
         existing={editing ? (byDate.get(editing) ?? null) : null}
         unit={unit}
-        // Pre-filled with the most recent weight, because the answer is almost
-        // always within a pound of it and confirming beats typing. NOT from
-        // today's entry when one exists -- that path is an edit and says so.
-        suggestion={head?.latest.weightLb ?? null}
+        // Pre-filled from the reading nearest the chosen day, because the
+        // answer is almost always within a pound of it and confirming beats
+        // typing. NOT from the day's own entry -- that path is an edit.
+        suggestion={editing ? (nearestReading(entries, editing)?.weightLb ?? null) : null}
         today={today}
         // Applied here and not refetched: saveWeighIn already revalidated the
         // route, so a refresh would re-render it for a fact this screen is
@@ -451,11 +458,13 @@ function Headline({
   rate,
   goal,
   unit,
+  today,
 }: {
   head: ReturnType<typeof headlineOf>;
   rate: ReturnType<typeof weeklyRate>;
   goal: WeightGoal;
   unit: DisplayUnit;
+  today: string;
 }) {
   if (!head) return null;
 
@@ -502,7 +511,10 @@ function Headline({
       </p>
       {rate ? (
         <p className="mt-1 text-sm text-muted-foreground">
-          <span className="tabular-nums">{rateLabel(rate, unit)}</span> {windowLabel(rate.days)}
+          <span className="tabular-nums">{rateLabel(rate, unit)}</span>{" "}
+          {daysBetween(head.latest.date, today) > STALE_DAYS
+            ? `as of ${shortDate(head.latest.date)}`
+            : windowLabel(rate.days)}
         </p>
       ) : null}
 
@@ -567,6 +579,7 @@ function WeighInSheet({
   const [value, setValue] = useState("");
   const [openedFor, setOpenedFor] = useState<string | null>(date);
   const [saving, startSave] = useTransition();
+  const [confirming, setConfirming] = useState(false);
   const pending = saving;
 
   // Reset on every OPEN, and on opening a different day. Adjusted during render
@@ -576,6 +589,7 @@ function WeighInSheet({
   // at last is a wrong number one tap from being saved.
   if (date !== null && date !== openedFor) {
     setOpenedFor(date);
+    setConfirming(false);
     // Shown in the display unit, and rounded only here -- the stored pound
     // value keeps its precision so a kg round trip lands on what was typed.
     setValue(
@@ -599,6 +613,10 @@ function WeighInSheet({
     // Straight back to pounds, UNROUNDED. Storage is always lb (S69); rounding
     // here would make 82 kg read back as 81.99 the next time the sheet opened.
     const lb = fromDisplay(typed, unit);
+    if (!confirming && suggestion !== null && isOutlier(lb, suggestion)) {
+      setConfirming(true);
+      return;
+    }
     startSave(async () => {
       const res = await reach(saveWeighIn(date, lb, existing?.note ?? null));
       if (res.error) {
@@ -643,7 +661,10 @@ function WeighInSheet({
               autoFocus
               className="h-12 text-base tabular-nums"
               value={value}
-              onChange={(e) => setValue(e.target.value)}
+              onChange={(e) => {
+                setValue(e.target.value);
+                setConfirming(false);
+              }}
               // Selected on focus so the first digit replaces the suggestion
               // rather than appending to it, the same fix the load field got.
               onFocus={(e) => e.currentTarget.select()}
@@ -654,6 +675,11 @@ function WeighInSheet({
               <InputGroupText>{unit}</InputGroupText>
             </InputGroupAddon>
           </InputGroup>
+          {confirming && (
+            <p role="alert" className="mt-2 text-sm text-warning">
+              Check this weight. Tap again to save.
+            </p>
+          )}
         </div>
 
         <div className="flex shrink-0 items-center gap-2 border-t border-border px-5 pt-3 pb-safe">
@@ -669,7 +695,7 @@ function WeighInSheet({
             </Button>
           )}
           <Button className="h-11 flex-1 text-base" onClick={save} disabled={pending || !value}>
-            {saving ? "Saving" : existing ? "Save" : "Weigh in"}
+            {saving ? "Saving" : confirming ? "Save anyway" : existing ? "Save" : "Weigh in"}
           </Button>
         </div>
       </DrawerContent>
@@ -733,6 +759,7 @@ function WeightChart({
   onWindowChange,
   extending,
   goal,
+  today,
 }: {
   entries: WeighIn[];
   unit: DisplayUnit;
@@ -743,6 +770,7 @@ function WeightChart({
   /** S60. Only the weight half draws anything here -- the rate has no line,
    * and S60 rules out projecting a date from it. */
   goal: WeightGoal;
+  today: string;
 }) {
   // Smoothed over the WHOLE log and only then clipped, so the line entering
   // from the left carries its history rather than restarting at the window
@@ -752,12 +780,12 @@ function WeightChart({
   // at the edge keeps a single place where the unit is applied (S69).
   const points = useMemo(
     () =>
-      chartSeries(entries, from).map((p) => ({
+      chartSeries(entries, from, undefined, today).map((p) => ({
         ...p,
         weightLb: p.weightLb === null ? null : toDisplay(p.weightLb, unit),
         trendLb: p.trendLb === null ? null : toDisplay(p.trendLb, unit),
       })),
-    [entries, from, unit],
+    [entries, from, today, unit],
   );
   // Converted once, here, same as every other weight on this chart (S69).
   const goalWeight = goal.weightLb === null ? null : toDisplay(goal.weightLb, unit);
@@ -807,7 +835,7 @@ function WeightChart({
             <ToggleGroupItem
               key={w.key}
               value={w.key}
-              className="rounded-full border-0 px-3 text-xs"
+              className="h-11 min-w-11 rounded-full border-0 px-3 text-xs"
             >
               {w.label}
             </ToggleGroupItem>

@@ -4,6 +4,8 @@ import { toDayGoal, withTodayGoal, type DayGoal } from "@/lib/goals";
 import { TrendsScreen } from "@/components/trends-screen";
 import { serverToday } from "@/lib/server-time";
 
+export const metadata = { title: "Trends" };
+
 export const dynamic = "force-dynamic";
 
 /**
