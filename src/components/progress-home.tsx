@@ -808,8 +808,8 @@ function WeightChart({
 
   return (
     <Card className={cn(SURFACE, SURFACE_PAD)}>
-      <div className="flex items-center justify-between gap-3">
-        <h2 className="text-xs font-semibold uppercase tracking-[0.08em] text-muted-foreground">
+      <div className="flex flex-col items-start gap-2 sm:flex-row sm:items-center sm:justify-between sm:gap-3">
+        <h2 className="whitespace-nowrap text-xs font-semibold uppercase tracking-[0.08em] text-muted-foreground">
           {chartWindow(windowKey).title}
         </h2>
         {/* One container with a moving selection, not five outlined chips in a

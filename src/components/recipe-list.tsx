@@ -70,9 +70,9 @@ export function RecipeList({ recipes }: { recipes: RecipeSummary[] }) {
           <Button size="icon-xl" variant="ghost" aria-label="Back to the log" onClick={goBack}>
             <ChevronLeft className="size-5" />
           </Button>
-          <span className="text-sm font-medium">Recipes</span>
-          <Button variant="outline" className="ml-auto h-11" onClick={() => setNaming(true)}>
-            <Plus className="size-4" /> New recipe
+          <h1 className="flex-1 text-sm font-medium">Recipes</h1>
+          <Button size="sm" variant="ghost" className="h-11" onClick={() => setNaming(true)}>
+            <Plus className="size-4" /> New
           </Button>
         </header>
 
