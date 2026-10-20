@@ -36,9 +36,10 @@ export function searchNamed<T extends Named>(items: T[], query: string, limit = 
   const scored: { item: T; score: number }[] = [];
 
   for (const item of items) {
-    const haystacks = [item.name.toLowerCase(), ...item.aliases.map((a) => a.toLowerCase())];
-    let best = Infinity;
-    for (const h of haystacks) best = Math.min(best, score(h, q));
+    // Odd scores are aliases: a dish whose alias starts with "chicken" should not
+    // outrank foods actually named chicken, but an exact alias still beats a prefix.
+    let best = score(item.name.toLowerCase(), q) * 2;
+    for (const alias of item.aliases) best = Math.min(best, score(alias.toLowerCase(), q) * 2 + 1);
     if (best < Infinity) scored.push({ item, score: best });
   }
 
