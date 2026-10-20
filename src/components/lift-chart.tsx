@@ -6,7 +6,7 @@ import { CartesianGrid, Line, LineChart, XAxis, YAxis } from "recharts";
 import { CHART_CLASS, MEASURE_TICKS, SERIES, TOOLTIP, X_AXIS, Y_AXIS, dayStamp, dayTick, measureDomain, stampDay } from "@/lib/chart";
 import { useFinePointer } from "@/lib/pointer";
 import { MAX_PINS, MIN_LIFT_SESSIONS, hasRepBand, repsOnly, shortDate, type LiftPoint } from "@/lib/training";
-import { toDisplay, type DisplayUnit } from "@/lib/weight";
+import { daysBetween, toDisplay, type DisplayUnit } from "@/lib/weight";
 import {
   ChartContainer,
   ChartTooltip,
@@ -16,7 +16,8 @@ import {
 
 /** One lift's estimated max over time (S80), on the exercise screen. */
 const liftConfig = {
-  e1rm: { label: "Est. 1RM", color: "var(--primary)" },
+  trend: { label: "Best, 6 weeks", color: "var(--primary)" },
+  e1rm: { label: "Est. 1RM", color: "var(--muted-foreground)" },
   repBand: { label: "High-rep", color: "var(--muted-foreground)" },
 } satisfies ChartConfig;
 
@@ -29,6 +30,23 @@ const TIME_AXIS = {
   tickFormatter: (t: number) => dayTick(stampDay(t)),
 } as const;
 
+/**
+ * One session's estimate swings with the rep scheme, so the line is the best
+ * estimate over the trailing six weeks and the sessions are dots beneath it.
+ */
+const TREND_DAYS = 42;
+
+function withTrend<P extends LiftPoint>(points: P[]): (P & { trend: number | null })[] {
+  return points.map((p, i) => {
+    let best: number | null = null;
+    for (let j = i; j >= 0 && daysBetween(points[j].date, p.date) <= TREND_DAYS; j -= 1) {
+      const v = points[j].e1rm;
+      if (v !== null && (best === null || v > best)) best = v;
+    }
+    return { ...p, trend: best };
+  });
+}
+
 /** Stored pounds in the reader's unit, to the tenth a plate can be read to. */
 function inUnit(points: LiftPoint[], unit: DisplayUnit): LiftPoint[] {
   if (unit === "lb") return points;
@@ -38,12 +56,11 @@ function inUnit(points: LiftPoint[], unit: DisplayUnit): LiftPoint[] {
 
 export function LiftChart({ points: stored, unit }: { points: LiftPoint[]; unit: DisplayUnit }) {
   const byReps = repsOnly(stored);
-  const points = (byReps
-    ? stored.map((p) => ({ ...p, e1rm: p.reps, repBand: null }))
-    : inUnit(stored, unit)
+  const points = withTrend(
+    byReps ? stored.map((p) => ({ ...p, e1rm: p.reps, repBand: null })) : inUnit(stored, unit),
   ).map((p) => ({ ...p, t: dayStamp(p.date) }));
   const suffix = byReps ? "reps" : unit;
-  const config = byReps ? { ...liftConfig, e1rm: { ...liftConfig.e1rm, label: "Best reps" } } : liftConfig;
+  const config = byReps ? { ...liftConfig, e1rm: { ...liftConfig.e1rm, label: "Reps" } } : liftConfig;
   const showRepBand = hasRepBand(points);
   const hoverable = useFinePointer();
   const domain = measureDomain(
@@ -64,23 +81,21 @@ export function LiftChart({ points: stored, unit }: { points: LiftPoint[]; unit:
 
         <Line
           {...SERIES}
-          // CONNECTED ACROSS THE HOLES, unlike the raw series on the weight
-          // chart and for the same reason the trend there is. A null here is a
-          // session with no set in this rep band -- not a session where the
-          // lift got weaker, and not a day that did not happen. Strength is the
-          // hidden thing each session measures once, so the line between two
-          // estimates is the model, and the dots below say which days were
-          // actually sessions.
-          connectNulls
           dataKey="e1rm"
-          type="monotone"
-          stroke="var(--color-e1rm)"
+          stroke="none"
+          dot={{ r: 2, fill: "var(--color-e1rm)", fillOpacity: 0.6, strokeWidth: 0 }}
+          activeDot={false}
+        />
+        <Line
+          {...SERIES}
+          // Across the holes: a session with no set in this rep band is not a
+          // session where the lift got weaker.
+          connectNulls
+          dataKey="trend"
+          type="linear"
+          stroke="var(--color-trend)"
           strokeWidth={2.5}
-          strokeLinecap="round"
-          // Dots ON, unlike the weight chart: a lift has one point per session
-          // rather than one per day, so the points are sparse enough to mark and
-          // a reader wants to know which days were sessions at all.
-          dot={{ r: 2, fill: "var(--color-e1rm)", strokeWidth: 0 }}
+          dot={false}
         />
 
         {/* A SECOND SERIES, never merged into the first. S33 keeps the bands
@@ -92,7 +107,7 @@ export function LiftChart({ points: stored, unit }: { points: LiftPoint[]; unit:
             {...SERIES}
             connectNulls
             dataKey="repBand"
-            type="monotone"
+            type="linear"
             stroke="var(--color-repBand)"
             strokeWidth={1.5}
             strokeDasharray="4 3"
@@ -169,10 +184,10 @@ export function PinnedLiftsChart({ lifts, unit }: { lifts: PinnedLift[]; unit: D
   // days, and connectNulls carries its line across them.
   const byDate = new Map<string, Record<string, string | number>>();
   for (const s of drawn) {
-    for (const p of inUnit(s.points, unit)) {
-      if (p.e1rm === null) continue;
+    for (const p of withTrend(inUnit(s.points, unit))) {
+      if (p.trend === null) continue;
       const row = byDate.get(p.date) ?? { date: p.date, t: dayStamp(p.date) };
-      row[s.key] = p.e1rm;
+      row[s.key] = p.trend;
       byDate.set(p.date, row);
     }
   }
@@ -198,11 +213,10 @@ export function PinnedLiftsChart({ lifts, unit }: { lifts: PinnedLift[]; unit: D
                 {...SERIES}
                 connectNulls
                 dataKey={s.key}
-                type="monotone"
+                type="linear"
                 stroke={`var(--color-${s.key})`}
                 strokeWidth={2.5}
-                strokeLinecap="round"
-                dot={{ r: 2, fill: `var(--color-${s.key})`, strokeWidth: 0 }}
+                dot={false}
               />
             ))}
 
