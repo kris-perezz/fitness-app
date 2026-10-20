@@ -80,9 +80,7 @@ test("a slot opened and never filled in contributes no point", () => {
   const { points } = liftHistory([
     { log_date: "2026-09-01", sets: [set({ reps: null, load_lb: 0 })] },
   ]);
-  assert.equal(points.length, 1);
-  assert.equal(points[0].e1rm, null, "no band gets a zero");
-  assert.equal(points[0].repBand, null);
+  assert.equal(points.length, 0, "a blank set is not a session's lift, not even a zero");
 });
 
 test("points run forwards and the set list runs backwards", () => {

@@ -223,7 +223,8 @@ export function searchExercises(exercises: Exercise[], query: string): Exercise[
  * does not make is how a definition quietly drifts from its name.
  */
 export function isWorkingSet(set: WorkoutSet): boolean {
-  return !set.skipped && set.set_type !== "warmup";
+  // Same rule as the volume views (0036): a set with no reps was not done.
+  return !set.skipped && set.set_type !== "warmup" && (set.reps ?? 0) > 0;
 }
 
 /**
