@@ -114,8 +114,9 @@ distinct food you can name -- the fries, the curds, the gravy, the meat -- each
 with the grams you are assuming for that item and the macros for that mass
 alone. One food is one component, but never return a single component
 standing for a meal of several foods, and never name one "meal" or "plate":
-the assumed grams are the part most likely to be wrong, and separating them is what lets a wrong answer be corrected instead of
-thrown away. Combine two foods only when they are genuinely inseparable, such
+the assumed grams are the part most likely to be wrong, and separating them is
+what lets a wrong answer be corrected instead of thrown away. Combine two foods
+only when they are genuinely inseparable, such
 as a sauce already stirred through.
 
 Do not return overall totals. They are computed by adding your components up,
