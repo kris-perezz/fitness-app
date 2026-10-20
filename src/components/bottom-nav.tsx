@@ -91,7 +91,9 @@ export function BottomNav({ openWorkoutId: fromServer }: { openWorkoutId?: strin
 
     // Train links straight into today's open session rather than through
     // /train, which would otherwise redirect there itself on arrival (S26).
-    // Skipping that hop means the prefetched shell is the session's own.
+    // Skipping that hop is the only way this link is ever prefetched all the
+    // way to real data instead of to a redirect the browser has to follow
+    // cold.
     const target = href === "/train" && openWorkoutId ? `/train/${openWorkoutId}` : href;
 
     return { href, label, Icon, active, target };
@@ -113,10 +115,12 @@ export function BottomNav({ openWorkoutId: fromServer }: { openWorkoutId?: strin
           <li key={href} className="flex-1">
             <Link
               href={target}
-              // The default prefetch: each tab's shell up to its loading.tsx,
-              // so a tap paints the skeleton at once. A full prefetch would
-              // run four whole server renders, every query included, on every
-              // page view.
+              // A full prefetch, so switching is instant rather than a server
+              // render behind a skeleton. It stores under the static stale time
+              // (five minutes) where the default dynamic one is never reused,
+              // and saves revalidate their paths, so nothing shown goes stale.
+              // Production only -- Next does not prefetch in dev.
+              prefetch
               aria-current={active ? "page" : undefined}
               className={cn(
                 // 44px minimum target, which is the floor on both platforms.
@@ -150,6 +154,7 @@ export function BottomNav({ openWorkoutId: fromServer }: { openWorkoutId?: strin
           <li key={href}>
             <Link
               href={target}
+              prefetch
               aria-current={active ? "page" : undefined}
               className={cn(
                 "relative flex flex-col items-center justify-center gap-1 rounded-lg py-3 transition-colors hover:bg-accent",
