@@ -16,6 +16,7 @@ import {
   duplicateRecipe,
   removeRecipeIngredient,
   saveRecipe,
+  updateRecipe,
   updateRecipeIngredient,
   type RecipeRow,
 } from "@/app/actions";
@@ -102,18 +103,29 @@ export function RecipeEditor({
       ? yieldCheck(cookedWeight, raw.grams)
       : null;
 
+  // What the server last accepted, so leaving or copying can save the rest.
+  const [saved, setSaved] = useState({ name, servings, cooked });
+  const dirty = name !== saved.name || servings !== saved.servings || cooked !== saved.cooked;
+
+  /** True when nothing is left unsaved. */
+  async function persist(): Promise<boolean> {
+    if (!dirty) return true;
+    const details = { name, servings: servingCount, cooked_weight_g: cookedWeight };
+    // An empty pot has nothing to publish yet, but its name still keeps.
+    const res = await reach(
+      lines.length > 0 ? saveRecipe(recipe.id, details) : updateRecipe(recipe.id, details),
+    );
+    if (res.error) {
+      toast.error(res.error);
+      return false;
+    }
+    setSaved({ name, servings, cooked });
+    return true;
+  }
+
   function save() {
     startTransition(async () => {
-      const res = await reach(saveRecipe(recipe.id, {
-        name,
-        servings: servingCount,
-        cooked_weight_g: cookedWeight,
-      }));
-      if (res.error) {
-        toast.error(res.error);
-        return;
-      }
-      toast.success("Recipe saved");
+      if (await persist()) toast.success("Saved recipe");
     });
   }
 
@@ -122,6 +134,7 @@ export function RecipeEditor({
   // editing the wrong one.
   function duplicate() {
     startTransition(async () => {
+      if (!(await persist())) return;
       const res = await reach(duplicateRecipe(recipe.id));
       if (res.error || !res.id) {
         toast.error(res.error ?? "Could not copy that recipe");
@@ -145,7 +158,11 @@ export function RecipeEditor({
   // The back arrow in the header, as a gesture. Installed to a home screen
   // there is no browser edge-swipe to fall back on, so a stacked screen that
   // cannot be swiped back can only be left by aiming at the corner.
-  const goBack = useBack("/recipes");
+  const leave = useBack("/recipes");
+  const goBack = () =>
+    startTransition(async () => {
+      if (await persist()) leave();
+    });
   const back = useSwipe({ onRight: goBack });
 
   return (
@@ -155,7 +172,7 @@ export function RecipeEditor({
           <Button size="icon-xl" variant="ghost" aria-label="All recipes" onClick={goBack}>
             <ChevronLeft className="size-5" />
           </Button>
-          <span className="truncate text-sm font-medium">{name || "Untitled recipe"}</span>
+          <h1 className="truncate text-sm font-medium">{name || "Untitled recipe"}</h1>
         </header>
 
         <Card className={cn(SURFACE, SURFACE_PAD)}>
@@ -223,22 +240,29 @@ export function RecipeEditor({
               would pull recharts in to render four numbers. */}
           <div className="grid grid-cols-4 gap-2 text-center">
             {[
-              ["Calories", per.kcal],
-              ["Protein", per.protein_g],
-              ["Carbs", per.carb_g],
-              ["Fat", per.fat_g],
+              ["Calories", per.kcal.toLocaleString()],
+              ["Protein", `${per.protein_g} g`],
+              ["Carbs", `${per.carb_g} g`],
+              ["Fat", `${per.fat_g} g`],
             ].map(([label, value]) => (
-              <div key={label as string}>
+              <div key={label}>
                 <div className="text-lg tabular-nums">{value}</div>
                 <div className="mt-0.5 text-xs text-muted-foreground">{label}</div>
               </div>
             ))}
           </div>
           <p className="mt-2 text-center text-xs text-muted-foreground">
-            per serving · whole dish {round(total.kcal).toLocaleString()} cal
+            Per serving
+            {cookedWeight !== null && cookedWeight > 0 && servingCount > 0
+              ? ` (about ${round(cookedWeight / servingCount)} g)`
+              : ""}
+            {" "}· fibre {per.fiber_g} g · sodium {per.sodium_mg.toLocaleString()} mg
+          </p>
+          <p className="mt-0.5 text-center text-xs text-muted-foreground">
+            Whole dish {round(total.kcal).toLocaleString()} cal
             {/* The raw weight is only ever read against the cooked one, so
                 without a cooked weight it is a number with nothing to say. */}
-            {check && raw.known ? ` · ${round(raw.grams)} g in` : ""}
+            {check && raw.known ? ` · ${round(raw.grams)} g raw` : ""}
           </p>
         </Card>
 
@@ -246,18 +270,17 @@ export function RecipeEditor({
           // S21 is advisory and never blocks a save -- real cooks do reduce a
           // stew hard. It is a prompt to look, so it says what to look at.
           // Alert brings its own surface, so it takes the page directly.
-          <Alert variant="destructive">
+          <Alert>
             <TriangleAlert />
             <AlertTitle>
               {check.verdict === "low"
                 ? `Only ${Math.round(check.ratio * 100)}% of what went in came out`
-                : `More came out (${Math.round(check.ratio * 100)}%) than went in`}
+                : `The dish weighs ${Math.round(check.ratio * 100)}% of what went in`}
             </AlertTitle>
             <AlertDescription>
               {check.verdict === "low"
-                ? "That is more loss than simmering explains. Check for an over-stated ingredient quantity."
-                : "Something is missing or under-stated. Check for an ingredient you did not add."}{" "}
-              Saving is fine either way.
+                ? "More loss than simmering explains. Check for an amount typed too high."
+                : "Normal when rice, pasta or beans soak up water. Otherwise, check for a missing ingredient."}
             </AlertDescription>
           </Alert>
         )}
@@ -316,9 +339,9 @@ export function RecipeEditor({
             <Button
               className="h-11 flex-1 text-base"
               onClick={save}
-              disabled={pending || name.trim() === "" || lines.length === 0}
+              disabled={pending || !dirty || name.trim() === ""}
             >
-              {pending ? "Saving" : "Save recipe"}
+              {pending ? "Saving" : dirty ? "Save changes" : "Saved"}
             </Button>
             <Button
               size="icon-xl"
@@ -340,8 +363,7 @@ export function RecipeEditor({
             </Button>
           </ButtonGroup>
           <p className="mt-2 text-xs text-muted-foreground">
-            Saving publishes this dish as a food, so a portion is logged like anything else.
-            Portions already logged keep the numbers they were logged with.
+            This dish is logged like any food. Portions already logged keep their numbers.
           </p>
         </div>
       </main>
@@ -427,9 +449,9 @@ function IngredientRow({ line }: { line: EditorLine }) {
       >
         <Item size="sm" className="rounded-none px-3.5 py-2.5">
           <ItemContent className="min-w-0">
-            <ItemTitle className="font-normal">{line.food.name}</ItemTitle>
+            <ItemTitle className="line-clamp-2 font-normal whitespace-normal">{line.food.name}</ItemTitle>
             <ItemDescription className="text-xs">
-              {show(macros.kcal)} cal · {show(macros.protein_g)} g protein
+              {round(macros.kcal).toLocaleString()} cal · {show(macros.protein_g)} g protein
             </ItemDescription>
           </ItemContent>
           <ItemActions className="shrink-0 gap-1">
@@ -442,9 +464,10 @@ function IngredientRow({ line }: { line: EditorLine }) {
               onChange={(e) => setQty(e.target.value)}
               onBlur={commit}
               onKeyDown={(e) => e.key === "Enter" && e.currentTarget.blur()}
-              className="h-9 w-16 text-base tabular-nums"
+              onFocus={(e) => e.currentTarget.select()}
+              className="h-11 w-16 text-base tabular-nums"
             />
-            <span className="w-8 shrink-0 text-xs text-muted-foreground">{unit}</span>
+            <span className="max-w-12 shrink-0 truncate text-xs text-muted-foreground">{unit}</span>
             <ConfirmAction
               title={`Remove ${line.food.name}?`}
               description="It comes out of the recipe's totals. Portions already logged keep the numbers they were logged with."

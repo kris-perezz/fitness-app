@@ -2,7 +2,7 @@
 
 import { useEffect, useRef, useState, useTransition } from "react";
 import { ChevronLeft } from "lucide-react";
-import { scale, show, qtyLabel, basisLabel, type Food } from "@/lib/food";
+import { amountLabel, scale, show, qtyLabel, basisLabel, type Food } from "@/lib/food";
 import { addRecipeIngredient, saveScannedFood } from "@/app/actions";
 import { reach } from "@/lib/reach";
 import { FoodPicker, type PickerStep } from "@/components/food-picker";
@@ -175,11 +175,12 @@ function IngredientQtyStep({
     });
   }
 
-  const previewRows: [string, number | null][] = [
-    ["Calories", preview?.kcal ?? null],
-    ["Protein", preview?.protein_g ?? null],
-    ["Carbs", preview?.carb_g ?? null],
-    ["Fat", preview?.fat_g ?? null],
+  const grams = (v: number | undefined) => (v === undefined ? null : `${show(v)} g`);
+  const previewRows: [string, string | null][] = [
+    ["Calories", preview ? Math.round(preview.kcal).toLocaleString() : null],
+    ["Protein", grams(preview?.protein_g)],
+    ["Carbs", grams(preview?.carb_g)],
+    ["Fat", grams(preview?.fat_g)],
   ];
 
   // The Back button as a gesture. A sheet step is a stacked screen like any
@@ -212,7 +213,7 @@ function IngredientQtyStep({
             htmlFor="ingredient_qty"
             className="text-xs font-normal text-muted-foreground"
           >
-            {food.basis === "per_100g" ? `Amount (${qtyLabel(food)})` : `How many ${food.unit}`}
+            {food.basis === "per_100g" ? `Amount (${qtyLabel(food)})` : `Amount (${amountLabel(2, food.unit).slice(2)})`}
           </FieldLabel>
           <Input
             ref={inputRef}
@@ -247,7 +248,7 @@ function IngredientQtyStep({
         <dl className="mt-6 grid grid-cols-4 gap-2 border-t border-border pt-4 text-center">
           {previewRows.map(([label, value]) => (
             <div key={label}>
-              <dd className="text-lg tabular-nums">{value ?? "-"}</dd>
+              <dd className="text-lg tabular-nums">{value ?? "—"}</dd>
               <dt className="mt-0.5 text-xs text-muted-foreground">{label}</dt>
             </div>
           ))}

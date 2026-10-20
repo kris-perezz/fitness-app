@@ -1,6 +1,7 @@
 "use client";
 
 import { useMemo, useState, useTransition } from "react";
+import { useRouter } from "next/navigation";
 import { ChevronLeft, Package, Plus, Search } from "lucide-react";
 import { saveScannedFood } from "@/app/actions";
 import { reach } from "@/lib/reach";
@@ -102,6 +103,7 @@ export function FoodShelf({ foods }: { foods: Food[] }) {
     });
   }
 
+  const router = useRouter();
   const goBack = useBack("/log");
 
   const back = useSwipe({ onRight: goBack });
@@ -113,7 +115,7 @@ export function FoodShelf({ foods }: { foods: Food[] }) {
           <Button size="icon-xl" variant="ghost" aria-label="Back to the log" onClick={goBack}>
             <ChevronLeft className="size-5" />
           </Button>
-          <span className="flex-1 text-sm font-medium">Foods</span>
+          <h1 className="flex-1 text-sm font-medium">My foods</h1>
           <Button size="sm" variant="ghost" className="h-11" onClick={open}>
             <Plus className="size-4" /> Add
           </Button>
@@ -169,7 +171,16 @@ export function FoodShelf({ foods }: { foods: Food[] }) {
                       {/* Tapping opens the correction sheet: the shelf is where
                           a number read off a crowded packet gets fixed, and
                           that was reachable only mid-log. */}
-                      <button onClick={() => setEditing(f)} className="text-left">
+                      <button
+                        // A recipe's numbers come from its ingredients, so it is
+                        // corrected in the recipe rather than here.
+                        onClick={() =>
+                          f.source === "recipe"
+                            ? router.push(`/recipes/${f.id.replace(/^recipe_/, "")}`)
+                            : setEditing(f)
+                        }
+                        className="text-left"
+                      >
                         <ItemContent className="min-w-0">
                           <ItemTitle className="font-normal">{f.name}</ItemTitle>
                           <ItemDescription className="flex items-center gap-1.5 text-xs">

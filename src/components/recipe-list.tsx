@@ -110,7 +110,7 @@ export function RecipeList({ recipes }: { recipes: RecipeSummary[] }) {
                           </ItemDescription>
                         </ItemContent>
                         <ItemActions className="shrink-0 text-sm tabular-nums text-muted-foreground">
-                          {r.ingredientCount === 0 ? "" : `${r.kcalPerServing} cal`}
+                          {r.ingredientCount === 0 ? "" : `${r.kcalPerServing.toLocaleString()} cal / serving`}
                         </ItemActions>
                       </Link>
                     </Item>
