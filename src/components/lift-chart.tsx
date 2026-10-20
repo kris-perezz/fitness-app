@@ -108,7 +108,7 @@ export function LiftChart({ points: stored, unit }: { points: LiftPoint[]; unit:
             {...TOOLTIP}
             content={
               <ChartTooltipContent
-                labelFormatter={(value) => shortDate(stampDay(Number(value)))}
+                labelFormatter={(_, payload) => shortDate(String(payload[0]?.payload?.date))}
                 formatter={(value, name, item) =>
                   value == null ? null : (
                     <>
@@ -211,7 +211,7 @@ export function PinnedLiftsChart({ lifts, unit }: { lifts: PinnedLift[]; unit: D
                 {...TOOLTIP}
                 content={
                   <ChartTooltipContent
-                    labelFormatter={(value) => shortDate(stampDay(Number(value)))}
+                    labelFormatter={(_, payload) => shortDate(String(payload[0]?.payload?.date))}
                     formatter={(value, name, item) =>
                       value == null ? null : (
                         <>
