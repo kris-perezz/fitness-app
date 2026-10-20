@@ -31,6 +31,7 @@ import { useSwipe } from "@/lib/swipe";
 import { useBack } from "@/lib/back";
 import { cn } from "@/lib/utils";
 import { PAGE, SURFACE } from "@/lib/ui";
+import { leaveSheet } from "@/lib/sheet-back";
 
 export type RecipeSummary = {
   id: string;
@@ -71,7 +72,7 @@ export function RecipeList({ recipes }: { recipes: RecipeSummary[] }) {
             <ChevronLeft className="size-5" />
           </Button>
           <h1 className="flex-1 text-sm font-medium">Recipes</h1>
-          <Button size="sm" variant="ghost" className="h-11" onClick={() => setNaming(true)}>
+          <Button size="sm" variant="ghost" className="h-11" aria-label="New recipe" onClick={() => setNaming(true)}>
             <Plus className="size-4" /> New
           </Button>
         </header>
@@ -156,9 +157,7 @@ function NewRecipeSheet({
         toast.error(res.error ?? "Could not create that recipe");
         return;
       }
-      setName("");
-      onOpenChange(false);
-      router.push(`/recipes/${res.id}`);
+      leaveSheet(router, `/recipes/${res.id}`);
     });
   }
 

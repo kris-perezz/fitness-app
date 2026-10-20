@@ -31,3 +31,13 @@ export function useSheetBack(open: boolean, close: () => void) {
     };
   }, [open, id]);
 }
+
+/**
+ * Navigates away from inside an open sheet. Closing first would pop the sheet's
+ * marker while the push is in flight, and Next discards a navigation that a
+ * popstate overtakes; replacing the marker instead keeps Back on the page below.
+ */
+export function leaveSheet(router: { push(href: string): void; replace(href: string): void }, href: string) {
+  if (typeof history.state?.sheet === "string") router.replace(href);
+  else router.push(href);
+}

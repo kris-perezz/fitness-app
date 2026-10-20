@@ -40,6 +40,7 @@ import { toast } from "sonner";
 import { cn } from "@/lib/utils";
 import { PAGE_SPLIT, SURFACE, SURFACE_PAD } from "@/lib/ui";
 import { useSwipe } from "@/lib/swipe";
+import { leaveSheet } from "@/lib/sheet-back";
 
 // Loaded after the page: recharts is most of the tab's script, and nothing
 // above the chart needs it to become tappable.
@@ -416,8 +417,7 @@ function PickDay({
         toast.error(res.error ?? "Could not open that session");
         return;
       }
-      onOpenChange(false);
-      router.push(`/train/${res.id}`);
+      leaveSheet(router, `/train/${res.id}`);
     });
   }
 
