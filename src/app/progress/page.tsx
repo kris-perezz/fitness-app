@@ -1,6 +1,7 @@
 import { createClient, must } from "@/lib/supabase/server";
 import { WINDOW_MONTHS, shiftMonth } from "@/lib/training";
-import { toWeighIn } from "@/lib/weight";
+import { toWeighIn, trendSeries } from "@/lib/weight";
+import { rateLb } from "@/lib/expenditure";
 import { liftHistory, type WorkoutSet } from "@/lib/training";
 import { ProgressHome } from "@/components/progress-home";
 import { serverToday } from "@/lib/server-time";
@@ -45,7 +46,7 @@ export default async function ProgressPage() {
     supabase
       .from("nutrition_settings")
       .select(
-        "goal_weight_lb, goal_rate_lb_per_week, display_weight_unit, strict_mode",
+        "goal_weight_lb, goal_rate_pct, display_weight_unit, strict_mode",
       )
       .maybeSingle()
       .then(must),
@@ -63,6 +64,9 @@ export default async function ProgressPage() {
   ]);
 
   const weighIns = (data ?? []).map(toWeighIn);
+  // The goal is stored as a percent of body weight; the screen reads pounds,
+  // taken against the current trend.
+  const trendLb = trendSeries(weighIns).at(-1)?.trendLb ?? null;
 
   return (
     <ProgressHome
@@ -87,8 +91,8 @@ export default async function ProgressPage() {
           ? {
               weightLb: settings?.goal_weight_lb != null ? Number(settings.goal_weight_lb) : null,
               rateLbPerWeek:
-                settings?.goal_rate_lb_per_week != null
-                  ? Number(settings.goal_rate_lb_per_week)
+                settings?.goal_rate_pct != null && trendLb !== null
+                  ? rateLb(Number(settings.goal_rate_pct), trendLb)
                   : null,
             }
           : { weightLb: null, rateLbPerWeek: null }

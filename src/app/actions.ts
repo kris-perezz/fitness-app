@@ -385,7 +385,8 @@ export type Goals = {
    * these two must never be collapsed into a falsy check.
    */
   goal_weight_lb: number | null;
-  goal_rate_lb_per_week: number | null;
+  /** Percent of body weight a week: negative loses, 0 maintains. */
+  goal_rate_pct: number | null;
   /**
    * S69. What weights are SHOWN in. Storage stays pounds everywhere, so this
    * never changes a stored number -- deliberately not called `weight_unit`,
@@ -412,8 +413,9 @@ export async function saveGoals(goals: Goals) {
     if (!inRange(n, 0, 2_000)) return { error: "Macros must be 0 to 2,000 g" };
   }
   if (!inRange(goals.goal_weight_lb, 40, 1_500, true)) return { error: "Goal weight is out of range" };
-  if (!inRange(goals.goal_rate_lb_per_week, -5, 5, true)) {
-    return { error: "Rate must be within 5 lb a week" };
+  const pct = goals.goal_rate_pct;
+  if (!inRange(pct, -1, 1, true) || (pct !== null && pct !== 0 && Math.abs(pct) < 0.25)) {
+    return { error: "Rate must be 0.25% to 1% a week" };
   }
   if (goals.display_weight_unit !== "lb" && goals.display_weight_unit !== "kg") {
     return { error: "Pick lb or kg" };
@@ -426,7 +428,7 @@ export async function saveGoals(goals: Goals) {
     carb_goal_g: goals.carb_goal_g,
     fat_goal_g: goals.fat_goal_g,
     goal_weight_lb: goals.goal_weight_lb,
-    goal_rate_lb_per_week: goals.goal_rate_lb_per_week,
+    goal_rate_pct: goals.goal_rate_pct,
     display_weight_unit: goals.display_weight_unit,
     strict_mode: goals.strict_mode === true,
     ...(goals.expenditure_enabled === undefined

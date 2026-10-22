@@ -25,7 +25,8 @@ import {
 } from "@/lib/goals";
 import { ToggleGroup, ToggleGroupItem } from "@/components/ui/toggle-group";
 import { Badge } from "@/components/ui/badge";
-import { calorieTarget, CONFIDENT_AFTER_DAYS, type Expenditure } from "@/lib/expenditure";
+import { calorieTarget, CONFIDENT_AFTER_DAYS, rateLb, type Expenditure } from "@/lib/expenditure";
+import { Slider } from "@/components/ui/slider";
 import { Switch } from "@/components/ui/switch";
 import { ThemeToggle } from "@/components/theme-toggle";
 import { fromDisplay, toDisplay, type DisplayUnit } from "@/lib/weight";
@@ -37,7 +38,7 @@ type Goals =
   | ({
       calorie_goal: number;
       goal_weight_lb: number | null;
-      goal_rate_lb_per_week: number | null;
+      goal_rate_pct: number | null;
       display_weight_unit?: DisplayUnit | null;
       strict_mode?: boolean | null;
       expenditure_enabled?: boolean | null;
@@ -125,10 +126,13 @@ export function GoalsForm({
   const [burn, setBurn] = useState(goals?.expenditure_enabled === true);
   // The sign of the rate, chosen rather than typed: the iPhone decimal keypad
   // has no minus key. Empty is no goal on file.
-  const storedRate = goals?.goal_rate_lb_per_week ?? null;
+  const storedRate = goals?.goal_rate_pct == null ? null : Number(goals.goal_rate_pct);
   const [direction, setDirection] = useState<"" | "lose" | "maintain" | "gain">(
     storedRate === null ? "" : storedRate < 0 ? "lose" : storedRate > 0 ? "gain" : "maintain",
   );
+  /** Percent of body weight a week, without the sign the toggle carries. */
+  const [pct, setPct] = useState(storedRate ? Math.abs(storedRate) : 0.5);
+  const signedPct = direction === "" ? null : direction === "maintain" ? 0 : (direction === "lose" ? -1 : 1) * pct;
   // Goals saved before the split was reconciled -- or edited straight in the
   // database -- arrive out of balance, so correct them on the way in rather
   // than waiting for the user to touch a field.
@@ -156,7 +160,6 @@ export function GoalsForm({
       // pounds on save. The alternative -- holding pounds and converting on
       // every render -- makes the field fight the user's keystrokes.
       goal_weight_lb: showGoal(goals?.goal_weight_lb, startUnit),
-      goal_rate_lb_per_week: showGoal(rateSize(goals?.goal_rate_lb_per_week), startUnit),
     };
   });
   const [pending, startTransition] = useTransition();
@@ -183,27 +186,23 @@ export function GoalsForm({
       const n = parseGoal(form.goal_weight_lb);
       return n === null ? null : fromDisplay(n, unit);
     })();
-    const rateLb = (() => {
-      if (direction === "") return null;
-      if (direction === "maintain") return 0;
-      const sign = direction === "lose" ? -1 : 1;
-      const stored = storedRate == null ? null : Number(storedRate);
-      if (stored !== null && Math.sign(stored) === sign && form.goal_rate_lb_per_week === showGoal(rateSize(stored), unit)) {
-        return stored;
-      }
-      const n = parseGoal(form.goal_rate_lb_per_week);
-      return n === null ? null : sign * Math.abs(fromDisplay(n, unit));
-    })();
     const burnOn = strict && burn;
     return {
       goal_weight_lb: weightLb,
-      goal_rate_lb_per_week: rateLb,
+      goal_rate_pct: signedPct,
       display_weight_unit: unit,
       strict_mode: strict,
       // Omitted when unchanged: the column only exists once its migration has run.
       ...(burnOn === (goals?.expenditure_enabled === true) ? {} : { expenditure_enabled: burnOn }),
     };
   };
+
+  // Save is offered only when something would change.
+  const snapshot = (values = numbers()) => {
+    const g = weightGoals();
+    return JSON.stringify([values, g.goal_weight_lb, g.goal_rate_pct, g.display_weight_unit, g.strict_mode, strict && burn]);
+  };
+  const [savedSnapshot, setSavedSnapshot] = useState(snapshot);
 
   /**
    * Switching the unit REWRITES THE FIELDS rather than relabelling them.
@@ -219,13 +218,13 @@ export function GoalsForm({
     setForm({
       ...form,
       goal_weight_lb: convert(form.goal_weight_lb),
-      goal_rate_lb_per_week: convert(form.goal_rate_lb_per_week),
     });
     setUnit(next);
   }
 
   const current = numbers();
 
+  const weightLb = expenditure.estimate?.weightLb ?? null;
   const burnBlock = (() => {
     const kcal = expenditure.estimate?.kcal ?? null;
     if (kcal === null) {
@@ -235,8 +234,10 @@ export function GoalsForm({
         </p>
       );
     }
-    const rate = goals?.goal_rate_lb_per_week;
-    const target = rate == null ? null : Math.round(calorieTarget(kcal, Number(rate)) / 10) * 10;
+    const target =
+      signedPct === null || weightLb === null
+        ? null
+        : Math.round(calorieTarget(kcal, rateLb(signedPct, weightLb)) / 10) * 10;
     return (
       <div className="space-y-1 text-sm">
         <p>You burn about {kcal.toLocaleString()} cal a day</p>
@@ -273,6 +274,57 @@ export function GoalsForm({
     );
   })();
 
+  const rateBlock = (
+    <div className="space-y-3 pt-2">
+      <ToggleGroup
+        type="single"
+        variant="outline"
+        className="w-full"
+        value={direction}
+        onValueChange={(next) => setDirection(next as typeof direction)}
+        aria-label="Weight goal direction"
+      >
+        <ToggleGroupItem value="lose" className="h-11 flex-1">Lose</ToggleGroupItem>
+        <ToggleGroupItem value="maintain" className="h-11 flex-1">Maintain</ToggleGroupItem>
+        <ToggleGroupItem value="gain" className="h-11 flex-1">Gain</ToggleGroupItem>
+      </ToggleGroup>
+      {(direction === "lose" || direction === "gain") && (
+        <Field>
+          <div className="flex items-baseline justify-between">
+            <FieldLabel htmlFor="goal_rate_pct" className="text-xs font-normal text-muted-foreground">
+              Rate
+            </FieldLabel>
+            <span className="text-sm tabular-nums">
+              {pct.toFixed(2)}% a week
+              {weightLb !== null && (
+                <span className="text-muted-foreground">
+                  {" · "}
+                  {(Math.round(toDisplay(rateLb(pct, weightLb), unit) * 10) / 10).toFixed(1)} {unit}
+                </span>
+              )}
+            </span>
+          </div>
+          <Slider
+            id="goal_rate_pct"
+            min={0.25}
+            max={1}
+            step={0.05}
+            value={[pct]}
+            onValueChange={([next]) => setPct(next)}
+            aria-label="Rate, percent of body weight a week"
+            className="py-3"
+          />
+          {direction === "gain" && pct > 0.5 && (
+            <FieldDescription>Faster gain is mostly fat unless you&apos;re new to lifting.</FieldDescription>
+          )}
+        </Field>
+      )}
+      {direction !== "" && (
+        <FieldDescription>Changes show on the scale in 3-4 weeks.</FieldDescription>
+      )}
+    </div>
+  );
+
   /**
    * Calories are the anchor, so every edit ends with the macros sitting on the
    * calorie goal: changing calories rescales the whole split, changing one
@@ -307,6 +359,7 @@ export function GoalsForm({
         toast.error(res.error);
         return;
       }
+      setSavedSnapshot(snapshot(values));
       toast.success("Goals saved");
     });
   }
@@ -354,6 +407,7 @@ export function GoalsForm({
                 <Switch id="expenditure_enabled" checked={burn} onCheckedChange={setBurn} />
               </Field>
               <FieldDescription>Estimates your daily burn from your log and weight.</FieldDescription>
+              {burn && rateBlock}
             </>
           )}
         </FieldGroup>
@@ -433,74 +487,32 @@ export function GoalsForm({
 
         {/* S60. On the goals tab with the rest of the prescription, and read on
             the progress tab: one screen holds what you decided, the other holds
-            what happened. Both blank is a legitimate state -- with no goal on
+            what happened. No goal is a legitimate state -- with none on
             file the progress tab simply states the rate and nothing sits beside
             it. Nothing else degrades. */}
         <FieldGroup className="gap-2">
-          {/* S79. The two goal fields go with the rest of the targets; the unit
-              toggle below them does NOT. It is not a goal -- it changes how
+          {/* S79. The goal weight goes with the rest of the targets; the unit
+              toggle below it does NOT. It is not a goal -- it changes how
               every weight in the app reads, including the weigh-in sheet and
               the progress chart, and both of those work identically in calm. */}
           {strict && (
-            <>
-            <div className="mb-1 flex items-center gap-1">
-              <FieldLabel className="text-xs font-normal text-muted-foreground">
-                Weight goal
+            <Field>
+              <FieldLabel
+                htmlFor="goal_weight_lb"
+                className="text-xs font-normal text-muted-foreground"
+              >
+                Goal weight ({unit})
               </FieldLabel>
-              <FieldHint label="How the weight goal reads">
-                Pick lose, maintain or gain, then how fast. Leave both blank for no goal.
-              </FieldHint>
-            </div>
-            <div className="grid grid-cols-2 gap-3">
-              <Field>
-                <FieldLabel
-                  htmlFor="goal_weight_lb"
-                  className="text-xs font-normal text-muted-foreground"
-                >
-                  Goal weight ({unit})
-                </FieldLabel>
-                <Input
-                  id="goal_weight_lb"
-                  type="text"
-                  inputMode="decimal"
-                  value={form.goal_weight_lb}
-                  onChange={(e) => setForm({ ...form, goal_weight_lb: e.target.value })}
-                  placeholder="None"
-                  className="h-12 text-base tabular-nums"
-                />
-              </Field>
-              <Field>
-                <FieldLabel
-                  htmlFor="goal_rate_lb_per_week"
-                  className="text-xs font-normal text-muted-foreground"
-                >
-                  Rate ({unit}/week)
-                </FieldLabel>
-                <Input
-                  id="goal_rate_lb_per_week"
-                  type="text"
-                  inputMode="decimal"
-                  disabled={direction === "" || direction === "maintain"}
-                  value={direction === "maintain" ? "0" : form.goal_rate_lb_per_week}
-                  onChange={(e) => setForm({ ...form, goal_rate_lb_per_week: e.target.value })}
-                  placeholder="None"
-                  className="h-12 text-base tabular-nums"
-                />
-              </Field>
-            </div>
-            <ToggleGroup
-              type="single"
-              variant="outline"
-              className="w-full"
-              value={direction}
-              onValueChange={(next) => setDirection(next as typeof direction)}
-              aria-label="Weight goal direction"
-            >
-              <ToggleGroupItem value="lose" className="h-11 flex-1">Lose</ToggleGroupItem>
-              <ToggleGroupItem value="maintain" className="h-11 flex-1">Maintain</ToggleGroupItem>
-              <ToggleGroupItem value="gain" className="h-11 flex-1">Gain</ToggleGroupItem>
-            </ToggleGroup>
-            </>
+              <Input
+                id="goal_weight_lb"
+                type="text"
+                inputMode="decimal"
+                value={form.goal_weight_lb}
+                onChange={(e) => setForm({ ...form, goal_weight_lb: e.target.value })}
+                placeholder="None"
+                className="h-12 text-base tabular-nums"
+              />
+            </Field>
           )}
           <div className="flex items-center justify-between gap-3 pt-2">
             <div className="flex items-center gap-1">
@@ -542,7 +554,7 @@ export function GoalsForm({
           </div>
         </FieldGroup>
 
-        <Button className="h-11 w-full text-base" onClick={save} disabled={pending}>
+        <Button className="h-11 w-full text-base" onClick={save} disabled={pending || snapshot() === savedSnapshot}>
           {pending ? "Saving" : "Save"}
         </Button>
       </Card>
@@ -581,11 +593,6 @@ export function GoalsForm({
  * so the empty check has to come first or every cleared field would silently
  * become a commitment to hold weight (S60).
  */
-/** How fast, without the direction, which the toggle carries. */
-function rateSize(lb: number | null | undefined): number | null {
-  return lb == null ? null : Math.abs(Number(lb));
-}
-
 function parseGoal(value: string): number | null {
   if (value.trim() === "") return null;
   const n = Number(value);
