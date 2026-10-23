@@ -10,7 +10,9 @@
     "test": "node --test \"src/**/*.test.mts\"",
     "check:ui": "node scripts/check-ui-primitives.mjs",
     "eval:describe": "node scripts/eval/run.mjs",
-    "eval:score": "node scripts/eval/score.mjs"
+    "eval:score": "node scripts/eval/score.mjs",
+    "check:paint": "node scripts/check-paint-cost.mjs",
+    "test:e2e": "playwright test"
   },
   "engines": {
     "node": ">=24"
@@ -37,6 +39,8 @@
     "vaul": "^1.1.2"
   },
   "devDependencies": {
+    "@axe-core/playwright": "^4.14.0",
+    "@playwright/test": "^1.64.1",
     "@tailwindcss/postcss": "^4",
     "@types/node": "^20",
     "@types/react": "^19",

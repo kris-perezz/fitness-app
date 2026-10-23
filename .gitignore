@@ -56,3 +56,8 @@ supabase/personal/
 
 # Work set aside for later, kept locally and out of the repo.
 /docs/parked/
+
+# Playwright
+/e2e/.auth/
+/test-results/
+/playwright-report/
