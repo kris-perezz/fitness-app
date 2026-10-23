@@ -221,7 +221,7 @@ export function DayRingsButton({
         // A day spilling in from the month either side keeps its rings -- it
         // has food on it and hiding that would misreport the day -- but sits
         // back, so the month on screen is still the thing being read.
-        modifiers.outside && "opacity-45",
+        modifiers.outside && "opacity-60",
         className,
       )}
       {...props}

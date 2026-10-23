@@ -22,6 +22,7 @@ import {
 } from "@/lib/training";
 import { Button } from "@/components/ui/button";
 import { Card } from "@/components/ui/card";
+import { ShowMore, usePaged } from "@/components/show-more";
 import dynamic from "next/dynamic";
 import { CHART_CLASS } from "@/lib/chart";
 import { Empty, EmptyDescription, EmptyHeader, EmptyMedia, EmptyTitle } from "@/components/ui/empty";
@@ -65,6 +66,7 @@ export function ExerciseScreen({
   unit: DisplayUnit;
 }) {
   const [pending, startTransition] = useTransition();
+  const history = usePaged(sessions);
 
   /**
    * MANY PINS since 0033, so this adds to the set rather than replacing it.
@@ -174,7 +176,7 @@ export function ExerciseScreen({
 
           <Card className={SURFACE}>
             <ul>
-              {sessions.map((session) => (
+              {history.visible.map((session) => (
                 <li key={session.date}>
                   <Item size="sm" className="rounded-none px-3.5 py-3">
                     <ItemContent className="min-w-0">
@@ -187,6 +189,7 @@ export function ExerciseScreen({
                 </li>
               ))}
             </ul>
+            <ShowMore paged={history} />
           </Card>
         </>
       )}

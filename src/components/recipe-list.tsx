@@ -8,6 +8,7 @@ import { createRecipe, deleteRecipe } from "@/app/actions";
 import { reach } from "@/lib/reach";
 import { Button } from "@/components/ui/button";
 import { Card } from "@/components/ui/card";
+import { ShowMore, usePaged } from "@/components/show-more";
 import { Input } from "@/components/ui/input";
 import { Field, FieldLabel } from "@/components/ui/field";
 import { Item, ItemActions, ItemContent, ItemDescription, ItemTitle } from "@/components/ui/item";
@@ -43,6 +44,7 @@ export type RecipeSummary = {
 
 export function RecipeList({ recipes }: { recipes: RecipeSummary[] }) {
   const [naming, setNaming] = useState(false);
+  const page = usePaged(recipes);
   const [, startDelete] = useTransition();
 
   // The editor is still where a recipe is deleted deliberately, with its own
@@ -96,7 +98,7 @@ export function RecipeList({ recipes }: { recipes: RecipeSummary[] }) {
         {recipes.length > 0 && (
           <Card className={SURFACE}>
             <ul>
-              {recipes.map((r) => (
+              {page.visible.map((r) => (
                 <li key={r.id}>
                   <SwipeToDelete
                     title={`Delete ${r.name}?`}
@@ -122,6 +124,7 @@ export function RecipeList({ recipes }: { recipes: RecipeSummary[] }) {
                 </li>
               ))}
             </ul>
+            <ShowMore paged={page} />
           </Card>
         )}
       </main>

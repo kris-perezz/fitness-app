@@ -185,7 +185,7 @@ export function MonthLog({
             // A fill or a mark from the month either side is a real day, so it
             // is drawn -- at less weight, so the month on screen still reads
             // as the subject.
-            outside: "opacity-45",
+            outside: "opacity-60",
             // A circle on a square cell, the cell's own radius on the taller
             // ring cell: a ring drawn round a 48x64 box is an oval, which
             // reads as a shape rather than as a mark on today.

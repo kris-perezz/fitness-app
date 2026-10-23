@@ -37,6 +37,7 @@ import { reach } from "@/lib/reach";
 import { deleteWithUndo } from "@/lib/undo";
 import { Button } from "@/components/ui/button";
 import { Card } from "@/components/ui/card";
+import { ShowMore, usePaged } from "@/components/show-more";
 import { ToggleGroup, ToggleGroupItem } from "@/components/ui/toggle-group";
 import { Calendar } from "@/components/ui/calendar";
 import { SwipeToDelete } from "@/components/swipe-to-delete";
@@ -209,6 +210,7 @@ export function ProgressHome({
         .sort((a, b) => b.date.localeCompare(a.date)),
     [entries, month],
   );
+  const weighIns = usePaged(monthEntries, month);
 
   const byDate = useMemo(() => new Map(entries.map((e) => [e.date, e])), [entries]);
   const weighedDays = useMemo(() => entries.map((e) => toDate(e.date)), [entries]);
@@ -318,11 +320,12 @@ export function ProgressHome({
         />
         </div>
 
-        {/* Last, and full width for the same reason as the weight chart. The
+        {/* Full width for the same reason as the weight chart, and above the
+            month row on desktop so a long month never pushes it down. The
             conditional is out here rather than inside the block so that no
             pins leaves no grid item -- an empty one would still claim a row. */}
         {pinned.length > 0 && (
-          <div className="lg:order-6 lg:col-span-2">
+          <div className="lg:order-4 lg:col-span-2">
             <PinnedLiftsBlock pinned={pinned} unit={unit} />
           </div>
         )}
@@ -330,7 +333,7 @@ export function ProgressHome({
         {/* THE CALENDAR. Fixed-width by design (PAGE_SPLIT's 22rem): a day
             grid does not get more useful by getting wider, so the room a wide
             screen offers goes to the chart above and the list beside it. */}
-        <div className="lg:order-5">
+        <div className="lg:order-6">
         <Card className={cn(SURFACE, "items-center px-1 py-2", "touch-pan-y")} {...monthSwipe}>
           <Calendar
             month={toDate(`${month}-01`)}
@@ -348,7 +351,7 @@ export function ProgressHome({
               // A fill from the month either side is real food or a real
               // session, so it is drawn -- at less weight, so the month on
               // screen still reads as the subject.
-              outside: "opacity-45",
+              outside: "opacity-60",
               today: "rounded-full ring-2 ring-ring ring-inset",
             }}
             onSelect={(day) => day && openWeighIn(dateKey(day))}
@@ -361,7 +364,7 @@ export function ProgressHome({
         {/* The month list takes the WIDE column on desktop: it is the only
             block here with a row per day, so it is the one that runs out of
             vertical room first. */}
-        <div className="lg:order-4">
+        <div className="lg:order-5">
         {monthEntries.length === 0 ? (
           <Empty className="py-12">
             <EmptyHeader>
@@ -377,7 +380,7 @@ export function ProgressHome({
           </Empty>
         ) : (
           <ul className="divide-y divide-border">
-            {monthEntries.map((e) => (
+            {weighIns.visible.map((e) => (
               <li key={e.date}>
                 {/* The weigh-in sheet keeps the Delete button it always had;
                     this is the shortcut past it for a reading typed wrong. */}
@@ -419,6 +422,7 @@ export function ProgressHome({
             ))}
           </ul>
         )}
+        <ShowMore paged={weighIns} />
         </div>
           </>
         )}

@@ -20,6 +20,7 @@ import { closeStaleWorkouts, loadTrainingWindow, openWorkoutOn } from "@/app/tra
 import { reach } from "@/lib/reach";
 import { Button } from "@/components/ui/button";
 import { Card } from "@/components/ui/card";
+import { ShowMore, usePaged } from "@/components/show-more";
 import { Calendar } from "@/components/ui/calendar";
 import { Item, ItemActions, ItemContent, ItemDescription, ItemTitle } from "@/components/ui/item";
 import {
@@ -132,6 +133,7 @@ export function TrainHome({
     () => sessions.filter((s) => s.date.startsWith(month)),
     [sessions, month],
   );
+  const sessionPage = usePaged(monthSessions, month);
 
   // Summed for the month on screen, then laid out in the fixed group order so
   // untrained muscles still occupy a row (S32 -- the zeros are the point).
@@ -315,7 +317,7 @@ export function TrainHome({
               // A fill from the month either side is real food or a real
               // session, so it is drawn -- at less weight, so the month on
               // screen still reads as the subject.
-              outside: "opacity-45",
+              outside: "opacity-60",
               today: "rounded-full ring-2 ring-ring ring-inset",
             }}
             onSelect={(day) => day && open(dateKey(day))}
@@ -340,11 +342,10 @@ export function TrainHome({
 
         {monthSessions.length > 0 && (
           <ul className="divide-y divide-border">
-            {monthSessions.map((s) => (
+            {sessionPage.visible.map((s) => (
               <li key={s.id}>
                 <Item asChild size="sm" className="rounded-none px-3.5 py-3 active:bg-accent">
-                  {/* Full prefetch -- see the resume link above. */}
-                  <Link href={`/train/${s.id}`} prefetch>
+                  <IntentLink href={`/train/${s.id}`}>
                     <ItemContent className="min-w-0">
                       <ItemTitle className="font-normal">{dayTitle(s.date, today)}</ItemTitle>
                       <ItemDescription className="truncate text-xs">
@@ -358,12 +359,13 @@ export function TrainHome({
                         {s.setCount} {s.setCount === 1 ? "set" : "sets"}
                       </span>
                     </ItemActions>
-                  </Link>
+                  </IntentLink>
                 </Item>
               </li>
             ))}
           </ul>
         )}
+        <ShowMore paged={sessionPage} />
         </div>
       </main>
 
@@ -556,6 +558,28 @@ function monthLabel(month: string): string {
   return toDate(`${month}-01`).toLocaleDateString("en-CA", { month: "long", year: "numeric" });
 }
 
+
+/**
+ * Full prefetch only once a row is pointed at. A month of rows all sit in view
+ * on desktop, and full-prefetching each one is a server render per session.
+ */
+function IntentLink({ onPointerEnter, onFocus, ...props }: React.ComponentProps<typeof Link>) {
+  const [intent, setIntent] = useState(false);
+  return (
+    <Link
+      {...props}
+      prefetch={intent ? true : null}
+      onPointerEnter={(e) => {
+        setIntent(true);
+        onPointerEnter?.(e);
+      }}
+      onFocus={(e) => {
+        setIntent(true);
+        onFocus?.(e);
+      }}
+    />
+  );
+}
 
 function toDate(key: string): Date {
   return new Date(`${key.length === 7 ? `${key}-01` : key}T12:00:00`);

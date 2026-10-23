@@ -11,6 +11,7 @@ import { EditFoodSheet } from "@/components/edit-food-sheet";
 import { FoodSourceBadge } from "@/components/food-source-badge";
 import { Button } from "@/components/ui/button";
 import { Card } from "@/components/ui/card";
+import { ShowMore, usePaged } from "@/components/show-more";
 import {
   Drawer,
   DrawerContent,
@@ -63,6 +64,7 @@ export function FoodShelf({ foods }: { foods: Food[] }) {
     () => (query.trim() === "" ? foods : searchFoods(foods, query)),
     [foods, query],
   );
+  const page = usePaged(results, query);
   const mine = useMemo(() => new Set(foods.map((f) => f.id)), [foods]);
 
   function open() {
@@ -165,7 +167,7 @@ export function FoodShelf({ foods }: { foods: Food[] }) {
                 </Empty>
               )}
               <ul className="divide-y divide-border">
-                {results.map((f) => (
+                {page.visible.map((f) => (
                   <li key={f.id}>
                     <Item asChild size="sm" className="rounded-none px-3.5 py-3 active:bg-accent">
                       {/* Tapping opens the correction sheet: the shelf is where
@@ -195,6 +197,7 @@ export function FoodShelf({ foods }: { foods: Food[] }) {
                   </li>
                 ))}
               </ul>
+              <ShowMore paged={page} />
             </Card>
           </>
         )}
