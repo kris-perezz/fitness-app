@@ -23,7 +23,7 @@ import { TIME_ZONE_COOKIE } from "./time-zone-cookie.shared.ts";
  *    dev` on a laptop, and UTC in production, which is the case this exists to
  *    stop mattering.
  */
-export async function userTimeZone(): Promise<string | undefined> {
+async function userTimeZone(): Promise<string | undefined> {
   const fromCookie = (await cookies()).get(TIME_ZONE_COOKIE)?.value;
   if (isTimeZone(fromCookie)) return fromCookie;
 

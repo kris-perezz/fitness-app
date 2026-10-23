@@ -36,7 +36,7 @@ export function swipeDirection(dx: number, dy: number): "left" | "right" | null 
   return dx < 0 ? "left" : "right";
 }
 
-export type SwipeHandlers = {
+type SwipeHandlers = {
   onPointerDown: (e: PointerEvent) => void;
   onPointerMove: (e: PointerEvent) => void;
   onPointerUp: () => void;

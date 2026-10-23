@@ -145,7 +145,6 @@ export function sourceHint(source: FoodSource, derivedFrom?: FoodSource | null):
   }
 }
 
-import { searchNamed } from "./search.ts";
 
 export const MEALS = ["Breakfast", "Lunch", "Dinner", "Snacks"] as const;
 export type Meal = (typeof MEALS)[number];
@@ -307,11 +306,6 @@ export function basisLabel(food: Food): string {
   return food.unit === "ml" ? "100 ml" : "100 g";
 }
 
-/** Ranked substring match over name + aliases. Exact prefix wins. */
-export function searchFoods(foods: Food[], query: string): Food[] {
-  return searchNamed(foods, query);
-}
-
 /**
  * Today, in the reader's own timezone, as a waking day: anything before
  * `DAY_STARTS_AT_HOUR` belongs to the night before, so a 1 a.m. snack or a
@@ -328,7 +322,7 @@ export function searchFoods(foods: Food[], query: string): Food[] {
  * renders the date any other way would otherwise reorder the pieces silently,
  * and this has to produce YYYY-MM-DD for a Postgres `date` column.
  */
-export const DAY_STARTS_AT_HOUR = 4;
+const DAY_STARTS_AT_HOUR = 4;
 
 export function todayDate(now = new Date(), timeZone?: string): string {
   now = new Date(now.getTime() - DAY_STARTS_AT_HOUR * 3_600_000);

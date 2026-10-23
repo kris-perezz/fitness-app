@@ -15,10 +15,10 @@ import { daysBetween, shiftDays, type WeighIn } from "./weight.ts";
  * kcal per lb of tissue change, the same both ways. MacroFactor's V3 mirrors gain
  * and loss after finding a lighter gain constant inflated surplus expenditure.
  */
-export const KCAL_PER_LB = 3500;
+const KCAL_PER_LB = 3500;
 
 /** Days of history before an estimate is shown. */
-export const SHOW_AFTER_DAYS = 14;
+const SHOW_AFTER_DAYS = 14;
 
 /** Days of history before the estimate has outlived its seed. */
 export const CONFIDENT_AFTER_DAYS = 28;
@@ -41,7 +41,7 @@ const PARTIAL_DAY_KCAL = 1000;
 
 export type IntakeTotal = { log_date: string; kcal: number; item_count: number };
 
-export type ExpenditurePoint = { date: string; kcal: number };
+type ExpenditurePoint = { date: string; kcal: number };
 
 export type Expenditure = {
   points: ExpenditurePoint[];
@@ -57,7 +57,7 @@ export type Expenditure = {
   weightLb: number | null;
 };
 
-export function energyOf(lbChange: number): number {
+function energyOf(lbChange: number): number {
   return lbChange * KCAL_PER_LB;
 }
 

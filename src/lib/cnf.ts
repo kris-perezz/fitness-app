@@ -65,7 +65,7 @@ export type CnfSearchResult =
   | { status: "ok"; hits: CnfHit[] }
   | { status: "error"; message: string };
 
-export type CnfFoodResult =
+type CnfFoodResult =
   /**
    * `micros` used to ride ALONGSIDE the Food, because the `foods` table has had
    * a `micros` jsonb since 0001 but the `Food` type did not carry one. S36

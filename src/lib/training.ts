@@ -252,7 +252,7 @@ export function setSummary(set: WorkoutSet, unit: DisplayUnit = "lb"): string {
  * negative beyond, which would sort a genuine top set below a light one. That
  * guard is arithmetic; the banding above is the part that matters.
  */
-export function estimated1RM(loadLb: number, reps: number | null): number {
+function estimated1RM(loadLb: number, reps: number | null): number {
   const r = reps ?? 0;
   if (r <= 0) return 0;
   if (r === 1) return loadLb;
@@ -286,7 +286,7 @@ export type Bests = {
 
 export const NO_BESTS: Bests = { e1rm: 0, repBand: 0, single: 0 };
 
-export type PrKind = "single" | "e1rm" | "rep";
+type PrKind = "single" | "e1rm" | "rep";
 
 /** Fold a set into a running best. Warm-ups and skipped sets never count. */
 export function foldBest(bests: Bests, set: WorkoutSet): Bests {
@@ -378,7 +378,7 @@ export const NO_HISTORY: SlotHistory = { lastSessions: {}, bests: {} };
  * Warm-ups and skipped sets are never candidates: a warm-up is not what you
  * want offered as the opening set of today's work.
  */
-export function topSet(sets: WorkoutSet[]): WorkoutSet | null {
+function topSet(sets: WorkoutSet[]): WorkoutSet | null {
   const candidates = sets.filter(isWorkingSet);
   if (candidates.length === 0) return null;
 
@@ -389,7 +389,7 @@ export function topSet(sets: WorkoutSet[]): WorkoutSet | null {
 }
 
 /** Where a suggested set came from, so the sheet can say so out loud. */
-export type Suggestion = {
+type Suggestion = {
   draft: SetDraft;
   /** "Set 2 today" or "Mon 25 Aug", shown on the Previous line. */
   from: string;
@@ -446,7 +446,7 @@ export function dayTitle(date: string, today: string): string {
 }
 
 /** "100 lb × 12", or "bodyweight × 12" where the load is a real zero (S29). */
-export function loadReps(loadLb: number, reps: number | null, unit: DisplayUnit = "lb"): string {
+function loadReps(loadLb: number, reps: number | null, unit: DisplayUnit = "lb"): string {
   const load = loadLb === 0 ? "bodyweight" : loadText(loadLb, unit);
   return `${load} × ${reps ?? 0}`;
 }
@@ -469,15 +469,6 @@ export function shortDate(date: string): string {
 /** Trailing-zero-free pounds: 135 not 135.0, but 132.5 stays 132.5. */
 export function trim(n: number): string {
   return String(Math.round(n * 10) / 10);
-}
-
-/**
- * A session left open overnight closes rather than absorbing the next day's
- * sets (S26). The comparison is against the waking date, so a set logged at
- * 01:00 still belongs to the session you started the evening before.
- */
-export function isStale(workout: Workout, today: string): boolean {
-  return workout.ended_at === null && workout.log_date !== today;
 }
 
 // ------------------------------------------------ one lift, over months (S80)

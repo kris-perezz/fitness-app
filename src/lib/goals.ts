@@ -8,7 +8,7 @@
  * available on the 4/4/9 grid -- see `balance` for how the remainder is placed.
  */
 
-export const KCAL_PER_G = {
+const KCAL_PER_G = {
   protein_goal_g: 4,
   carb_goal_g: 4,
   fat_goal_g: 9,

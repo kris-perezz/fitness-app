@@ -120,7 +120,7 @@ export function dailySeries(
  * this number is context for how hard to lean on the rest of the screen rather
  * than a score to improve.
  */
-export type EstimateShare = { entries: number; estimates: number; percent: number };
+type EstimateShare = { entries: number; estimates: number; percent: number };
 
 export function estimateShare(days: IntakeDay[]): EstimateShare {
   const entries = days.reduce((n, d) => n + d.item_count, 0);

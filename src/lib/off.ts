@@ -34,7 +34,7 @@ const SEARCH_LIMIT = 20;
 const USER_AGENT = "fitness-app/0.1 (name and barcode lookup)";
 
 /** OFF is barcode-indexed, so the barcode IS the natural key for a scanned food. */
-export function offFoodId(barcode: string): string {
+function offFoodId(barcode: string): string {
   return `off_${barcode}`;
 }
 
@@ -42,7 +42,7 @@ export function isBarcode(code: string): boolean {
   return /^\d{6,14}$/.test(code);
 }
 
-export type OffResult =
+type OffResult =
   | { status: "found"; food: Food }
   | { status: "miss" }
   | { status: "error"; message: string };

@@ -1,4 +1,4 @@
-export const NO_CONNECTION = "No connection. Try again.";
+const NO_CONNECTION = "No connection. Try again.";
 
 /**
  * A server action that throws never reached the server, or never came back.

@@ -39,7 +39,7 @@ export type RecipeDetails = {
  * A discriminated result rather than a nullable number: the UI has to name the
  * foods blocking the yield check so the user can go fix them.
  */
-export type RawWeight =
+type RawWeight =
   | { known: true; grams: number }
   | { known: false; missing: string[] };
 
@@ -103,7 +103,7 @@ export function perServingMacros(lines: RecipeLine[], servings: number): Macros 
  * recipe made of one known and one unknown food does not report the known half
  * as the whole.
  */
-export function perServingMicros(lines: RecipeLine[], servings: number): Micros {
+function perServingMicros(lines: RecipeLine[], servings: number): Micros {
   if (!(servings > 0)) return {};
 
   let total: Micros = {};
@@ -120,7 +120,7 @@ export function perServingMicros(lines: RecipeLine[], servings: number): Micros 
  * `grams_per_unit`, which is genuinely unknown for something like "1 scoop" of
  * a food nobody has weighed.
  */
-export function ingredientGrams(food: Food, qty: number): number | null {
+function ingredientGrams(food: Food, qty: number): number | null {
   // Millilitres are summed as if they were grams. Every liquid in the catalog
   // is water-based (milk, juice, stock) and sits within a few percent of 1
   // g/ml, which is far inside the band S21 flags on -- and the alternative is a
@@ -155,10 +155,10 @@ export function rawInputWeight(lines: RecipeLine[]): RawWeight {
  * without comment. Only a result outside this band suggests a fat-fingered
  * quantity or a forgotten ingredient.
  */
-export const YIELD_MIN = 0.4;
-export const YIELD_MAX = 1.1;
+const YIELD_MIN = 0.4;
+const YIELD_MAX = 1.1;
 
-export type YieldCheck = {
+type YieldCheck = {
   /** cooked / raw. 0.85 means the dish lost 15% of its weight. */
   ratio: number;
   /**
@@ -182,22 +182,6 @@ export function yieldCheck(cookedWeightG: number, rawGrams: number): YieldCheck 
   if (ratio < YIELD_MIN) return { ratio, verdict: "low" };
   if (ratio > YIELD_MAX) return { ratio, verdict: "high" };
   return { ratio, verdict: "plausible" };
-}
-
-/**
- * Convenience over `rawInputWeight` + `yieldCheck`: null whenever the check
- * cannot run at all (no cooked weight recorded, or an ingredient of unknown
- * weight). Call `rawInputWeight` directly to tell those two cases apart and
- * name the offending foods.
- */
-export function checkRecipeYield(
-  lines: RecipeLine[],
-  cookedWeightG: number | null,
-): YieldCheck | null {
-  if (cookedWeightG == null) return null;
-  const raw = rawInputWeight(lines);
-  if (!raw.known) return null;
-  return yieldCheck(cookedWeightG, raw.grams);
 }
 
 /**

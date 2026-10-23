@@ -14,10 +14,10 @@
  * the server sits east of the phone.
  */
 
-export type StepTotal = { date: string; steps: number };
+type StepTotal = { date: string; steps: number };
 
 /** One reading, at whatever grain the phone was asked to group by. */
-export type HealthSample = {
+type HealthSample = {
   metric: string;
   /** ISO 8601, offset preserved, so the instant survives the round trip. */
   measured_at: string;

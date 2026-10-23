@@ -4,7 +4,7 @@
  * S27 asks that finding an exercise behave exactly like finding a food, "so
  * there is only one thing to learn". The cheapest way to guarantee that is for
  * both to be the same function rather than two implementations that agree
- * today: this was lifted verbatim out of `searchFoods`, which now delegates.
+ * today.
  */
 export type Named = {
   name: string;

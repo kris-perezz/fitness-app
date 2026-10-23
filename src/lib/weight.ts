@@ -62,7 +62,7 @@ export const HALF_LIFE_DAYS = 7;
 export const MIN_TREND_ENTRIES = 5;
 
 /** The default window S59 states its rate over. */
-export const RATE_WEEKS = 4;
+const RATE_WEEKS = 4;
 
 export type TrendPoint = {
   date: string;
@@ -153,7 +153,7 @@ export function trendSeries(entries: WeighIn[], halfLife = HALF_LIFE_DAYS): Tren
  * encoding of the same fact -- a break, a dash, a widening band -- costs a
  * legend and buys nothing the chart was not already showing.
  */
-export type ChartPoint = {
+type ChartPoint = {
   date: string;
   weightLb: number | null;
   trendLb: number | null;
@@ -368,7 +368,7 @@ export function rateLabel(rate: Rate, unit: DisplayUnit = "lb"): string {
   // Converting the endpoints and subtracting would give the same answer here;
   // converting the difference is the version that stays right if a unit with an
   // offset is ever added.
-  const shown = Math.abs(rateToDisplay(rate.lbPerWeek, unit));
+  const shown = Math.abs(toDisplay(rate.lbPerWeek, unit));
   return `${sign}${shown.toFixed(1)} ${unit}/week`;
 }
 
@@ -544,12 +544,3 @@ export function fromDisplay(value: number, unit: DisplayUnit): number {
   return unit === "kg" ? value * LB_PER_KG : value;
 }
 
-/** A rate is a difference, so it converts by the same factor, not the same way. */
-export function rateToDisplay(lbPerWeek: number, unit: DisplayUnit): number {
-  return toDisplay(lbPerWeek, unit);
-}
-
-/** The word, for a label or an axis. */
-export function unitLabel(unit: DisplayUnit): string {
-  return unit;
-}

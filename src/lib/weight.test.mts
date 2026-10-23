@@ -21,7 +21,6 @@ import {
   MIN_TREND_ENTRIES,
   daysBetween,
   fromDisplay,
-  rateToDisplay,
   toDisplay,
   deltaLabel,
   headline,
@@ -371,8 +370,8 @@ test("S69: pounds pass through untouched", () => {
 test("S69: a rate converts as a difference, not as a weight", () => {
   // -2 lb/week is about -0.91 kg/week. The same factor, but it must not pick up
   // an offset the way a temperature conversion would.
-  assert.equal(Number(rateToDisplay(-2, "kg").toFixed(2)), -0.91);
-  assert.equal(rateToDisplay(-2, "lb"), -2);
+  assert.equal(Number(toDisplay(-2, "kg").toFixed(2)), -0.91);
+  assert.equal(toDisplay(-2, "lb"), -2);
 });
 
 test("the nearest reading skips the date itself and picks the closer side", () => {

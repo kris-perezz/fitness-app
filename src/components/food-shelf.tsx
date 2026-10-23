@@ -5,7 +5,8 @@ import { useRouter } from "next/navigation";
 import { ChevronLeft, Package, Plus, Search } from "lucide-react";
 import { saveScannedFood } from "@/app/actions";
 import { reach } from "@/lib/reach";
-import { basisLabel, searchFoods, type Food } from "@/lib/food";
+import { basisLabel, type Food } from "@/lib/food";
+import { searchNamed } from "@/lib/search";
 import { FoodPicker, type PickerStep } from "@/components/food-picker";
 import { EditFoodSheet } from "@/components/edit-food-sheet";
 import { FoodSourceBadge } from "@/components/food-source-badge";
@@ -61,7 +62,7 @@ export function FoodShelf({ foods }: { foods: Food[] }) {
   // sheet should stay quiet until you type and wrong here, where the whole
   // point is seeing what you have saved.
   const results = useMemo(
-    () => (query.trim() === "" ? foods : searchFoods(foods, query)),
+    () => (query.trim() === "" ? foods : searchNamed(foods, query)),
     [foods, query],
   );
   const page = usePaged(results, query);

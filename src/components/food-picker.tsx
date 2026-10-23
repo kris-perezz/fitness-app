@@ -12,7 +12,8 @@ import {
   ScanBarcode,
   Search,
 } from "lucide-react";
-import { searchFoods, show, basisLabel, type Food } from "@/lib/food";
+import { show, basisLabel, type Food } from "@/lib/food";
+import { searchNamed } from "@/lib/search";
 import {
   saveLabelFood,
   searchCnfFoods,
@@ -160,7 +161,7 @@ function SearchStep({
     if (active) setPicked(null);
   }
   const inputRef = useRef<HTMLInputElement>(null);
-  const results = useMemo(() => searchFoods(foods, query), [foods, query]);
+  const results = useMemo(() => searchNamed(foods, query), [foods, query]);
 
   useEffect(() => {
     const t = setTimeout(() => inputRef.current?.focus(), 120);
