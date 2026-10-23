@@ -1,7 +1,9 @@
 "use client";
 
 import { useState, useTransition } from "react";
-import { saveGoals, signOut } from "@/app/actions";
+import Link from "next/link";
+import { deleteMyAccount, exportMyData, saveGoals, signOut } from "@/app/actions";
+import { ConfirmAction } from "@/components/confirm-action";
 import { reach } from "@/lib/reach";
 import { Button } from "@/components/ui/button";
 import { Card } from "@/components/ui/card";
@@ -13,7 +15,7 @@ import {
   PopoverDescription,
   PopoverTrigger,
 } from "@/components/ui/popover";
-import { Info, LogOut } from "lucide-react";
+import { Download, Info, LogOut, Trash2 } from "lucide-react";
 import {
   MACRO_KEYS,
   balance,
@@ -163,6 +165,31 @@ export function GoalsForm({
     };
   });
   const [pending, startTransition] = useTransition();
+  const [accountPending, startAccount] = useTransition();
+
+  function exportData() {
+    startAccount(async () => {
+      const res = await reach(exportMyData());
+      if (res.error || !res.data) {
+        toast.error(res.error ?? "Export failed");
+        return;
+      }
+      const blob = new Blob([JSON.stringify(res.data, null, 2)], { type: "application/json" });
+      const url = URL.createObjectURL(blob);
+      const a = document.createElement("a");
+      a.href = url;
+      a.download = `jacked-af-export-${new Date().toLocaleDateString("en-CA")}.json`;
+      a.click();
+      URL.revokeObjectURL(url);
+    });
+  }
+
+  function deleteAccount() {
+    startAccount(async () => {
+      const res = await reach(deleteMyAccount());
+      if (res?.error) toast.error(res.error);
+    });
+  }
 
   const numbers = () => ({
     calorie_goal: Number(form.calorie_goal) || 0,
@@ -583,6 +610,38 @@ export function GoalsForm({
         </form>
       </Card>
 
+      <Card className={SURFACE}>
+        <Button
+          type="button"
+          variant="ghost"
+          className="h-12 w-full justify-start rounded-none px-4 text-[15px] font-normal"
+          onClick={exportData}
+          disabled={accountPending}
+        >
+          <Download className="size-4" /> Export my data
+        </Button>
+        <ConfirmAction
+          trigger={
+            <Button
+              type="button"
+              variant="ghost"
+              className="h-12 w-full justify-start rounded-none px-4 text-[15px] font-normal text-destructive"
+              disabled={accountPending}
+            >
+              <Trash2 className="size-4" /> Delete my account
+            </Button>
+          }
+          title="Delete your account?"
+          description="This erases your account and all your data. It cannot be undone."
+          confirmLabel="Delete account"
+          onConfirm={deleteAccount}
+        />
+      </Card>
+
+      <p className="flex justify-center gap-4 text-xs text-muted-foreground">
+        <Link href="/privacy" className="underline-offset-4 hover:underline">Privacy</Link>
+        <Link href="/terms" className="underline-offset-4 hover:underline">Terms</Link>
+      </p>
     </main>
   );
 }

@@ -328,6 +328,8 @@ export async function extractLabel(image: string, abort?: AbortSignal): Promise<
       headers: { "Content-Type": "application/json", Authorization: `Bearer ${key}` },
       body: JSON.stringify({
         model: MODEL,
+        // Reasoning tokens count toward the cap, so it has to leave room to answer.
+        max_output_tokens: 3000,
         input: [
           {
             role: "user",

@@ -20,6 +20,15 @@ const WINDOW_MS = 10_000;
 // Survives the boundary remounting after its own retry fails.
 let retriedAt = 0;
 
+function reportError(error: Error & { digest?: string }) {
+  fetch("/api/client-error", {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({ message: error.message, digest: error.digest, path: location.pathname }),
+    keepalive: true,
+  }).catch(() => {});
+}
+
 function reloadedRecently() {
   try {
     return Date.now() - Number(sessionStorage.getItem(RELOADED_AT)) < WINDOW_MS;
@@ -50,6 +59,7 @@ export default function Error({
 
   useEffect(() => {
     console.error(error);
+    reportError(error);
     if (step === "give-up") return;
     if (step === "reload") {
       try {

@@ -1,7 +1,24 @@
 "use client";
 
+import { useEffect } from "react";
+
 // The root layout itself failed, so none of its styles or providers exist here.
-export default function GlobalError({ retry }: { retry: () => void }) {
+export default function GlobalError({
+  error,
+  retry,
+}: {
+  error: Error & { digest?: string };
+  retry: () => void;
+}) {
+  useEffect(() => {
+    fetch("/api/client-error", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ message: error.message, digest: error.digest, path: location.pathname }),
+      keepalive: true,
+    }).catch(() => {});
+  }, [error]);
+
   return (
     <html lang="en">
       <body style={{ fontFamily: "system-ui, sans-serif", textAlign: "center", padding: "6rem 1rem" }}>

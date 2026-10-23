@@ -409,6 +409,8 @@ export async function estimateFromDescription(
       body: JSON.stringify({
         model: MODEL,
         reasoning: { effort: REASONING_EFFORT },
+        // Reasoning tokens count toward the cap, so it has to leave room to answer.
+        max_output_tokens: 4000,
         input: [
           { role: "system", content: PROMPT },
           {

@@ -1,5 +1,6 @@
 "use client";
 
+import Link from "next/link";
 import { useEffect, useState } from "react";
 import { createClient } from "@/lib/supabase/client";
 import { Button } from "@/components/ui/button";
@@ -268,6 +269,20 @@ export default function LoginPage() {
               {mode === "signup" ? "I already have an account" : "Create an account"}
             </Button>
           </div>
+
+          {mode === "signup" && (
+            <p className="text-center text-xs text-muted-foreground">
+              By creating an account you agree to the{" "}
+              <Link href="/terms" className="underline underline-offset-4">
+                Terms
+              </Link>{" "}
+              and{" "}
+              <Link href="/privacy" className="underline underline-offset-4">
+                Privacy Policy
+              </Link>
+              .
+            </p>
+          )}
         </form>
       )}
     </main>

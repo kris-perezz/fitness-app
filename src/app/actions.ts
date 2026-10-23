@@ -1426,3 +1426,60 @@ async function republishRecipesUsing(
   }
   await Promise.all(affected.map((id) => publishRecipe(supabase, id, userId)));
 }
+
+// ------------------------------------------------------------------ account
+
+export async function exportMyData(): Promise<{ error?: string; data?: Record<string, unknown> }> {
+  const supabase = await createClient();
+  const user = await authUser(supabase);
+  if (!user) return { error: "Sign in again" };
+
+  // Paged because PostgREST caps a response at 1000 rows, and a year of entries is more.
+  const rows = async (table: string, column?: string) => {
+    const out: unknown[] = [];
+    for (let from = 0; ; from += 1000) {
+      let query = supabase.from(table).select("*").range(from, from + 999);
+      if (column) query = query.eq(column, user.id);
+      const { data, error } = await query;
+      if (error) return { data: null, error };
+      out.push(...data);
+      if (data.length < 1000) return { data: out, error: null };
+    }
+  };
+  const mine = (table: string, column = "user_id") => rows(table, column);
+  const all = (table: string) => rows(table);
+  const results = await Promise.all([
+    mine("intake_entries"),
+    mine("foods", "created_by"),
+    all("recipes"),
+    all("recipe_ingredients"),
+    all("workouts"),
+    all("workout_exercises"),
+    all("workout_sets"),
+    mine("exercises", "created_by"),
+    mine("weigh_ins"),
+    mine("nutrition_settings"),
+    mine("day_goals"),
+    mine("pinned_exercises"),
+  ]);
+  const failed = results.find((r) => r.error);
+  if (failed?.error) return { error: plain(failed.error) };
+
+  const [intake_entries, foods, recipes, recipe_ingredients, workouts, workout_exercises, workout_sets, exercises, weigh_ins, nutrition_settings, day_goals, pinned_exercises] =
+    results.map((r) => r.data ?? []);
+  return {
+    data: {
+      exported_at: new Date().toISOString(),
+      intake_entries, foods, recipes, recipe_ingredients, workouts, workout_exercises,
+      workout_sets, exercises, weigh_ins, nutrition_settings, day_goals, pinned_exercises,
+    },
+  };
+}
+
+export async function deleteMyAccount(): Promise<{ error: string } | undefined> {
+  const supabase = await createClient();
+  const { error } = await supabase.rpc("delete_my_account");
+  if (error) return { error: plain(error) };
+  await supabase.auth.signOut();
+  redirect("/login");
+}
