@@ -1,15 +1,47 @@
 "use client"
 
 import * as React from "react"
+import { Dialog as DialogPrimitive } from "radix-ui"
 import { Drawer as DrawerPrimitive } from "vaul"
 
 import { cn } from "@/lib/utils"
+import { useMediaQuery } from "@/lib/media-query"
 import { useSheetBack } from "@/lib/sheet-back"
 
+/**
+ * Set when the drawer renders as a centered modal. Title, Description, Close and
+ * Trigger are plain Radix Dialog parts in vaul too, so only Root and Content
+ * have to switch.
+ */
+const ModalContext = React.createContext<{ dismissible: boolean } | null>(null)
+
+/**
+ * A bottom sheet on a phone, a floating modal from `md` up. Without a keyboard
+ * to lift it, a sheet stays at the bottom of a desktop screen, far from the eye.
+ * The registry Dialog was considered: its padded grid and close button would
+ * fight the layout every drawer body already has, so the Radix primitive is
+ * used directly with the drawer's own surface.
+ */
 function Drawer({
   ...props
 }: React.ComponentProps<typeof DrawerPrimitive.Root>) {
   useSheetBack((props.open ?? false) && props.dismissible !== false, () => props.onOpenChange?.(false))
+  // `md`, where the bottom nav becomes the side rail.
+  const desktop = useMediaQuery("(min-width: 48rem)")
+  if (desktop) {
+    return (
+      <ModalContext value={{ dismissible: props.dismissible !== false }}>
+        <DialogPrimitive.Root
+          data-slot="drawer"
+          open={props.open}
+          defaultOpen={props.defaultOpen}
+          onOpenChange={props.onOpenChange}
+        >
+          {props.children}
+        </DialogPrimitive.Root>
+      </ModalContext>
+    )
+  }
   return <DrawerPrimitive.Root data-slot="drawer" {...props} />
 }
 
@@ -31,6 +63,13 @@ function DrawerClose({
   return <DrawerPrimitive.Close data-slot="drawer-close" {...props} />
 }
 
+/**
+ * Never faded: fading a backdrop blur re-blurs the whole screen every frame,
+ * while a still one is drawn once. `!` beats the fade vaul injects itself.
+ */
+const OVERLAY =
+  "fixed inset-0 z-50 bg-black/10 supports-backdrop-filter:backdrop-blur-xs animate-none! transition-none!"
+
 function DrawerOverlay({
   className,
   ...props
@@ -39,7 +78,7 @@ function DrawerOverlay({
     <DrawerPrimitive.Overlay
       data-slot="drawer-overlay"
       className={cn(
-        "fixed inset-0 z-50 bg-black/10 supports-backdrop-filter:backdrop-blur-xs data-open:animate-in data-open:fade-in-0 data-closed:animate-out data-closed:fade-out-0",
+        OVERLAY,
         className
       )}
       {...props}
@@ -59,6 +98,36 @@ function DrawerContent({
   snapped = false,
   ...props
 }: React.ComponentProps<typeof DrawerPrimitive.Content> & { snapped?: boolean }) {
+  const modal = React.useContext(ModalContext)
+  if (modal) {
+    const block = (event: Event) => !modal.dismissible && event.preventDefault()
+    return (
+      <DialogPrimitive.Portal data-slot="drawer-portal">
+        {/* vaul's Overlay reads vaul's context, which a Dialog root lacks. */}
+        <DialogPrimitive.Overlay data-slot="drawer-overlay" className={OVERLAY} />
+        <DialogPrimitive.Content
+          data-slot="drawer-content"
+          className={cn(
+            "group/drawer-content fixed top-1/2 left-1/2 z-50 flex max-h-[85dvh] w-[calc(100%-2rem)] max-w-lg -translate-x-1/2 -translate-y-1/2 flex-col rounded-xl border bg-popover pt-6 text-sm text-popover-foreground shadow-lg duration-150 data-open:animate-in data-open:fade-in-0 data-open:zoom-in-95 data-closed:animate-out data-closed:fade-out-0 data-closed:zoom-out-95",
+            // A snapped body is laid out to fill its sheet, so it needs a height to fill.
+            snapped && "h-[85dvh]",
+            className
+          )}
+          {...props}
+          onInteractOutside={(event) => {
+            block(event)
+            props.onInteractOutside?.(event)
+          }}
+          onEscapeKeyDown={(event) => {
+            block(event)
+            props.onEscapeKeyDown?.(event)
+          }}
+        >
+          {children}
+        </DialogPrimitive.Content>
+      </DialogPrimitive.Portal>
+    )
+  }
   return (
     <DrawerPortal data-slot="drawer-portal">
       <DrawerOverlay />

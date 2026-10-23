@@ -116,7 +116,7 @@
   --secondary: oklch(0.94 0 0);
   --secondary-foreground: oklch(0.205 0 0);
   --muted: oklch(0.94 0 0);
-  --muted-foreground: oklch(0.556 0 0);
+  --muted-foreground: oklch(0.52 0 0);
   --accent: oklch(0.94 0 0);
   --accent-foreground: oklch(0.205 0 0);
   --destructive: oklch(0.577 0.245 27.325);
@@ -305,10 +305,9 @@
  * is what turns two loops into a wander. Durations are coprime for the same
  * reason: three orbs on tidy multiples resynchronise in front of you.
  *
- * ONLY `transform` is animated. Blur is expensive to paint and cheap to reuse,
- * so each orb is painted once and then moved by the compositor; animating the
- * filter, the opacity or the gradient instead would repaint a full-screen blur
- * every frame and cost the scroll its smoothness.
+ * ONLY `transform` is animated, so each orb is painted once and then moved by
+ * the compositor. The softness lives in the gradient's eased stops rather than
+ * in `filter: blur`, which a scaling layer pays for again on every frame.
  */
 /* The page has to reach `--theme-color` at the top and bottom edges, because
    that is the flat colour iOS paints the strips outside the viewport with and it
@@ -337,11 +336,19 @@
   animation: orb-sway 23s ease-in-out infinite;
 }
 
+/* The stops ease out like a blurred edge, so there is no rim to find. */
 .orb {
   width: 100%;
   height: 76%;
   border-radius: 50%;
-  filter: blur(56px);
+  background: radial-gradient(
+    closest-side,
+    var(--orb),
+    color-mix(in oklab, var(--orb) 85%, transparent) 30%,
+    color-mix(in oklab, var(--orb) 50%, transparent) 55%,
+    color-mix(in oklab, var(--orb) 18%, transparent) 80%,
+    transparent
+  );
   will-change: transform;
   animation: orb-rise 17s ease-in-out infinite;
 }
@@ -363,18 +370,18 @@
 /* Three tones of one colour rather than three colours. The hue walks from rose
    to coral across the set, which is what keeps the overlaps from going grey. */
 .orb-a {
-  background: radial-gradient(closest-side, oklch(0.8 0.1 8 / 40%), transparent);
+  --orb: oklch(0.8 0.1 8 / 40%);
   animation-duration: 17s;
 }
 
 .orb-b {
-  background: radial-gradient(closest-side, oklch(0.85 0.075 18 / 34%), transparent);
+  --orb: oklch(0.85 0.075 18 / 34%);
   animation-duration: 13s;
   animation-delay: -5s;
 }
 
 .orb-c {
-  background: radial-gradient(closest-side, oklch(0.83 0.085 355 / 32%), transparent);
+  --orb: oklch(0.83 0.085 355 / 32%);
   animation-duration: 26s;
   animation-delay: -9s;
   animation-direction: reverse;
@@ -475,6 +482,18 @@
   html {
     @apply font-sans;
   }
+}
+
+/* The scrollbar's width is reserved whether or not the page overflows, so
+   content never jumps sideways between a short page and a long one. The
+   modal scroll lock otherwise pads the body by that width again; the gutter
+   already holds the space, so the pad is a second shift. */
+html {
+  scrollbar-gutter: stable;
+}
+
+html body[data-scroll-locked] {
+  margin-right: 0 !important;
 }
 
 /* startup-splash.tsx. Unlayered so it isn't at the mercy of layer order the
