@@ -109,7 +109,7 @@ export function BottomNav({ openWorkoutId: fromServer }: { openWorkoutId?: strin
           covering. Gone from `md` up, where the rail below takes over. */}
       <ul
         data-slot="nav-bar"
-        className="fixed inset-x-0 bottom-0 z-40 mx-auto flex max-w-md items-stretch justify-around gap-1 border-t border-border bg-background/85 px-2 py-1 pb-safe md:hidden"
+        className="fixed inset-x-0 bottom-0 z-40 mx-auto flex max-w-md items-stretch justify-around gap-1 border-t border-border bg-background px-2 py-1 pb-safe md:hidden"
       >
         {items.map(({ href, label, Icon, active, target }) => (
           <li key={href} className="flex-1">
@@ -148,7 +148,7 @@ export function BottomNav({ openWorkoutId: fromServer }: { openWorkoutId?: strin
           draws the rail, on top of it. */}
       <ul
         data-slot="nav-rail"
-        className="fixed inset-y-0 left-0 z-40 hidden w-20 flex-col items-stretch gap-1 border-r border-border bg-background/85 p-2 pt-4 md:flex"
+        className="fixed inset-y-0 left-0 z-40 hidden w-20 flex-col items-stretch gap-1 border-r border-border bg-background p-2 pt-4 md:flex"
       >
         {items.map(({ href, label, Icon, active, target }) => (
           <li key={href}>

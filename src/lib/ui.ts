@@ -1,10 +1,8 @@
 /**
  * Shape shared by every surface in the app.
  *
- * The four tabs and the screens under them draw the same pane -- a translucent
- * card with one border and one shadow, so the strawberry field reads through
- * it rather than stopping at the edge. Unblurred: a blur over the drifting
- * orbs is redrawn every frame. It lives here because it was
+ * The four tabs and the screens under them draw the same pane -- a card with
+ * one border and one shadow. It lives here because it was
  * written out at a dozen call sites, and a surface that differs by a class in
  * one of them is exactly the inconsistency it is meant to prevent.
  *

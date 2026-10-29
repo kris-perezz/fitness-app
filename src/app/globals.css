@@ -245,17 +245,11 @@
 
   --shadow-card: 0 1px 2px oklch(0.3 0.03 60 / 4%), 0 8px 24px -8px oklch(0.3 0.03 60 / 7%);
 
-  /* Translucent, and the only theme where it is. Anything painted with
-     `bg-background` -- the calendar, an outline button -- would otherwise be an
-     opaque cream block sitting on top of the orbs, which is the shape you
-     notice instead of the drift. The page's own ground is `--page` below. */
-  --background: oklch(0.973 0.01 67.7 / 72%);
+  --background: oklch(0.973 0.01 67.7);
   --page: oklch(0.973 0.01 67.7);
   --foreground: oklch(0.239 0 90);
-  --card: oklch(0.995 0.006 84.6 / 72%);
+  --card: oklch(0.995 0.006 84.6);
   --card-foreground: oklch(0.239 0 90);
-  /* Opaque, unlike --card. A dropdown or a sheet has content UNDER it that must
-     not show through; a card has the page under it, which should. */
   --popover: oklch(0.995 0.006 84.6);
   --popover-foreground: oklch(0.239 0 90);
   --primary: oklch(0.62 0.145 130);
@@ -452,15 +446,6 @@
  */
 @utility pb-safe {
   padding-bottom: max(1rem, env(safe-area-inset-bottom));
-}
-
-/* Unlayered on purpose. The nav carries `bg-background/85`, a Tailwind utility,
-   and a utility beats anything sitting in @layer base -- so inside the layer
-   this rule did nothing and the bar was 85% of an already translucent
-   background. It covers scrolling content by design (see bottom-nav.tsx), so it
-   takes the opaque ground the rest of the theme does not. */
-.strawberry-matcha [data-slot="nav-bar"] {
-  background-color: color-mix(in oklch, var(--page) 92%, transparent);
 }
 
 @layer base {

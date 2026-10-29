@@ -595,7 +595,7 @@ export function GoalsForm({
           changes a colour.
 
           A quiet list row like Appearance above, not a filled destructive
-          button -- a solid colour block inside a translucent card reads as a
+          button -- a solid colour block inside a card reads as a
           clipped rectangle rather than a row. Destructive stays legible in the
           colour of the label and icon instead. */}
       <Card className={SURFACE}>
